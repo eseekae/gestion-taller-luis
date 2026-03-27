@@ -43,7 +43,6 @@ export default function Estadisticas() {
     const conteoColegios: { [key: string]: number } = {}
     const conteoPrendas: { [key: string]: number } = {}
 
-    // 1. Procesar Pedidos
     pedidos.forEach(p => {
       const fecha = new Date(p.created_at)
       const mes = fecha.getMonth()
@@ -63,7 +62,6 @@ export default function Estadisticas() {
       conteoColegios[col] = (conteoColegios[col] || 0) + p.total_final
     })
 
-    // 2. Procesar Detalles
     detalles.forEach(d => {
       const pedidoReal = pedidos.find(p => p.id === d.pedido_id)
       if (pedidoReal) {
@@ -126,7 +124,6 @@ export default function Estadisticas() {
 
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
           
-          {/* KPIs */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '30px' }}>
             <div style={cardStyle}>
               <p style={{ margin: 0, fontSize: '12px', fontWeight: '800', color: '#64748b' }}>INGRESOS MES</p>
@@ -147,7 +144,6 @@ export default function Estadisticas() {
             </div>
           </div>
 
-          {/* GRÁFICO TENDENCIA */}
           <div style={{ ...cardStyle, marginBottom: '30px' }}>
             <h2 style={{ margin: '0 0 20px 0', fontSize: '16px', fontWeight: '900', color: '#000' }}>Crecimiento de Ingresos</h2>
             <div style={{ width: '100%', height: '300px' }}>
@@ -156,7 +152,6 @@ export default function Estadisticas() {
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="mes" tick={{ fill: '#000', fontWeight: 700, fontSize: 12 }} />
                   <YAxis tickFormatter={(v) => `$${v/1000}k`} tick={{ fill: '#000', fontWeight: 700 }} />
-                  {/* CORRECCIÓN 1 */}
                   <Tooltip 
                     formatter={(value: any) => [`$${Number(value).toLocaleString('es-CL')}`, 'Ingresos']}
                     contentStyle={{ borderRadius: '12px', border: '2px solid #000', fontWeight: '800' }}
@@ -168,7 +163,6 @@ export default function Estadisticas() {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
-            {/* GRÁFICO COLEGIOS */}
             <div style={cardStyle}>
               <h2 style={{ margin: '0 0 20px 0', fontSize: '14px', fontWeight: '900', color: '#000' }}>TOP COLEGIOS ($)</h2>
               <div style={{ width: '100%', height: '250px' }}>
@@ -176,7 +170,6 @@ export default function Estadisticas() {
                   <BarChart data={rankingColegios} layout="vertical">
                     <XAxis type="number" hide />
                     <YAxis dataKey="nombre" type="category" tick={{ fill: '#000', fontWeight: 700, fontSize: 10 }} width={80} />
-                    {/* CORRECCIÓN 2 */}
                     <Tooltip 
                       formatter={(value: any) => [`$${Number(value).toLocaleString('es-CL')}`, 'Total']}
                       contentStyle={{ borderRadius: '12px', border: '2px solid #000', fontWeight: '800' }}
@@ -187,7 +180,6 @@ export default function Estadisticas() {
               </div>
             </div>
 
-            {/* GRÁFICO PRENDAS */}
             <div style={cardStyle}>
               <h2 style={{ margin: '0 0 20px 0', fontSize: '14px', fontWeight: '900', color: '#000' }}>TOP PRENDAS (UDS)</h2>
               <div style={{ width: '100%', height: '250px' }}>
@@ -195,7 +187,6 @@ export default function Estadisticas() {
                   <BarChart data={rankingPrendas}>
                     <XAxis dataKey="nombre" tick={{ fill: '#000', fontWeight: 700, fontSize: 10 }} />
                     <YAxis tick={{ fill: '#000', fontWeight: 700 }} />
-                    {/* CORRECCIÓN 3 */}
                     <Tooltip 
                       formatter={(value: any) => [`${Number(value)} unidades`, 'Vendidas']}
                       contentStyle={{ borderRadius: '12px', border: '2px solid #000', fontWeight: '800' }}
@@ -205,7 +196,6 @@ export default function Estadisticas() {
                 </ResponsiveContainer>
               </div>
             </div>
-
           </div>
         </motion.div>
       </div>
