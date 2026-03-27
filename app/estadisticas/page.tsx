@@ -48,12 +48,10 @@ export default function Estadisticas() {
       const fecha = new Date(p.created_at)
       const mes = fecha.getMonth()
       const anio = fecha.getFullYear()
-      const mesAnio = `${anio}-${(mes + 1).toString().padStart(2, '0')}` // Ej: 2026-03
+      const mesAnio = `${anio}-${(mes + 1).toString().padStart(2, '0')}`
 
-      // Tendencia Mensual (Gráfico de Área)
       ventasPorMes[mesAnio] = (ventasPorMes[mesAnio] || 0) + p.total_final
 
-      // KPIs
       if (anio === anioActual && mes === mesActual) tActual += p.total_final
       else if ((mesActual === 0 && anio === anioActual - 1 && mes === 11) || (mesActual > 0 && anio === anioActual && mes === mesActual - 1)) {
         tAnterior += p.total_final
@@ -61,12 +59,11 @@ export default function Estadisticas() {
 
       deudaTotal += (p.total_final - p.abono)
 
-      // Ranking Colegios
       const col = p.colegio?.trim() ? p.colegio.toUpperCase() : 'PARTICULAR'
       conteoColegios[col] = (conteoColegios[col] || 0) + p.total_final
     })
 
-    // 2. Procesar Detalles (Solo mes actual para prendas)
+    // 2. Procesar Detalles
     detalles.forEach(d => {
       const pedidoReal = pedidos.find(p => p.id === d.pedido_id)
       if (pedidoReal) {
@@ -80,7 +77,6 @@ export default function Estadisticas() {
       conteoPrendas[nombreProd] = (conteoPrendas[nombreProd] || 0) + d.cantidad
     })
 
-    // Formatear Data para Recharts
     const mesesNombres = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
     const chartTendencia = Object.keys(ventasPorMes).sort().map(key => {
       const [y, m] = key.split('-');
@@ -111,131 +107,104 @@ export default function Estadisticas() {
   const porcentajeCrecimiento = Math.round(crecimientoCrudo)
   const tendenciaPositiva = porcentajeCrecimiento >= 0
 
-  const containerVariants = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.1 } } }
-  const itemVariants = { hidden: { y: 20, opacity: 0 }, visible: { y: 0, opacity: 1 } }
   const cardStyle = { backgroundColor: '#fff', borderRadius: '24px', padding: '24px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }
 
-  if (loading) return <main style={{ minHeight: '100vh', backgroundColor: '#f8fafc', display: 'flex', justifyContent: 'center', alignItems: 'center' }}><p style={{ color: '#64748b', fontWeight: '600' }}>Generando reportes...</p></main>
+  if (loading) return <main style={{ minHeight: '100vh', backgroundColor: '#f8fafc', display: 'flex', justifyContent: 'center', alignItems: 'center' }}><p style={{ color: '#000', fontWeight: '800' }}>Cargando estadísticas...</p></main>
 
   return (
-    <main style={{ minHeight: '100vh', backgroundColor: '#f8fafc', padding: '20px', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+    <main style={{ minHeight: '100vh', backgroundColor: '#f8fafc', padding: '20px', fontFamily: 'sans-serif' }}>
       <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
         
-        {/* CABECERA */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '30px' }}>
-          <button onClick={() => router.push('/')} style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', padding: '10px', borderRadius: '12px', color: '#0f172a', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
+          <button onClick={() => router.push('/')} style={{ backgroundColor: '#fff', border: '2px solid #000', padding: '10px', borderRadius: '12px', color: '#000', cursor: 'pointer' }}>
             <ArrowLeft size={20} />
           </button>
           <div>
-            <h1 style={{ margin: 0, fontSize: '24px', fontWeight: '800', color: '#0f172a', letterSpacing: '-0.5px' }}>Dashboard Financiero</h1>
-            <p style={{ margin: 0, fontSize: '14px', color: '#64748b', fontWeight: '500' }}>Métricas de producción y ventas</p>
+            <h1 style={{ margin: 0, fontSize: '24px', fontWeight: '900', color: '#000' }}>Dashboard Financiero</h1>
           </div>
         </div>
 
-        <motion.div initial="hidden" animate="visible" variants={containerVariants}>
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
           
-          {/* KPIs (TARJETAS SUPERIORES) */}
+          {/* KPIs */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '30px' }}>
-            
-            <motion.div variants={itemVariants} style={cardStyle}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '15px' }}>
-                <p style={{ margin: 0, fontSize: '13px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase' }}>Ingresos del Mes</p>
-                <div style={{ backgroundColor: '#f1f5f9', padding: '8px', borderRadius: '10px', color: '#0f172a' }}><DollarSign size={18} /></div>
-              </div>
-              <p style={{ margin: '0 0 10px 0', fontSize: '32px', fontWeight: '800', color: '#0f172a' }}>${ventasMesActual.toLocaleString('es-CL')}</p>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: '600', color: tendenciaPositiva ? '#10b981' : '#ef4444' }}>
-                {tendenciaPositiva ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
-                <span>{tendenciaPositiva ? '+' : ''}{porcentajeCrecimiento}% vs mes anterior</span>
-              </div>
-            </motion.div>
+            <div style={cardStyle}>
+              <p style={{ margin: 0, fontSize: '12px', fontWeight: '800', color: '#64748b' }}>INGRESOS MES</p>
+              <p style={{ margin: '10px 0', fontSize: '28px', fontWeight: '900', color: '#000' }}>${ventasMesActual.toLocaleString('es-CL')}</p>
+              <span style={{ fontSize: '13px', fontWeight: '700', color: tendenciaPositiva ? '#10b981' : '#ef4444' }}>
+                {tendenciaPositiva ? '↑' : '↓'} {porcentajeCrecimiento}% vs anterior
+              </span>
+            </div>
 
-            <motion.div variants={itemVariants} style={cardStyle}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '15px' }}>
-                <p style={{ margin: 0, fontSize: '13px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase' }}>Cuentas por Cobrar</p>
-                <div style={{ backgroundColor: '#fef2f2', padding: '8px', borderRadius: '10px', color: '#ef4444' }}><AlertCircle size={18} /></div>
-              </div>
-              <p style={{ margin: '0 0 10px 0', fontSize: '32px', fontWeight: '800', color: '#0f172a' }}>${plataEnCalle.toLocaleString('es-CL')}</p>
-              <p style={{ margin: 0, fontSize: '13px', fontWeight: '500', color: '#64748b' }}>Capital pendiente de ingreso</p>
-            </motion.div>
+            <div style={cardStyle}>
+              <p style={{ margin: 0, fontSize: '12px', fontWeight: '800', color: '#64748b' }}>CUENTAS POR COBRAR</p>
+              <p style={{ margin: '10px 0', fontSize: '28px', fontWeight: '900', color: '#ef4444' }}>${plataEnCalle.toLocaleString('es-CL')}</p>
+            </div>
 
-            <motion.div variants={itemVariants} style={cardStyle}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '15px' }}>
-                <p style={{ margin: 0, fontSize: '13px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase' }}>Volumen (Mes)</p>
-                <div style={{ backgroundColor: '#eff6ff', padding: '8px', borderRadius: '10px', color: '#3b82f6' }}><ShoppingBag size={18} /></div>
-              </div>
-              <p style={{ margin: '0 0 10px 0', fontSize: '32px', fontWeight: '800', color: '#0f172a' }}>{totalPrendasMes} <span style={{ fontSize: '18px', color: '#94a3b8' }}>unds.</span></p>
-              <p style={{ margin: 0, fontSize: '13px', fontWeight: '500', color: '#64748b' }}>Prendas procesadas este mes</p>
-            </motion.div>
-
+            <div style={cardStyle}>
+              <p style={{ margin: 0, fontSize: '12px', fontWeight: '800', color: '#64748b' }}>PRENDAS (MES)</p>
+              <p style={{ margin: '10px 0', fontSize: '28px', fontWeight: '900', color: '#3b82f6' }}>{totalPrendasMes} uds.</p>
+            </div>
           </div>
 
-          {/* GRÁFICO PRINCIPAL: TENDENCIA DE VENTAS */}
-          <motion.div variants={itemVariants} style={{ ...cardStyle, marginBottom: '30px' }}>
-            <h2 style={{ margin: '0 0 20px 0', fontSize: '16px', fontWeight: '700', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <BarChart3 size={18} color="#8b5cf6" /> Curva de Crecimiento (Ingresos)
-            </h2>
+          {/* GRÁFICO TENDENCIA */}
+          <div style={{ ...cardStyle, marginBottom: '30px' }}>
+            <h2 style={{ margin: '0 0 20px 0', fontSize: '16px', fontWeight: '900', color: '#000' }}>Crecimiento de Ingresos</h2>
             <div style={{ width: '100%', height: '300px' }}>
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={tendenciaMeses} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <XAxis dataKey="mes" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} dy={10} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} tickFormatter={(value) => `$${value/1000}k`} />
+                <AreaChart data={tendenciaMeses}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="mes" tick={{ fill: '#000', fontWeight: 700, fontSize: 12 }} />
+                  <YAxis tickFormatter={(v) => `$${v/1000}k`} tick={{ fill: '#000', fontWeight: 700 }} />
+                  {/* CORRECCIÓN 1 */}
                   <Tooltip 
-                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
                     formatter={(value: any) => [`$${Number(value).toLocaleString('es-CL')}`, 'Ingresos']}
+                    contentStyle={{ borderRadius: '12px', border: '2px solid #000', fontWeight: '800' }}
                   />
-                  <Area type="monotone" dataKey="total" stroke="#8b5cf6" strokeWidth={3} fillOpacity={1} fill="url(#colorTotal)" activeDot={{ r: 6, strokeWidth: 0, fill: '#8b5cf6' }} />
+                  <Area type="monotone" dataKey="total" stroke="#000" strokeWidth={4} fill="#e2e8f0" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
-          </motion.div>
+          </div>
 
-          {/* GRÁFICOS SECUNDARIOS: COLEGIOS Y PRENDAS */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
-            
-            <motion.div variants={itemVariants} style={cardStyle}>
-              <h2 style={{ margin: '0 0 20px 0', fontSize: '14px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Ingresos por Colegio (Top 5)</h2>
+            {/* GRÁFICO COLEGIOS */}
+            <div style={cardStyle}>
+              <h2 style={{ margin: '0 0 20px 0', fontSize: '14px', fontWeight: '900', color: '#000' }}>TOP COLEGIOS ($)</h2>
               <div style={{ width: '100%', height: '250px' }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={rankingColegios} layout="vertical" margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
+                  <BarChart data={rankingColegios} layout="vertical">
                     <XAxis type="number" hide />
-                    <YAxis dataKey="nombre" type="category" axisLine={false} tickLine={false} tick={{ fill: '#0f172a', fontSize: 11, fontWeight: 600 }} width={90} />
-                    <Tooltip cursor={{ fill: '#f1f5f9' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }} formatter={(value: any) => [`$${Number(value).toLocaleString('es-CL')}`, 'Total']} />
-                    <Bar dataKey="total" radius={[0, 6, 6, 0]} barSize={24}>
-                      {rankingColegios.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={index === 0 ? '#3b82f6' : '#94a3b8'} />
-                      ))}
-                    </Bar>
+                    <YAxis dataKey="nombre" type="category" tick={{ fill: '#000', fontWeight: 700, fontSize: 10 }} width={80} />
+                    {/* CORRECCIÓN 2 */}
+                    <Tooltip 
+                      formatter={(value: any) => [`$${Number(value).toLocaleString('es-CL')}`, 'Total']}
+                      contentStyle={{ borderRadius: '12px', border: '2px solid #000', fontWeight: '800' }}
+                    />
+                    <Bar dataKey="total" fill="#000" radius={[0, 5, 5, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-            </motion.div>
+            </div>
 
-            <motion.div variants={itemVariants} style={cardStyle}>
-              <h2 style={{ margin: '0 0 20px 0', fontSize: '14px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Volumen por Prenda (Top 5)</h2>
+            {/* GRÁFICO PRENDAS */}
+            <div style={cardStyle}>
+              <h2 style={{ margin: '0 0 20px 0', fontSize: '14px', fontWeight: '900', color: '#000' }}>TOP PRENDAS (UDS)</h2>
               <div style={{ width: '100%', height: '250px' }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={rankingPrendas} margin={{ top: 0, right: 0, left: -25, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                    <XAxis dataKey="nombre" axisLine={false} tickLine={false} tick={{ fill: '#0f172a', fontSize: 11, fontWeight: 600 }} dy={10} />
-                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} />
-                    <Tooltip cursor={{ fill: '#f1f5f9' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }} formatter={(value: any) => [`${Number(value)} unidades`, 'Vendidas']} />
-                    <Bar dataKey="cantidad" radius={[6, 6, 0, 0]} barSize={32}>
-                      {rankingPrendas.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={index === 0 ? '#10b981' : '#cbd5e1'} />
-                      ))}
-                    </Bar>
+                  <BarChart data={rankingPrendas}>
+                    <XAxis dataKey="nombre" tick={{ fill: '#000', fontWeight: 700, fontSize: 10 }} />
+                    <YAxis tick={{ fill: '#000', fontWeight: 700 }} />
+                    {/* CORRECCIÓN 3 */}
+                    <Tooltip 
+                      formatter={(value: any) => [`${Number(value)} unidades`, 'Vendidas']}
+                      contentStyle={{ borderRadius: '12px', border: '2px solid #000', fontWeight: '800' }}
+                    />
+                    <Bar dataKey="cantidad" fill="#000" radius={[5, 5, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-            </motion.div>
+            </div>
 
           </div>
         </motion.div>
