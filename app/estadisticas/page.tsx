@@ -207,7 +207,7 @@ export default function Estadisticas() {
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
                     <XAxis type="number" hide />
                     <YAxis dataKey="nombre" type="category" axisLine={false} tickLine={false} tick={{ fill: '#0f172a', fontSize: 11, fontWeight: 600 }} width={90} />
-                    <Tooltip cursor={{ fill: '#f1f5f9' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }} formatter={(value: number) => [`$${value.toLocaleString('es-CL')}`, 'Total']} />
+                    <Tooltip cursor={{ fill: '#f1f5f9' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }} formatter={(value: any) => [`$${Number(value).toLocaleString('es-CL')}`, 'Total']} />
                     <Bar dataKey="total" radius={[0, 6, 6, 0]} barSize={24}>
                       {rankingColegios.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={index === 0 ? '#3b82f6' : '#94a3b8'} />
@@ -226,7 +226,7 @@ export default function Estadisticas() {
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                     <XAxis dataKey="nombre" axisLine={false} tickLine={false} tick={{ fill: '#0f172a', fontSize: 11, fontWeight: 600 }} dy={10} />
                     <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} />
-                    <Tooltip cursor={{ fill: '#f1f5f9' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }} formatter={(value: number) => [`${value} unidades`, 'Vendidas']} />
+                    <Tooltip cursor={{ fill: '#f1f5f9' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }} formatter={(value: any) => [`${Number(value)} unidades`, 'Vendidas']} />
                     <Bar dataKey="cantidad" radius={[6, 6, 0, 0]} barSize={32}>
                       {rankingPrendas.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={index === 0 ? '#10b981' : '#cbd5e1'} />
