@@ -17,13 +17,12 @@ export default function RegistroPedido() {
   const [precioManualEspecial, setPrecioManualEspecial] = useState('')
   const [cantidad, setCantidad] = useState(1)
 
-  // DATOS CLIENTE Y PEDIDO
   const [nombreCliente, setNombreCliente] = useState('')
   const [rut, setRut] = useState('')
   const [telefono, setTelefono] = useState('')
   const [colegio, setColegio] = useState('')
   const [fechaEntrega, setFechaEntrega] = useState('')
-  const [observaciones, setObservaciones] = useState('') // NUEVA VARIABLE
+  const [observaciones, setObservaciones] = useState('')
   
   const [abono, setAbono] = useState('')
   const [metodoPagoInicial, setMetodoPagoInicial] = useState('Transferencia')
@@ -70,19 +69,21 @@ export default function RegistroPedido() {
     if (carrito.length === 0) return alert("Añade algo al pedido primero")
     setLoading(true)
     try {
-      const { data: cli } = await supabase.from('clientes').insert([{ nombre: nombreCliente, telefono, rut }]).select().single()
+      // FIX ERROR 'READING ID': Verificamos que la respuesta no sea nula
+      const { data: cli, error: cliError } = await supabase.from('clientes').insert([{ nombre: nombreCliente, telefono, rut }]).select().single()
+      if (cliError || !cli) throw new Error("Error al registrar cliente. Revisa los permisos de Supabase.")
       
-      // INSERTAMOS CON LA NUEVA COLUMNA OBSERVACIONES
-      const { data: ped } = await supabase.from('pedidos').insert([{
+      const { data: ped, error: pedError } = await supabase.from('pedidos').insert([{
         cliente_id: cli.id, 
         total_final: totalCalculado, 
         abono: 0, 
         estado: 'Pendiente',
         colegio: colegio || 'Particular', 
         fecha_entrega: fechaEntrega || null,
-        observaciones: observaciones, // SE GUARDA AQUÍ
+        observaciones: observaciones,
         creado_por: sessionStorage.getItem('user_name') || ''
       }]).select().single()
+      if (pedError || !ped) throw new Error("Error al registrar pedido.")
 
       const detalles = carrito.map(item => ({
         pedido_id: ped.id, producto_id: item.id_inv, cantidad: item.cantidad, talla: item.talla, precio_unitario: item.precio, estado: 'Pendiente'
@@ -109,11 +110,13 @@ export default function RegistroPedido() {
       }
 
       alert("✅ Venta registrada con éxito."); router.push('/pedidos')
-    } catch (err: any) { alert(err.message) }
+    } catch (err: any) { 
+      console.error(err)
+      alert(`❌ Error: ${err.message}`) 
+    }
     finally { setLoading(false) }
   }
 
-  // ESTILOS DE ALTO CONTRASTE (NEUBRUTALISM)
   const cardStyle = { backgroundColor: '#fff', padding: '24px', borderRadius: '24px', border: '3px solid #000', boxShadow: '8px 8px 0px #000', marginBottom: '20px' }
   const inputStyle = { width: '100%', padding: '12px 16px', border: '3px solid #000', borderRadius: '12px', fontSize: '15px', color: '#000', outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' as const }
   const labelStyle = { fontSize: '12px', fontWeight: '900', color: '#000', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px', textTransform: 'uppercase' as const }
@@ -122,7 +125,6 @@ export default function RegistroPedido() {
     <main style={{ minHeight: '100vh', backgroundColor: '#fff', padding: '20px', fontFamily: 'sans-serif' }}>
       <div style={{ maxWidth: '550px', margin: '0 auto' }}>
         
-        {/* CABECERA */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '25px' }}>
           <button onClick={() => router.push('/')} style={{ backgroundColor: '#fff', border: '3px solid #000', padding: '10px', borderRadius: '12px', color: '#000', cursor: 'pointer', boxShadow: '4px 4px 0px #000' }}>
             <ArrowLeft size={20} />
@@ -134,7 +136,6 @@ export default function RegistroPedido() {
 
         <form onSubmit={guardar}>
           
-          {/* DATOS DEL CLIENTE */}
           <div style={cardStyle}>
             <h2 style={{ margin: '0 0 20px 0', fontSize: '16px', fontWeight: '900', color: '#000', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <User size={18} /> Información del Cliente
@@ -168,7 +169,6 @@ export default function RegistroPedido() {
                 </div>
               </div>
 
-              {/* CAMPO DE OBSERVACIONES */}
               <div>
                 <label style={labelStyle}><MessageSquare size={14} /> Observaciones (Don Luis)</label>
                 <textarea 
@@ -181,7 +181,6 @@ export default function RegistroPedido() {
             </div>
           </div>
 
-          {/* SELECCIÓN PRENDAS */}
           <div style={cardStyle}>
             <h2 style={{ margin: '0 0 20px 0', fontSize: '16px', fontWeight: '900', color: '#000', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <ShoppingBag size={18} /> Productos
@@ -206,20 +205,18 @@ export default function RegistroPedido() {
             </button>
           </div>
 
-          {/* RESUMEN */}
           {carrito.length > 0 && (
             <div style={{ ...cardStyle, background: '#f0fdf4' }}>
               <h3 style={labelStyle}>Resumen</h3>
               {carrito.map((item) => (
                 <div key={item.tempId} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #000' }}>
-                  <span style={{ fontWeight: '800' }}>{item.cantidad}x {item.nombre} ({item.talla})</span>
-                  <button onClick={() => quitarDelCarrito(item.tempId)} style={{ color: 'red', border: 'none', background: 'none', fontWeight: '900' }}>X</button>
+                  <span style={{ fontWeight: '800', color: '#000' }}>{item.cantidad}x {item.nombre} ({item.talla})</span>
+                  <button onClick={() => quitarDelCarrito(item.tempId)} style={{ color: 'red', border: 'none', background: 'none', fontWeight: '900', cursor: 'pointer' }}>X</button>
                 </div>
               ))}
             </div>
           )}
 
-          {/* TOTAL Y PAGO */}
           <div style={{ backgroundColor: '#000', color: '#fff', padding: '30px', borderRadius: '24px', border: '3px solid #000', boxShadow: '8px 8px 0px #3b82f6' }}>
             <p style={{ margin: 0, fontSize: '14px', fontWeight: '900' }}>TOTAL</p>
             <p style={{ margin: '0 0 20px 0', fontSize: '36px', fontWeight: '900', color: '#4ade80' }}>${totalCalculado.toLocaleString('es-CL')}</p>
@@ -227,6 +224,21 @@ export default function RegistroPedido() {
             <div style={{ marginBottom: '20px' }}>
               <label style={{ color: '#fff', fontSize: '12px', fontWeight: '900' }}>ABONO INICIAL $</label>
               <input type="number" style={{ ...inputStyle, background: '#fff', marginTop: '5px' }} value={abono} onChange={e => setAbono(e.target.value)} />
+            </div>
+
+            {/* FIX MÉTODO DE PAGO: Agregado selector de método de pago */}
+            <div style={{ marginBottom: '25px' }}>
+              <label style={{ color: '#fff', fontSize: '12px', fontWeight: '900' }}>MÉTODO DE PAGO</label>
+              <select 
+                style={{ ...inputStyle, background: '#fff', marginTop: '5px' }} 
+                value={metodoPagoInicial} 
+                onChange={e => setMetodoPagoInicial(e.target.value)}
+              >
+                <option value="Transferencia">Transferencia</option>
+                <option value="Efectivo">Efectivo</option>
+                <option value="Débito">Débito</option>
+                <option value="Crédito">Crédito</option>
+              </select>
             </div>
 
             <button type="submit" disabled={loading} style={{ width: '100%', backgroundColor: '#4ade80', color: '#000', border: '3px solid #000', padding: '16px', borderRadius: '14px', fontWeight: '900', fontSize: '18px', cursor: 'pointer', boxShadow: '4px 4px 0px #fff' }}>
