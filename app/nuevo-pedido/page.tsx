@@ -23,6 +23,8 @@ export default function RegistroPedido() {
   const [fechaEntrega, setFechaEntrega] = useState('')
   
   const [abono, setAbono] = useState('')
+  const [metodoPagoInicial, setMetodoPagoInicial] = useState('Transferencia')
+  const [fechaPagoInicial, setFechaPagoInicial] = useState(new Date().toISOString().split('T')[0])
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -66,7 +68,7 @@ export default function RegistroPedido() {
     try {
       const { data: cli } = await supabase.from('clientes').insert([{ nombre: nombreCliente, telefono, rut }]).select().single()
       const { data: ped } = await supabase.from('pedidos').insert([{
-        cliente_id: cli.id, total_final: totalCalculado, abono: Number(abono), estado: 'Pendiente',
+        cliente_id: cli.id, total_final: totalCalculado, abono: 0, estado: 'Pendiente',
         colegio: colegio || 'Particular', fecha_entrega: fechaEntrega || null
       }]).select().single()
 
@@ -74,6 +76,15 @@ export default function RegistroPedido() {
         pedido_id: ped.id, producto_id: item.id_inv, cantidad: item.cantidad, talla: item.talla, precio_unitario: item.precio, estado: 'Pendiente'
       }))
       await supabase.from('detalles_pedido').insert(detalles)
+
+      if (Number(abono) > 0) {
+        await supabase.from('pagos').insert([{
+          pedido_id: ped.id,
+          monto: Number(abono),
+          fecha_pago: fechaPagoInicial,
+          metodo_pago: metodoPagoInicial
+        }])
+      }
 
       // Reservar stock
       for (const item of carrito) {
@@ -210,6 +221,22 @@ export default function RegistroPedido() {
             <div style={{ marginBottom: '25px' }}>
               <label style={{ ...labelStyle, color: '#94a3b8' }}><CreditCard size={14} /> Abono Inicial $</label>
               <input required type="number" placeholder="Ej: 10000" style={{ ...inputStyle, backgroundColor: '#1e293b', border: '1px solid #334155', color: '#fff' }} value={abono} onChange={e => setAbono(e.target.value)} />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '25px' }}>
+              <div>
+                <label style={{ ...labelStyle, color: '#94a3b8' }}>Método de Pago</label>
+                <select style={{ ...inputStyle, backgroundColor: '#1e293b', border: '1px solid #334155', color: '#fff' }} value={metodoPagoInicial} onChange={e => setMetodoPagoInicial(e.target.value)}>
+                  <option value="Transferencia">Transferencia</option>
+                  <option value="Efectivo">Efectivo</option>
+                  <option value="Débito">Débito</option>
+                  <option value="Crédito">Crédito</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ ...labelStyle, color: '#94a3b8' }}>Fecha de Pago</label>
+                <input type="date" style={{ ...inputStyle, backgroundColor: '#1e293b', border: '1px solid #334155', color: '#fff' }} value={fechaPagoInicial} onChange={e => setFechaPagoInicial(e.target.value)} />
+              </div>
             </div>
 
             <motion.button whileHover={{ scale: 1.02, backgroundColor: '#059669' }} whileTap={{ scale: 0.98 }} type="submit" disabled={loading} style={{ width: '100%', backgroundColor: '#10b981', color: '#fff', border: 'none', padding: '16px', borderRadius: '14px', fontWeight: '700', fontSize: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', boxShadow: '0 4px 6px -1px rgba(16, 185, 129, 0.2)' }}>

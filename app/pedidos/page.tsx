@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 import { motion } from 'framer-motion'
 import * as XLSX from 'xlsx-js-style'
-import { ArrowLeft, Search, School, Phone, IdCard, Calendar, Package, Printer, Trash2, Edit3, CheckCircle2, Clock, RotateCcw, MessageCircle, Download } from 'lucide-react'
+import { ArrowLeft, Search, School, Phone, IdCard, Calendar, Package, Printer, Trash2, CreditCard, MessageCircle, Download, Landmark, Banknote, ChevronDown, ChevronUp } from 'lucide-react'
 
 export default function VerPedidos() {
   const router = useRouter()
@@ -13,20 +13,30 @@ export default function VerPedidos() {
   const [busqueda, setBusqueda] = useState('')
   const [filtro, setFiltro] = useState('Todos')
   const [ordenarColegio, setOrdenarColegio] = useState(false)
+  const [expandidos, setExpandidos] = useState<Record<string, boolean>>({})
+
+  const metodoPagoIcono = (metodo: string) => {
+    if (metodo === 'Transferencia') return <Landmark size={14} />
+    if (metodo === 'Efectivo') return <Banknote size={14} />
+    return <CreditCard size={14} />
+  }
 
   const cargar = useCallback(async () => {
     if (!sessionStorage.getItem('user_role')) return router.push('/login')
 
     setLoading(true)
-    const [pRes, cRes, iRes, dRes] = await Promise.all([
+    const [pRes, cRes, iRes, dRes, pagosRes] = await Promise.all([
       supabase.from('pedidos').select('*').order('created_at', { ascending: false }),
       supabase.from('clientes').select('*'),
       supabase.from('inventario').select('*'),
-      supabase.from('detalles_pedido').select('*').order('id')
+      supabase.from('detalles_pedido').select('*').order('id'),
+      supabase.from('pagos').select('*').order('fecha_pago', { ascending: true })
     ])
     
     const cruzados = (pRes.data || []).map(p => {
       const cliente = cRes.data?.find(c => c.id === p.cliente_id)
+      const pagos = (pagosRes.data || []).filter(pg => pg.pedido_id === p.id)
+      const totalPagado = pagos.reduce((acc, pg) => acc + Number(pg.monto || 0), 0)
       const detalles = dRes.data?.filter(d => d.pedido_id === p.id).map(d => {
         const prod = iRes.data?.find(inv => inv.id === d.producto_id)
         return { ...d, p_nombre: prod?.nombre || 'Producto' }
@@ -34,7 +44,7 @@ export default function VerPedidos() {
 
       // Ahora el estado depende de si las cantidades calzan
       const itemsCompletos = detalles?.length > 0 && detalles.every(d => (d.cantidad_entregada || 0) === d.cantidad)
-      const pagoCompleto = p.abono >= p.total_final
+      const pagoCompleto = totalPagado >= p.total_final
       
       let estadoMacro = ''
       let colorEstadoBg = ''
@@ -52,7 +62,7 @@ export default function VerPedidos() {
 
       return { 
         ...p, c_nombre: cliente?.nombre || 'S/N', c_telefono: cliente?.telefono || '', c_rut: cliente?.rut || '', 
-        detalles, estado_macro: estadoMacro, color_bg: colorEstadoBg, color_text: colorEstadoText, itemsCompletos
+        detalles, pagos, total_pagado: totalPagado, estado_macro: estadoMacro, color_bg: colorEstadoBg, color_text: colorEstadoText, itemsCompletos
       }
     })
     setDatos(cruzados)
@@ -61,7 +71,7 @@ export default function VerPedidos() {
 
   const calcularEstadoPedido = (pedido: any, detallesActualizados: any[]) => {
     const itemsCompletos = detallesActualizados?.length > 0 && detallesActualizados.every(d => (d.cantidad_entregada || 0) === d.cantidad)
-    const pagoCompleto = pedido.abono >= pedido.total_final
+    const pagoCompleto = Number(pedido.total_pagado || 0) >= Number(pedido.total_final || 0)
 
     let estadoMacro = ''
     let colorEstadoBg = ''
@@ -149,9 +159,10 @@ export default function VerPedidos() {
     datos.forEach(p => {
       const inicioBloque = reporte.length + 2 // +1 por header y +1 porque Excel parte en 1
       const totalPedido = Number(p.total_final || 0)
-      const abonoPedido = Number(p.abono || 0)
+      const abonoPedido = Number(p.total_pagado || 0)
       const saldoPendiente = totalPedido - abonoPedido
       const detalles = p.detalles || []
+      const pagos = p.pagos || []
 
       // Fila encabezado del pedido
       reporte.push({
@@ -201,6 +212,28 @@ export default function VerPedidos() {
           'Total Pedido': '',
           'Abono Pedido': '',
           'Saldo Pendiente': ''
+        })
+      })
+
+      // Filas de pagos del pedido
+      pagos.forEach((pg: any) => {
+        reporte.push({
+          'Tipo': 'PAGO',
+          'ID Pedido': '',
+          'Fecha': pg.fecha_pago ? new Date(pg.fecha_pago).toLocaleDateString('es-CL') : '',
+          'Cliente': '',
+          'RUT': '',
+          'Teléfono': '',
+          'Colegio': '',
+          'Ítem': '',
+          'Talla': '',
+          'Cantidad': '',
+          'Cantidad Entregada': '',
+          'Precio Unitario': '',
+          'Total Ítem': '',
+          'Total Pedido': '',
+          'Abono Pedido': formatoMoneda(pg.monto || 0),
+          'Saldo Pendiente': pg.metodo_pago || ''
         })
       })
 
@@ -254,19 +287,77 @@ export default function VerPedidos() {
     XLSX.writeFile(wb, `Reporte_Detallado_Ventas_${new Date().toISOString().split('T')[0]}.xlsx`)
   }
 
-  const actualizarAbono = async (pedidoId: string, totalFinal: number, abonoActual: number) => {
-    const input = prompt(`💰 Modificar Pago\nTotal: $${totalFinal}\nPagado: $${abonoActual}\n\nNUEVO MONTO TOTAL pagado:`, abonoActual.toString());
-    if (input === null) return;
-    const nuevoAbono = Number(input);
-    if (isNaN(nuevoAbono) || nuevoAbono < 0) return alert("❌ Monto inválido.");
+  const agregarPago = async (pedido: any) => {
+    const montoInput = prompt('💰 Nuevo Pago\nMonto:', '')
+    if (montoInput === null) return
+    const monto = Number(montoInput)
+    if (isNaN(monto) || monto <= 0) return alert('❌ Monto inválido.')
+
+    const fechaDefault = new Date().toISOString().split('T')[0]
+    const fechaPago = prompt('📅 Fecha de Pago (YYYY-MM-DD):', fechaDefault)
+    if (fechaPago === null || !fechaPago.trim()) return
+
+    const metodo = prompt('💳 Método (Transferencia, Efectivo, Débito, Crédito):', 'Transferencia')
+    if (metodo === null || !['Transferencia', 'Efectivo', 'Débito', 'Crédito'].includes(metodo)) {
+      return alert('❌ Método inválido.')
+    }
+
+    const pagoTemp = {
+      id: `temp-${Date.now()}`,
+      pedido_id: pedido.id,
+      monto,
+      fecha_pago: fechaPago,
+      metodo_pago: metodo
+    }
+
+    let snapshot: any[] = []
+    setDatos(prev => {
+      snapshot = prev
+      return prev.map(p => {
+        if (p.id !== pedido.id) return p
+        const pagosActualizados = [...(p.pagos || []), pagoTemp]
+        const totalPagado = Number(p.total_pagado || 0) + monto
+        const { estadoMacro, colorEstadoBg, colorEstadoText, itemsCompletos } = calcularEstadoPedido(
+          { ...p, total_pagado: totalPagado },
+          p.detalles || []
+        )
+        return {
+          ...p,
+          pagos: pagosActualizados,
+          total_pagado: totalPagado,
+          estado_macro: estadoMacro,
+          color_bg: colorEstadoBg,
+          color_text: colorEstadoText,
+          itemsCompletos
+        }
+      })
+    })
+
     try {
-      await supabase.from('pedidos').update({ abono: nuevoAbono }).eq('id', pedidoId);
-      cargar(); 
-    } catch (err) { alert("Error al actualizar pago: " + err); }
+      const { data, error } = await supabase.from('pagos').insert([{
+        pedido_id: pedido.id,
+        monto,
+        fecha_pago: fechaPago,
+        metodo_pago: metodo
+      }]).select().single()
+      if (error) throw error
+
+      setDatos(prev => prev.map(p => {
+        if (p.id !== pedido.id) return p
+        return {
+          ...p,
+          pagos: (p.pagos || []).map((pg: any) => (String(pg.id).startsWith('temp-') ? (data || pg) : pg))
+        }
+      }))
+    } catch (err) {
+      setDatos(snapshot)
+      alert('❌ Error al guardar el pago. Se revirtió el cambio.')
+    }
   }
 
   const borrarPedido = async (pedidoId: string, detalles: any[]) => {
     if(!confirm('⚠️ ¿Borrar pedido completo?')) return
+    await supabase.from('pagos').delete().eq('pedido_id', pedidoId)
     for (const det of detalles) {
       if (det.estado === 'Pendiente' && det.producto_id) {
         await supabase.rpc('reservar_stock', { prod_id: det.producto_id, cant: -det.cantidad })
@@ -323,7 +414,8 @@ export default function VerPedidos() {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {filtrados.map(p => {
-            const deuda = p.total_final - p.abono;
+            const deuda = p.total_final - (p.total_pagado || 0);
+            const expandido = !!expandidos[p.id]
             return (
               <div key={p.id} style={{ backgroundColor: '#fff', padding: '24px', borderRadius: '24px', border: '2px solid #e2e8f0', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
                 
@@ -342,8 +434,15 @@ export default function VerPedidos() {
                   {p.c_rut && <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><IdCard size={14} /> {p.c_rut}</span>}
                 </div>
 
-                {/* ITEMS DEL PEDIDO CON BOTONES DE ENTREGA PARCIAL */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '24px' }}>
+                <button
+                  onClick={() => setExpandidos(prev => ({ ...prev, [p.id]: !prev[p.id] }))}
+                  style={{ width: '100%', marginBottom: '16px', border: '2px solid #000', backgroundColor: '#fff', borderRadius: '10px', padding: '10px', fontWeight: '900', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px' }}
+                >
+                  {expandido ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  {expandido ? 'Ocultar Detalle' : 'Ver Detalle'}
+                </button>
+
+                {expandido && <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '24px' }}>
                   {p.detalles?.map((det: any, idx: number) => {
                     const entregadoTotal = (det.cantidad_entregada || 0) === det.cantidad;
                     return (
@@ -365,13 +464,42 @@ export default function VerPedidos() {
                       </div>
                     )
                   })}
-                </div>
+                </div>}
+
+                {expandido && (
+                  <div style={{ marginBottom: '20px', border: '2px solid #000', borderRadius: '16px', padding: '14px', backgroundColor: '#fff' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                      <p style={{ margin: 0, fontSize: '13px', fontWeight: '900', color: '#000' }}>Historial de Pagos</p>
+                      <button onClick={() => agregarPago(p)} style={{ border: '2px solid #000', background: '#000', color: '#fff', padding: '6px 10px', borderRadius: '8px', fontSize: '11px', fontWeight: '800', cursor: 'pointer' }}>
+                        AÑADIR PAGO
+                      </button>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {(p.pagos || []).length === 0 && (
+                        <p style={{ margin: 0, fontSize: '12px', fontWeight: '700', color: '#64748b' }}>Sin pagos registrados.</p>
+                      )}
+                      {(p.pagos || []).map((pg: any) => (
+                        <div key={pg.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '10px', backgroundColor: '#f8fafc' }}>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', fontWeight: '800', color: '#000' }}>
+                            <Calendar size={14} /> {pg.fecha_pago ? new Date(pg.fecha_pago).toLocaleDateString('es-CL') : '-'}
+                          </span>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', fontWeight: '800', color: '#10b981' }}>
+                            <CreditCard size={14} /> ${Number(pg.monto || 0).toLocaleString('es-CL')}
+                          </span>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', fontWeight: '800', color: '#000' }}>
+                            {metodoPagoIcono(pg.metodo_pago)} {pg.metodo_pago || '-'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
                   <div style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '16px' }}>
                     <p style={{ margin: 0, fontSize: '12px', fontWeight: '800', color: '#000' }}>PAGADO</p>
-                    <p style={{ margin: '4px 0', fontSize: '20px', fontWeight: '900', color: '#10b981' }}>${p.abono.toLocaleString()}</p>
-                    <button onClick={() => actualizarAbono(p.id, p.total_final, p.abono)} style={{ border: '1px solid #000', background: '#000', color: '#fff', padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: '800', cursor: 'pointer' }}>Modificar</button>
+                    <p style={{ margin: '4px 0', fontSize: '20px', fontWeight: '900', color: '#10b981' }}>${Number(p.total_pagado || 0).toLocaleString('es-CL')}</p>
+                    <button onClick={() => agregarPago(p)} style={{ border: '2px solid #000', background: '#000', color: '#fff', padding: '4px 8px', borderRadius: '8px', fontSize: '11px', fontWeight: '800', cursor: 'pointer' }}>Añadir Pago</button>
                   </div>
                   <div style={{ backgroundColor: deuda > 0 ? '#fef2f2' : '#f0fdf4', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '16px' }}>
                     <p style={{ margin: 0, fontSize: '12px', fontWeight: '800', color: '#000' }}>DEUDA</p>
