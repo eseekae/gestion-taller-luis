@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 import { motion } from 'framer-motion'
-import * as XLSX from 'xlsx'
+import * as XLSX from 'xlsx-js-style'
 import { ArrowLeft, Search, School, Phone, IdCard, Calendar, Package, Printer, Trash2, Edit3, CheckCircle2, Clock, RotateCcw, MessageCircle, Download } from 'lucide-react'
 
 export default function VerPedidos() {
@@ -144,8 +144,10 @@ export default function VerPedidos() {
   const exportarExcel = () => {
     const reporte: any[] = []
     const formatoMoneda = (monto: number) => `$${Number(monto || 0).toLocaleString('es-CL')}`
+    const rangosPedidos: Array<{ inicio: number; fin: number }> = []
 
     datos.forEach(p => {
+      const inicioBloque = reporte.length + 2 // +1 por header y +1 porque Excel parte en 1
       const totalPedido = Number(p.total_final || 0)
       const abonoPedido = Number(p.abono || 0)
       const saldoPendiente = totalPedido - abonoPedido
@@ -201,9 +203,52 @@ export default function VerPedidos() {
           'Saldo Pendiente': ''
         })
       })
+
+      const finBloque = reporte.length + 1
+      rangosPedidos.push({ inicio: inicioBloque, fin: finBloque })
     })
 
     const ws = XLSX.utils.json_to_sheet(reporte)
+
+    const bordeNegro = { rgb: '000000' }
+    const columnasTotales = 16 // A..P
+    const asegurarCelda = (fila: number, col: number) => {
+      const dir = XLSX.utils.encode_cell({ r: fila - 1, c: col })
+      if (!ws[dir]) ws[dir] = { t: 's', v: '' }
+      return dir
+    }
+    const aplicarBorde = (fila: number, col: number, borde: any) => {
+      const dir = asegurarCelda(fila, col)
+      const celda = ws[dir] as any
+      celda.s = {
+        ...(celda.s || {}),
+        border: {
+          ...(celda.s?.border || {}),
+          ...borde
+        }
+      }
+      ws[dir] = celda
+    }
+
+    rangosPedidos.forEach(({ inicio, fin }) => {
+      // Separadores internos entre filas del mismo bloque
+      for (let fila = inicio + 1; fila <= fin; fila++) {
+        for (let col = 0; col < columnasTotales; col++) {
+          aplicarBorde(fila, col, { top: { style: 'thin', color: bordeNegro } })
+        }
+      }
+
+      // Borde exterior oscuro y prominente del bloque
+      for (let col = 0; col < columnasTotales; col++) {
+        aplicarBorde(inicio, col, { top: { style: 'medium', color: bordeNegro } })
+        aplicarBorde(fin, col, { bottom: { style: 'medium', color: bordeNegro } })
+      }
+      for (let fila = inicio; fila <= fin; fila++) {
+        aplicarBorde(fila, 0, { left: { style: 'medium', color: bordeNegro } })
+        aplicarBorde(fila, columnasTotales - 1, { right: { style: 'medium', color: bordeNegro } })
+      }
+    })
+
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, "Reporte Detallado")
     XLSX.writeFile(wb, `Reporte_Detallado_Ventas_${new Date().toISOString().split('T')[0]}.xlsx`)
