@@ -181,7 +181,6 @@ export default function VerPedidos() {
     }))
 
     try {
-      // AQUÍ MANTENEMOS LA COLUMNA CREADO_POR QUE HICISTE
       const { error } = await supabase.from('pagos').insert([{
         pedido_id: pedido.id,
         monto: monto,
@@ -226,18 +225,18 @@ export default function VerPedidos() {
     .filter(p => filtro === 'Todos' || (filtro === 'Pendientes' && p.estado_macro !== 'Completado') || p.estado_macro === filtro)
 
   return (
-    <main style={{ minHeight: '100vh', backgroundColor: '#cbd5e1', padding: '20px', fontFamily: 'sans-serif' }}>
+    <main style={{ minHeight: '100vh', backgroundColor: '#ffffff', padding: '20px', fontFamily: 'sans-serif' }}>
       <div style={{ maxWidth: '650px', margin: '0 auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '25px' }}>
-          <button onClick={() => router.push('/')} style={{ backgroundColor: '#fff', border: '3px solid #000', padding: '10px', borderRadius: '12px', boxShadow: '4px 4px 0px #000' }}><ArrowLeft size={20} /></button>
-          <h1 style={{ fontSize: '24px', fontWeight: '900' }}>Gestión de Pedidos</h1>
+          <button onClick={() => router.push('/')} style={{ backgroundColor: '#fff', border: '3px solid #000', padding: '10px', borderRadius: '12px', boxShadow: '4px 4px 0px #000' }}><ArrowLeft size={20} color="#000" /></button>
+          <h1 style={{ fontSize: '24px', fontWeight: '900', color: '#000000' }}>Gestión de Pedidos</h1>
           <button onClick={exportarExcel} style={{ backgroundColor: '#166534', color: '#fff', padding: '10px 16px', borderRadius: '12px', fontWeight: '800', border: '3px solid #000', boxShadow: '4px 4px 0px #000' }}><Download size={18} /> Excel</button>
         </div>
 
         <div style={{ marginBottom: '25px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
           <div style={{ position: 'relative' }}>
-            <Search style={{ position: 'absolute', left: '14px', top: '14px' }} size={20} />
-            <input placeholder="Buscar..." style={{ width: '100%', padding: '14px 40px', border: '3px solid #000', borderRadius: '12px', fontWeight: '700', boxShadow: '4px 4px 0px #000' }} onChange={(e) => setBusqueda(e.target.value)} />
+            <Search style={{ position: 'absolute', left: '14px', top: '14px' }} size={20} color="#000" />
+            <input placeholder="Buscar..." style={{ width: '100%', padding: '14px 40px', border: '3px solid #000', borderRadius: '12px', fontWeight: '700', boxShadow: '4px 4px 0px #000', color: '#000' }} onChange={(e) => setBusqueda(e.target.value)} />
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
             {['Todos', 'Pendientes', 'Completado'].map(f => (
@@ -253,20 +252,20 @@ export default function VerPedidos() {
             return (
               <div key={p.id} style={{ backgroundColor: '#fff', padding: '24px', borderRadius: '24px', border: '3px solid #000', boxShadow: '8px 8px 0px #000' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
-                  <span style={{ fontWeight: '800', fontSize: '12px' }}><School size={12} /> {p.colegio || 'Particular'}</span>
+                  <span style={{ fontWeight: '800', fontSize: '12px', color: '#000000', display: 'flex', alignItems: 'center', gap: '4px' }}><School size={12} color="#000" /> {p.colegio || 'Particular'}</span>
                   <span style={{ backgroundColor: p.color_bg, color: p.color_text, padding: '6px 12px', borderRadius: '8px', fontWeight: '800', border: '2px solid #000' }}>{p.estado_macro}</span>
                 </div>
-                <h2 style={{ fontWeight: '900', fontSize: '24px' }}>{p.c_nombre}</h2>
-                <button onClick={() => setExpandidos(prev => ({ ...prev, [p.id]: !prev[p.id] }))} style={{ width: '100%', margin: '16px 0', border: '3px solid #000', borderRadius: '10px', padding: '10px', fontWeight: '900', background: '#f1f5f9' }}>{expandido ? 'Ocultar Detalle' : 'Ver Detalle'}</button>
+                <h2 style={{ fontWeight: '900', fontSize: '24px', color: '#000000' }}>{p.c_nombre}</h2>
+                <button onClick={() => setExpandidos(prev => ({ ...prev, [p.id]: !prev[p.id] }))} style={{ width: '100%', margin: '16px 0', border: '3px solid #000', borderRadius: '10px', padding: '10px', fontWeight: '900', background: '#f1f5f9', color: '#000000' }}>{expandido ? 'Ocultar Detalle' : 'Ver Detalle'}</button>
 
                 {expandido && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '20px' }}>
                     {p.detalles?.map((det: any, idx: number) => (
                       <div key={idx} style={{ padding: '12px', border: '2px solid #000', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', background: '#f8fafc' }}>
-                        <div><p style={{ fontWeight: '800' }}>{det.p_nombre}</p><p style={{ fontSize: '12px' }}>{det.cantidad_entregada || 0} de {det.cantidad}</p></div>
+                        <div><p style={{ fontWeight: '800', color: '#000000' }}>{det.p_nombre}</p><p style={{ fontSize: '12px', color: '#000000' }}>{det.cantidad_entregada || 0} de {det.cantidad}</p></div>
                         <div style={{ display: 'flex', gap: '5px' }}>
-                          <button onClick={() => actualizarEntrega(det, -1)} style={{ border: '2px solid #000', borderRadius: '8px', padding: '5px', background: '#fff' }}>-</button>
-                          <button onClick={() => actualizarEntrega(det, 1)} style={{ background: '#000', color: '#fff', borderRadius: '8px', padding: '5px', border: '2px solid #000' }}>+1</button>
+                          <button onClick={() => actualizarEntrega(det, -1)} style={{ border: '2px solid #000', borderRadius: '8px', padding: '5px', background: '#ef4444', color: '#ffffff', fontWeight: '900' }}>-</button>
+                          <button onClick={() => actualizarEntrega(det, 1)} style={{ background: '#4ade80', color: '#000', borderRadius: '8px', padding: '5px', border: '2px solid #000', fontWeight: '900' }}>+1</button>
                         </div>
                       </div>
                     ))}
@@ -275,12 +274,12 @@ export default function VerPedidos() {
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>
                   <div style={{ background: '#f0fdf4', padding: '16px', borderRadius: '16px', border: '3px solid #000' }}>
-                    <p style={{ fontSize: '12px', fontWeight: '800' }}>PAGADO</p>
+                    <p style={{ fontSize: '12px', fontWeight: '800', color: '#000000' }}>PAGADO</p>
                     <p style={{ fontSize: '22px', fontWeight: '900', color: '#166534' }}>${Number(p.total_pagado || 0).toLocaleString('es-CL')}</p>
                     <button onClick={() => agregarPago(p)} style={{ background: '#000', color: '#fff', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '900', marginTop: '8px', border: '2px solid #000' }}>+ Pago</button>
                   </div>
                   <div style={{ background: deuda > 0 ? '#fef2f2' : '#f0fdf4', padding: '16px', borderRadius: '16px', border: '3px solid #000' }}>
-                    <p style={{ fontSize: '12px', fontWeight: '800' }}>DEUDA</p>
+                    <p style={{ fontSize: '12px', fontWeight: '800', color: '#000000' }}>DEUDA</p>
                     <p style={{ fontSize: '22px', fontWeight: '900', color: deuda > 0 ? '#991b1b' : '#166534' }}>${deuda.toLocaleString('es-CL')}</p>
                   </div>
                 </div>
@@ -298,16 +297,16 @@ export default function VerPedidos() {
         </div>
 
         <div style={{ marginTop: '60px', borderTop: '6px solid #000', paddingTop: '40px', paddingBottom: '80px' }}>
-          <h2 style={{ fontSize: '28px', fontWeight: '900', marginBottom: '24px' }}>HISTORIAL DE ACTIVIDAD</h2>
+          <h2 style={{ fontSize: '28px', fontWeight: '900', marginBottom: '24px', color: '#000000' }}>HISTORIAL DE ACTIVIDAD</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {logs.length === 0 ? <p>Sin registros.</p> : logs.map((log) => (
+            {logs.length === 0 ? <p style={{ color: '#000' }}>Sin registros.</p> : logs.map((log) => (
               <div key={log.id} style={{ backgroundColor: '#fff', border: '3px solid #000', padding: '20px', borderRadius: '20px', boxShadow: '6px 6px 0px #000' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
                   <span style={{ background: '#000', color: '#fff', padding: '5px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '900' }}>{log.usuario}</span>
-                  <span style={{ fontSize: '13px', fontWeight: '800', color: '#475569' }}>{new Date(log.fecha).toLocaleString()}</span>
+                  <span style={{ fontSize: '13px', fontWeight: '800', color: '#000000' }}>{new Date(log.fecha).toLocaleString()}</span>
                 </div>
-                <p style={{ fontWeight: '900', fontSize: '16px' }}>{log.accion}</p>
-                <p style={{ fontSize: '14px', color: '#1e293b' }}>{log.detalles}</p>
+                <p style={{ fontWeight: '900', fontSize: '16px', color: '#000000' }}>{log.accion}</p>
+                <p style={{ fontSize: '14px', color: '#000000' }}>{log.detalles}</p>
               </div>
             ))}
           </div>
