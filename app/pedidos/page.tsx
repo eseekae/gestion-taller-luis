@@ -2,9 +2,10 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
+import { registrarLog } from '../../lib/auditoria'
 import { motion } from 'framer-motion'
-import * as XLSX from 'xlsx'
-import { ArrowLeft, Search, School, Phone, IdCard, Calendar, Package, Printer, Trash2, Edit3, CheckCircle2, Clock, RotateCcw, MessageCircle, Download } from 'lucide-react'
+import * as XLSX from 'xlsx-js-style'
+import { ArrowLeft, Search, School, Phone, IdCard, Calendar, Package, Printer, Trash2, CreditCard, MessageCircle, Download, Landmark, Banknote, ChevronDown, ChevronUp } from 'lucide-react'
 
 export default function VerPedidos() {
   const router = useRouter()
@@ -13,27 +14,52 @@ export default function VerPedidos() {
   const [busqueda, setBusqueda] = useState('')
   const [filtro, setFiltro] = useState('Todos')
   const [ordenarColegio, setOrdenarColegio] = useState(false)
+  const [expandidos, setExpandidos] = useState<Record<string, boolean>>({})
+  const [usuarioActivo, setUsuarioActivo] = useState('')
+  const [logs, setLogs] = useState<any[]>([])
+
+
+  const metodoPagoIcono = (metodo: string) => {
+    if (metodo === 'Transferencia') return <Landmark size={14} />
+    if (metodo === 'Efectivo') return <Banknote size={14} />
+    return <CreditCard size={14} />
+  }
 
   const cargar = useCallback(async () => {
     if (!sessionStorage.getItem('user_role')) return router.push('/login')
+    setUsuarioActivo(sessionStorage.getItem('user_name') || '')
 
     setLoading(true)
-    const [pRes, cRes, iRes, dRes] = await Promise.all([
+
+
+
+
+
+
+
+        const [pRes, cRes, iRes, dRes, pagosRes, aRes] = await Promise.all([
       supabase.from('pedidos').select('*').order('created_at', { ascending: false }),
       supabase.from('clientes').select('*'),
       supabase.from('inventario').select('*'),
-      supabase.from('detalles_pedido').select('*').order('id')
+      supabase.from('detalles_pedido').select('*').order('id'),
+      supabase.from('pagos').select('*').order('fecha_pago', { ascending: true }),
+      supabase.from('auditoria').select('*').order('fecha', { ascending: false }).limit(20)
     ])
+    setLogs(aRes.data || [])
+
     
     const cruzados = (pRes.data || []).map(p => {
       const cliente = cRes.data?.find(c => c.id === p.cliente_id)
+      const pagos = (pagosRes.data || []).filter(pg => pg.pedido_id === p.id)
+      const totalPagado = pagos.reduce((acc, pg) => acc + Number(pg.monto || 0), 0)
       const detalles = dRes.data?.filter(d => d.pedido_id === p.id).map(d => {
         const prod = iRes.data?.find(inv => inv.id === d.producto_id)
         return { ...d, p_nombre: prod?.nombre || 'Producto' }
       })
 
-      const itemsCompletos = detalles?.length > 0 && detalles.every(d => d.estado === 'Entregado')
-      const pagoCompleto = p.abono >= p.total_final
+      // Ahora el estado depende de si las cantidades calzan
+      const itemsCompletos = detalles?.length > 0 && detalles.every(d => (d.cantidad_entregada || 0) === d.cantidad)
+      const pagoCompleto = totalPagado >= p.total_final
       
       let estadoMacro = ''
       let colorEstadoBg = ''
@@ -51,12 +77,93 @@ export default function VerPedidos() {
 
       return { 
         ...p, c_nombre: cliente?.nombre || 'S/N', c_telefono: cliente?.telefono || '', c_rut: cliente?.rut || '', 
-        detalles, estado_macro: estadoMacro, color_bg: colorEstadoBg, color_text: colorEstadoText, itemsCompletos
+        detalles, pagos, total_pagado: totalPagado, estado_macro: estadoMacro, color_bg: colorEstadoBg, color_text: colorEstadoText, itemsCompletos
       }
     })
     setDatos(cruzados)
     setLoading(false)
   }, [router])
+
+  const calcularEstadoPedido = (pedido: any, detallesActualizados: any[]) => {
+    const itemsCompletos = detallesActualizados?.length > 0 && detallesActualizados.every(d => (d.cantidad_entregada || 0) === d.cantidad)
+    const pagoCompleto = Number(pedido.total_pagado || 0) >= Number(pedido.total_final || 0)
+
+    let estadoMacro = ''
+    let colorEstadoBg = ''
+    let colorEstadoText = ''
+
+    if (itemsCompletos && pagoCompleto) {
+      estadoMacro = 'Completado'; colorEstadoBg = '#dcfce7'; colorEstadoText = '#166534'
+    } else if (!itemsCompletos && pagoCompleto) {
+      estadoMacro = 'Pend. Entrega'; colorEstadoBg = '#dbeafe'; colorEstadoText = '#1e40af'
+    } else if (itemsCompletos && !pagoCompleto) {
+      estadoMacro = 'Pend. Pago'; colorEstadoBg = '#ffedd5'; colorEstadoText = '#c2410c'
+    } else {
+      estadoMacro = 'Pend. Entrega y Pago'; colorEstadoBg = '#fef3c7'; colorEstadoText = '#b45309'
+    }
+
+    return { estadoMacro, colorEstadoBg, colorEstadoText, itemsCompletos }
+  }
+
+  // ENTREGA PARCIAL CON OPTIMISTIC UI + ROLLBACK
+  const actualizarEntrega = async (det: any, cambio: number | 'todo') => {
+    const actual = det.cantidad_entregada || 0
+    const total = det.cantidad
+    let nuevaCantidad = cambio === 'todo' ? total : actual + cambio
+
+    if (nuevaCantidad < 0 || nuevaCantidad > total) return
+    const variacion = nuevaCantidad - actual
+    if (variacion === 0) return
+
+    const pedidoObjetivoId = det.pedido_id
+    const nuevoEstado = nuevaCantidad === total ? 'Entregado' : 'Pendiente'
+    let datosPrevios: any[] = []
+
+    // 1) Actualizamos UI local al instante
+    setDatos(prev => {
+      datosPrevios = prev
+      return prev.map(pedido => {
+        const perteneceAlPedido = pedido.id === pedidoObjetivoId || pedido.detalles?.some((d: any) => d.id === det.id)
+        if (!perteneceAlPedido) return pedido
+
+        const detallesActualizados = (pedido.detalles || []).map((d: any) =>
+          d.id === det.id ? { ...d, cantidad_entregada: nuevaCantidad, estado: nuevoEstado } : d
+        )
+        const { estadoMacro, colorEstadoBg, colorEstadoText, itemsCompletos } = calcularEstadoPedido(pedido, detallesActualizados)
+
+        return {
+          ...pedido,
+          detalles: detallesActualizados,
+          estado_macro: estadoMacro,
+          color_bg: colorEstadoBg,
+          color_text: colorEstadoText,
+          itemsCompletos
+        }
+      })
+    })
+
+    try {
+      // 2) Sincronizamos en background con Supabase
+      if (det.producto_id) {
+        const rpcName = variacion > 0 ? 'entregar_stock' : 'revertir_entrega_stock'
+        await supabase.rpc(rpcName, { prod_id: det.producto_id, cant: Math.abs(variacion) })
+      }
+
+      await supabase.from('detalles_pedido').update({ 
+        cantidad_entregada: nuevaCantidad, 
+        estado: nuevoEstado 
+      }).eq('id', det.id)
+
+      await registrarLog(
+        `${sessionStorage.getItem('user_name') || 'Usuario'} modificó entrega de ${det.p_nombre || 'Producto'}`,
+        `Cantidad entregada: ${actual} -> ${nuevaCantidad}`
+      )
+    } catch (err) {
+      // 3) Si falla backend, revertimos UI local y avisamos
+      setDatos(datosPrevios)
+      alert("❌ No se pudo sincronizar la entrega. Se revirtió el cambio.")
+    }
+  }
 
   const abrirWhatsApp = (telefono: string) => {
     const numLimpio = telefono.replace(/\D/g, '')
@@ -65,58 +172,247 @@ export default function VerPedidos() {
   }
 
   const exportarExcel = () => {
-    const reporte = datos.map(p => ({
-      Fecha: new Date(p.created_at).toLocaleDateString('es-CL'),
-      Cliente: p.c_nombre,
-      Telefono: p.c_telefono,
-      RUT: p.c_rut,
-      Colegio: p.colegio || 'Particular',
-      Total: p.total_final,
-      Abono: p.abono,
-      Saldo: p.total_final - p.abono,
-      Estado: p.estado_macro
-    }))
+    const reporte: any[] = []
+    const formatoMoneda = (monto: number) => `$${Number(monto || 0).toLocaleString('es-CL')}`
+    const rangosPedidos: Array<{ inicio: number; fin: number }> = []
+
+    datos.forEach(p => {
+      const inicioBloque = reporte.length + 2 // +1 por header y +1 porque Excel parte en 1
+      const totalPedido = Number(p.total_final || 0)
+      const abonoPedido = Number(p.total_pagado || 0)
+      const saldoPendiente = totalPedido - abonoPedido
+      const detalles = p.detalles || []
+      const pagos = p.pagos || []
+
+      // Fila encabezado del pedido
+      reporte.push({
+        'Tipo': 'PEDIDO',
+        'ID Pedido': p.id,
+        'Fecha': new Date(p.created_at).toLocaleDateString('es-CL'),
+        'Cliente': p.c_nombre || 'S/N',
+        'RUT': p.c_rut || '',
+        'Teléfono': p.c_telefono || '',
+        'Colegio': p.colegio || 'Particular',
+        'Ítem': '',
+        'Talla': '',
+        'Cantidad': '',
+        'Cantidad Entregada': '',
+        'Precio Unitario': '',
+        'Total Ítem': '',
+        'Total Pedido': formatoMoneda(totalPedido),
+        'Abono Pedido': formatoMoneda(abonoPedido),
+        'Saldo Pendiente': formatoMoneda(saldoPendiente),
+        'Usuario': p.creado_por || ''
+      })
+
+      // Filas detalle por ítem
+      detalles.forEach((det: any) => {
+        const cantidad = Number(det.cantidad || 0)
+        const cantidadEntregada = Number(det.cantidad_entregada || 0)
+        const precioUnitarioBase =
+          det.precio_unitario ??
+          det.precio ??
+          (cantidad > 0 ? Number(det.subtotal || 0) / cantidad : 0)
+        const precioUnitario = Number(precioUnitarioBase || 0)
+        const totalItem = cantidad * precioUnitario
+
+        reporte.push({
+          'Tipo': 'ÍTEM',
+          'ID Pedido': '',
+          'Fecha': '',
+          'Cliente': '',
+          'RUT': '',
+          'Teléfono': '',
+          'Colegio': '',
+          'Ítem': det.p_nombre || 'Producto',
+          'Talla': det.talla || '',
+          'Cantidad': cantidad,
+          'Cantidad Entregada': cantidadEntregada,
+          'Precio Unitario': formatoMoneda(precioUnitario),
+          'Total Ítem': formatoMoneda(totalItem),
+          'Total Pedido': '',
+          'Abono Pedido': '',
+          'Saldo Pendiente': '',
+          'Usuario': ''
+        })
+      })
+
+      // Filas de pagos del pedido
+      pagos.forEach((pg: any) => {
+        reporte.push({
+          'Tipo': 'PAGO',
+          'ID Pedido': '',
+          'Fecha': pg.fecha_pago ? new Date(pg.fecha_pago).toLocaleDateString('es-CL') : '',
+          'Cliente': '',
+          'RUT': '',
+          'Teléfono': '',
+          'Colegio': '',
+          'Ítem': '',
+          'Talla': '',
+          'Cantidad': '',
+          'Cantidad Entregada': '',
+          'Precio Unitario': '',
+          'Total Ítem': '',
+          'Total Pedido': '',
+          'Abono Pedido': formatoMoneda(pg.monto || 0),
+          'Saldo Pendiente': pg.metodo_pago || '',
+          'Usuario': pg.creado_por || ''
+        })
+      })
+
+      const finBloque = reporte.length + 1
+      rangosPedidos.push({ inicio: inicioBloque, fin: finBloque })
+    })
+
     const ws = XLSX.utils.json_to_sheet(reporte)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, "Ventas")
-    XLSX.writeFile(wb, `Respaldo_Ventas_${new Date().toISOString().split('T')[0]}.xlsx`)
-  }
 
-  const toggleDetalle = async (detalle_id: string, actual: string, productoId: string, cantidad: number) => {
-    const nuevoEstado = actual === 'Pendiente' ? 'Entregado' : 'Pendiente'
-    try {
-      if (productoId) {
-        if (nuevoEstado === 'Entregado') await supabase.rpc('entregar_stock', { prod_id: productoId, cant: cantidad })
-        else await supabase.rpc('revertir_entrega_stock', { prod_id: productoId, cant: cantidad })
+    const bordeNegro = { rgb: '000000' }
+    const columnasTotales = 17 // A..Q
+    const asegurarCelda = (fila: number, col: number) => {
+      const dir = XLSX.utils.encode_cell({ r: fila - 1, c: col })
+      if (!ws[dir]) ws[dir] = { t: 's', v: '' }
+      return dir
+    }
+    const aplicarBorde = (fila: number, col: number, borde: any) => {
+      const dir = asegurarCelda(fila, col)
+      const celda = ws[dir] as any
+      celda.s = {
+        ...(celda.s || {}),
+        border: {
+          ...(celda.s?.border || {}),
+          ...borde
+        }
       }
-      await supabase.from('detalles_pedido').update({ estado: nuevoEstado }).eq('id', detalle_id)
-      cargar()
-    } catch (err) { alert("Error: " + err) }
+      ws[dir] = celda
+    }
+
+    rangosPedidos.forEach(({ inicio, fin }) => {
+      // Separadores internos entre filas del mismo bloque
+      for (let fila = inicio + 1; fila <= fin; fila++) {
+        for (let col = 0; col < columnasTotales; col++) {
+          aplicarBorde(fila, col, { top: { style: 'thin', color: bordeNegro } })
+        }
+      }
+
+      // Borde exterior oscuro y prominente del bloque
+      for (let col = 0; col < columnasTotales; col++) {
+        aplicarBorde(inicio, col, { top: { style: 'medium', color: bordeNegro } })
+        aplicarBorde(fin, col, { bottom: { style: 'medium', color: bordeNegro } })
+      }
+      for (let fila = inicio; fila <= fin; fila++) {
+        aplicarBorde(fila, 0, { left: { style: 'medium', color: bordeNegro } })
+        aplicarBorde(fila, columnasTotales - 1, { right: { style: 'medium', color: bordeNegro } })
+      }
+    })
+
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, "Reporte Detallado")
+    XLSX.writeFile(wb, `Reporte_Detallado_Ventas_${new Date().toISOString().split('T')[0]}.xlsx`)
   }
 
-  const actualizarAbono = async (pedidoId: string, totalFinal: number, abonoActual: number) => {
-    const input = prompt(`💰 Modificar Pago\nTotal: $${totalFinal}\nPagado: $${abonoActual}\n\nNUEVO MONTO TOTAL pagado:`, abonoActual.toString());
-    if (input === null) return;
-    const nuevoAbono = Number(input);
-    if (isNaN(nuevoAbono) || nuevoAbono < 0) return alert("❌ Monto inválido.");
+  const agregarPago = async (pedido: any) => {
+    const montoInput = prompt('💰 Nuevo Pago\nMonto:', '')
+    if (montoInput === null) return
+    const monto = Number(montoInput)
+    if (isNaN(monto) || monto <= 0) return alert('❌ Monto inválido.')
+
+    const fechaDefault = new Date().toISOString().split('T')[0]
+    const fechaPago = prompt('📅 Fecha de Pago (YYYY-MM-DD):', fechaDefault)
+    if (fechaPago === null || !fechaPago.trim()) return
+
+    const metodo = prompt('💳 Método (Transferencia, Efectivo, Débito, Crédito):', 'Transferencia')
+    if (metodo === null || !['Transferencia', 'Efectivo', 'Débito', 'Crédito'].includes(metodo)) {
+      return alert('❌ Método inválido.')
+    }
+
+    const pagoTemp = {
+      id: `temp-${Date.now()}`,
+      pedido_id: pedido.id,
+      monto,
+      fecha_pago: fechaPago,
+      metodo_pago: metodo,
+      creado_por: sessionStorage.getItem('user_name') || ''
+    }
+
+    let snapshot: any[] = []
+    setDatos(prev => {
+      snapshot = prev
+      return prev.map(p => {
+        if (p.id !== pedido.id) return p
+        const pagosActualizados = [...(p.pagos || []), pagoTemp]
+        const totalPagado = Number(p.total_pagado || 0) + monto
+        const { estadoMacro, colorEstadoBg, colorEstadoText, itemsCompletos } = calcularEstadoPedido(
+          { ...p, total_pagado: totalPagado },
+          p.detalles || []
+        )
+        return {
+          ...p,
+          pagos: pagosActualizados,
+          total_pagado: totalPagado,
+          estado_macro: estadoMacro,
+          color_bg: colorEstadoBg,
+          color_text: colorEstadoText,
+          itemsCompletos
+        }
+      })
+    })
+
     try {
-      await supabase.from('pedidos').update({ abono: nuevoAbono }).eq('id', pedidoId);
-      cargar(); 
-    } catch (err) { alert("Error al actualizar pago: " + err); }
+      const { data, error } = await supabase.from('pagos').insert([{
+        pedido_id: pedido.id,
+        monto,
+        fecha_pago: fechaPago,
+        metodo_pago: metodo,
+        creado_por: sessionStorage.getItem('user_name') || ''
+      }]).select().single()
+      if (error) throw error
+
+      setDatos(prev => prev.map(p => {
+        if (p.id !== pedido.id) return p
+        return {
+          ...p,
+          pagos: (p.pagos || []).map((pg: any) => (String(pg.id).startsWith('temp-') ? (data || pg) : pg))
+        }
+      }))
+
+      await registrarLog(
+        `${sessionStorage.getItem('user_name') || 'Usuario'} registró un pago de $${Number(monto).toLocaleString('es-CL')} para ${pedido.c_nombre || 'cliente'}`,
+        `Pedido ${pedido.id} - método ${metodo}`
+      )
+    } catch (err) {
+      setDatos(snapshot)
+      alert('❌ Error al guardar el pago. Se revirtió el cambio.')
+    }
   }
 
-  const borrarPedido = async (pedidoId: string, detalles: any[]) => {
+  const borrarPedido = async (pedidoId: string, detalles: any[], clienteNombre: string) => {
     if(!confirm('⚠️ ¿Borrar pedido completo?')) return
-    for (const det of detalles) {
-      if (det.estado === 'Pendiente' && det.producto_id) {
-        await supabase.rpc('reservar_stock', { prod_id: det.producto_id, cant: -det.cantidad })
+    const usuario = sessionStorage.getItem('user_name') || ''
+    if (usuario !== 'Admin') {
+      const clave = prompt('🔒 Confirmación requerida. Ingresa clave para borrar:')
+      if (clave !== '1122') {
+        alert('❌ Clave incorrecta. No se eliminó el pedido.')
+        return
       }
     }
-    await supabase.from('pedidos').delete().eq('id', pedidoId)
-    cargar()
+    try {
+      await supabase.from('pagos').delete().eq('pedido_id', pedidoId)
+      for (const det of detalles) {
+        if (det.estado === 'Pendiente' && det.producto_id) {
+          await supabase.rpc('reservar_stock', { prod_id: det.producto_id, cant: -det.cantidad })
+        }
+      }
+      await supabase.from('pedidos').delete().eq('id', pedidoId)
+      await registrarLog(
+        `${usuario || 'Usuario'} eliminó el pedido de ${clienteNombre || 'cliente'}`,
+        `Pedido ${pedidoId}`
+      )
+      cargar()
+    } catch (err) {
+      alert('❌ No se pudo eliminar el pedido.')
+    }
   }
 
-  const formatearFecha = (f: string) => new Intl.DateTimeFormat('es-CL', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(f))
   useEffect(() => { cargar() }, [cargar])
 
   const filtrados = datos
@@ -134,7 +430,7 @@ export default function VerPedidos() {
   const btnFiltroStyle = (activo: boolean) => ({ backgroundColor: activo ? '#000' : '#fff', color: activo ? '#fff' : '#000', border: `2px solid #000`, borderRadius: '8px', padding: '8px 14px', fontSize: '12px', fontWeight: '800', cursor: 'pointer' })
   
   return (
-    <main style={{ minHeight: '100vh', backgroundColor: '#f8fafc', padding: '20px', fontFamily: 'sans-serif' }}>
+    <main style={{ minHeight: '100vh', backgroundColor: '#f8fafc', padding: '20px', fontFamily: 'sans-serif', borderTop: usuarioActivo === 'Admin' ? '8px solid #3b82f6' : '8px solid transparent' }}>
       <div style={{ maxWidth: '650px', margin: '0 auto' }}>
         
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '25px' }}>
@@ -144,7 +440,6 @@ export default function VerPedidos() {
             </button>
             <h1 style={{ margin: 0, fontSize: '24px', fontWeight: '900', color: '#000' }}>Gestión de Pedidos</h1>
           </div>
-          {/* BOTÓN EXPORTAR EXCEL */}
           <button onClick={exportarExcel} style={{ backgroundColor: '#166534', color: '#fff', padding: '10px 16px', borderRadius: '12px', fontWeight: '800', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
             <Download size={18} /> Excel
           </button>
@@ -165,7 +460,8 @@ export default function VerPedidos() {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {filtrados.map(p => {
-            const deuda = p.total_final - p.abono;
+            const deuda = p.total_final - (p.total_pagado || 0);
+            const expandido = !!expandidos[p.id]
             return (
               <div key={p.id} style={{ backgroundColor: '#fff', padding: '24px', borderRadius: '24px', border: '2px solid #e2e8f0', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
                 
@@ -184,28 +480,72 @@ export default function VerPedidos() {
                   {p.c_rut && <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><IdCard size={14} /> {p.c_rut}</span>}
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '24px' }}>
+                <button
+                  onClick={() => setExpandidos(prev => ({ ...prev, [p.id]: !prev[p.id] }))}
+                  style={{ width: '100%', marginBottom: '16px', border: '2px solid #000', backgroundColor: '#fff', borderRadius: '10px', padding: '10px', fontWeight: '900', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px' }}
+                >
+                  {expandido ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  {expandido ? 'Ocultar Detalle' : 'Ver Detalle'}
+                </button>
+
+                {expandido && <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '24px' }}>
                   {p.detalles?.map((det: any, idx: number) => {
-                    const entregado = det.estado === 'Entregado';
+                    const entregadoTotal = (det.cantidad_entregada || 0) === det.cantidad;
                     return (
-                      <div key={idx} style={{ backgroundColor: entregado ? '#f0fdf4' : '#f8fafc', border: `1px solid ${entregado ? '#bbf7d0' : '#e2e8f0'}`, padding: '12px 16px', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div key={idx} style={{ backgroundColor: entregadoTotal ? '#f0fdf4' : '#f8fafc', border: `1px solid ${entregadoTotal ? '#bbf7d0' : '#e2e8f0'}`, padding: '12px 16px', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
-                          <p style={{ margin: 0, fontSize: '14px', fontWeight: '800', color: '#000' }}>{det.cantidad}x {det.p_nombre}</p>
-                          <p style={{ margin: 0, fontSize: '12px', fontWeight: '700', color: '#64748b' }}>Talla: {det.talla}</p>
+                          <p style={{ margin: 0, fontSize: '14px', fontWeight: '800', color: '#000' }}>{det.p_nombre}</p>
+                          <p style={{ margin: 0, fontSize: '12px', fontWeight: '700', color: '#64748b' }}>
+                            Talla: {det.talla} | <span style={{color:'#000'}}>{det.cantidad_entregada || 0} de {det.cantidad} entregados</span>
+                          </p>
                         </div>
-                        <button onClick={() => toggleDetalle(det.id, det.estado, det.producto_id, det.cantidad)} style={{ backgroundColor: entregado ? '#fff' : '#000', color: entregado ? '#166534' : '#fff', padding: '8px 12px', borderRadius: '8px', fontWeight: '800', fontSize: '12px', border: `1px solid #000`, cursor: 'pointer' }}>
-                          {entregado ? 'Deshacer' : 'Entregar'}
-                        </button>
+                        
+                        <div style={{ display: 'flex', gap: '5px' }}>
+                          <button onClick={() => actualizarEntrega(det, -1)} style={{ backgroundColor: '#fff', color: '#000', border: '2px solid #000', padding: '5px 10px', borderRadius: '8px', fontWeight: '900', cursor: 'pointer' }}>-</button>
+                          <button onClick={() => actualizarEntrega(det, 1)} style={{ backgroundColor: '#000', color: '#fff', border: '2px solid #000', padding: '5px 10px', borderRadius: '8px', fontWeight: '900', cursor: 'pointer' }}>+1</button>
+                          <button onClick={() => actualizarEntrega(det, 'todo')} style={{ backgroundColor: entregadoTotal ? '#10b981' : '#fff', color: entregadoTotal ? '#fff' : '#000', border: '2px solid #000', padding: '5px 10px', borderRadius: '8px', fontWeight: '800', fontSize: '11px', cursor: 'pointer' }}>
+                            {entregadoTotal ? '✓' : 'TODO'}
+                          </button>
+                        </div>
                       </div>
                     )
                   })}
-                </div>
+                </div>}
+
+                {expandido && (
+                  <div style={{ marginBottom: '20px', border: '2px solid #000', borderRadius: '16px', padding: '14px', backgroundColor: '#fff' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                      <p style={{ margin: 0, fontSize: '13px', fontWeight: '900', color: '#000' }}>Historial de Pagos</p>
+                      <button onClick={() => agregarPago(p)} style={{ border: '2px solid #000', background: '#000', color: '#fff', padding: '6px 10px', borderRadius: '8px', fontSize: '11px', fontWeight: '800', cursor: 'pointer' }}>
+                        AÑADIR PAGO
+                      </button>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {(p.pagos || []).length === 0 && (
+                        <p style={{ margin: 0, fontSize: '12px', fontWeight: '700', color: '#64748b' }}>Sin pagos registrados.</p>
+                      )}
+                      {(p.pagos || []).map((pg: any) => (
+                        <div key={pg.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '10px', backgroundColor: '#f8fafc' }}>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', fontWeight: '800', color: '#000' }}>
+                            <Calendar size={14} /> {pg.fecha_pago ? new Date(pg.fecha_pago).toLocaleDateString('es-CL') : '-'}
+                          </span>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', fontWeight: '800', color: '#10b981' }}>
+                            <CreditCard size={14} /> ${Number(pg.monto || 0).toLocaleString('es-CL')}
+                          </span>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', fontWeight: '800', color: '#000' }}>
+                            {metodoPagoIcono(pg.metodo_pago)} {pg.metodo_pago || '-'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
                   <div style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '16px' }}>
                     <p style={{ margin: 0, fontSize: '12px', fontWeight: '800', color: '#000' }}>PAGADO</p>
-                    <p style={{ margin: '4px 0', fontSize: '20px', fontWeight: '900', color: '#10b981' }}>${p.abono.toLocaleString()}</p>
-                    <button onClick={() => actualizarAbono(p.id, p.total_final, p.abono)} style={{ border: '1px solid #000', background: '#000000', padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: '800', cursor: 'pointer' }}>Modificar</button>
+                    <p style={{ margin: '4px 0', fontSize: '20px', fontWeight: '900', color: '#10b981' }}>${Number(p.total_pagado || 0).toLocaleString('es-CL')}</p>
+                    <button onClick={() => agregarPago(p)} style={{ border: '2px solid #000', background: '#000', color: '#fff', padding: '4px 8px', borderRadius: '8px', fontSize: '11px', fontWeight: '800', cursor: 'pointer' }}>Añadir Pago</button>
                   </div>
                   <div style={{ backgroundColor: deuda > 0 ? '#fef2f2' : '#f0fdf4', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '16px' }}>
                     <p style={{ margin: 0, fontSize: '12px', fontWeight: '800', color: '#000' }}>DEUDA</p>
@@ -214,7 +554,7 @@ export default function VerPedidos() {
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #e2e8f0', paddingTop: '16px', flexWrap: 'wrap', gap: '10px' }}>
-                  <button onClick={() => borrarPedido(p.id, p.detalles)} style={{ color: '#ef4444', fontWeight: '800', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px' }}>
+                  <button onClick={() => borrarPedido(p.id, p.detalles, p.c_nombre)} style={{ color: '#ef4444', fontWeight: '800', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px' }}>
                     <Trash2 size={16} /> Eliminar
                   </button>
                   <div style={{ display: 'flex', gap: '10px' }}>
@@ -227,10 +567,47 @@ export default function VerPedidos() {
                   </div>
                 </div>
               </div>
-            )
+
+
+
+
+
+                        )
           })}
+        </div>
+
+        {/* HISTORIAL DE ACTIVIDAD */}
+        <div style={{ marginTop: '50px', borderTop: '4px solid #000', paddingTop: '30px', paddingBottom: '60px' }}>
+          <h2 style={{ fontSize: '26px', fontWeight: '900', marginBottom: '24px', color: '#000', textTransform: 'uppercase' }}>HISTORIAL DE ACTIVIDAD</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {logs.length === 0 ? (
+              <p style={{ fontWeight: '800', color: '#64748b' }}>No hay registros en el historial.</p>
+            ) : (
+              logs.map((log) => (
+                <div key={log.id} style={{ 
+                  backgroundColor: log.usuario === 'Admin' ? '#eff6ff' : '#fff', 
+                  border: '2px solid #000', 
+                  padding: '16px', 
+                  borderRadius: '16px', 
+                  boxShadow: '4px 4px 0px #000' 
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <span style={{ backgroundColor: '#000', color: '#fff', padding: '5px 12px', borderRadius: '6px', fontSize: '11px', fontWeight: '900' }}>
+                      {log.usuario}
+                    </span>
+                    <span style={{ fontSize: '12px', fontWeight: '800', color: '#64748b' }}>
+                      {new Date(log.fecha).toLocaleString()}
+                    </span>
+                  </div>
+                  <p style={{ margin: '0 0 6px 0', fontSize: '15px', fontWeight: '900', color: '#000' }}>{log.accion}</p>
+                  <p style={{ margin: 0, fontSize: '13px', fontWeight: '700', color: '#475569' }}>{log.detalles}</p>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </div>
     </main>
+
   )
 }
