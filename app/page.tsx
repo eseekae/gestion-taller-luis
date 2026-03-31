@@ -102,14 +102,6 @@ export default function Home() {
             onClick={() => router.push('/inventario')} 
           />
 
-          <MenuButton
-            icon={<History size={24} />}
-            title="Historial de Movimientos"
-            subtitle="Auditoría de acciones del sistema"
-            color="#0f172a"
-            onClick={() => router.push('/logs')}
-          />
-
           {/* Solo el Jefe ve Estadísticas */}
           {user.permiso_ver_lucas && (
             <MenuButton 
