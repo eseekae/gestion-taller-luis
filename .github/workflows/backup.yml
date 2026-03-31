@@ -2,8 +2,8 @@ name: Respaldo Semanal Base de Datos
 
 on:
   schedule:
-    - cron: '0 0 * * 0' # Esto corre solo los domingos a las 12 AM
-  workflow_dispatch: # Esto nos permite probarlo a mano ahora
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
 
 jobs:
   backup:
@@ -12,15 +12,21 @@ jobs:
       - name: Checkout del código
         uses: actions/checkout@v4
 
-      - name: Instalar Postgres Client
-        run: sudo apt-get install -y postgresql-client
+      - name: Instalar Postgres Client 17
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget gnupg2
+          wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+          echo "deb http://apt.postgresql.org/pub/repos/apt/ $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
 
       - name: Ejecutar Dump de la base de datos
         env:
           PGPASSWORD: ${{ secrets.DB_PASSWORD }}
         run: |
           mkdir -p backups
-          pg_dump -h aws-0-us-west-2.pooler.supabase.com -U postgres -d postgres -p 6543 > backups/respaldo_$(date +%Y-%m-%d).sql
+          pg_dump -h aws-0-us-west-2.pooler.supabase.com -U postgres.hkwzuhpptuqzgkqxcqjv -d postgres -p 6543 > backups/respaldo_$(date +%Y-%m-%d).sql
 
       - name: Subir respaldo al repositorio
         run: |
