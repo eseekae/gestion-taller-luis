@@ -23,7 +23,18 @@ export default function LogsPage() {
 
   const limpiarLogsAdmin = async () => {
     if (usuarioActivo !== 'Admin') return
-    if (!confirm('¿Eliminar todos los logs del usuario Admin?')) return
+    if (!confirm('¿Eliminar pedidos, pagos y logs creados por Admin?')) return
+
+    const { data: pedidosAdmin } = await supabase.from('pedidos').select('id').eq('creado_por', 'Admin')
+    const idsPedidos = (pedidosAdmin || []).map(p => p.id)
+
+    if (idsPedidos.length > 0) {
+      await supabase.from('detalles_pedido').delete().in('pedido_id', idsPedidos)
+      await supabase.from('pagos').delete().in('pedido_id', idsPedidos)
+      await supabase.from('pedidos').delete().in('id', idsPedidos)
+    }
+
+    await supabase.from('pagos').delete().eq('creado_por', 'Admin')
     await supabase.from('auditoria').delete().eq('usuario', 'Admin')
     await cargarLogs()
   }
@@ -41,7 +52,7 @@ export default function LogsPage() {
   }, [router])
 
   return (
-    <main style={{ minHeight: '100vh', backgroundColor: '#f8fafc', padding: '20px', fontFamily: 'sans-serif' }}>
+    <main style={{ minHeight: '100vh', backgroundColor: '#f8fafc', padding: '20px', fontFamily: 'sans-serif', borderTop: usuarioActivo === 'Admin' ? '8px solid #3b82f6' : '8px solid transparent' }}>
       <div style={{ maxWidth: '700px', margin: '0 auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
           <button onClick={() => router.push('/')} style={{ backgroundColor: '#fff', border: '2px solid #000', padding: '10px', borderRadius: '12px', color: '#000', cursor: 'pointer' }}>

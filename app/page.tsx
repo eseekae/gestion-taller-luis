@@ -39,7 +39,7 @@ export default function Home() {
   if (!user) return null
 
   return (
-    <main style={{ minHeight: '100vh', backgroundColor: '#f8fafc', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+    <main style={{ minHeight: '100vh', backgroundColor: '#f8fafc', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px', fontFamily: 'system-ui, -apple-system, sans-serif', borderTop: user?.nombre === 'Admin' ? '8px solid #3b82f6' : '8px solid transparent' }}>
       
       <motion.div 
         initial="hidden"

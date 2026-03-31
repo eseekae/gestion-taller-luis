@@ -8,6 +8,7 @@ import { ArrowLeft, User, Phone, IdCard, School, Calendar, ShoppingBag, Plus, X,
 
 export default function RegistroPedido() {
   const router = useRouter()
+  const [usuarioActivo, setUsuarioActivo] = useState('')
   const [inventario, setInventario] = useState<any[]>([])
   const [carrito, setCarrito] = useState<any[]>([])
   
@@ -29,6 +30,7 @@ export default function RegistroPedido() {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
+    setUsuarioActivo(sessionStorage.getItem('user_name') || '')
     const fetch = async () => {
       const { data } = await supabase.from('inventario').select('*').order('nombre')
       if (data) {
@@ -70,7 +72,8 @@ export default function RegistroPedido() {
       const { data: cli } = await supabase.from('clientes').insert([{ nombre: nombreCliente, telefono, rut }]).select().single()
       const { data: ped } = await supabase.from('pedidos').insert([{
         cliente_id: cli.id, total_final: totalCalculado, abono: 0, estado: 'Pendiente',
-        colegio: colegio || 'Particular', fecha_entrega: fechaEntrega || null
+        colegio: colegio || 'Particular', fecha_entrega: fechaEntrega || null,
+        creado_por: sessionStorage.getItem('user_name') || ''
       }]).select().single()
 
       const detalles = carrito.map(item => ({
@@ -83,7 +86,8 @@ export default function RegistroPedido() {
           pedido_id: ped.id,
           monto: Number(abono),
           fecha_pago: fechaPagoInicial,
-          metodo_pago: metodoPagoInicial
+          metodo_pago: metodoPagoInicial,
+          creado_por: sessionStorage.getItem('user_name') || ''
         }])
       }
 
@@ -112,7 +116,7 @@ export default function RegistroPedido() {
   const itemVariants = { hidden: { y: 20, opacity: 0 }, visible: { y: 0, opacity: 1 } }
 
   return (
-    <main style={{ minHeight: '100vh', backgroundColor: '#f8fafc', padding: '20px', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+    <main style={{ minHeight: '100vh', backgroundColor: '#f8fafc', padding: '20px', fontFamily: 'system-ui, -apple-system, sans-serif', borderTop: usuarioActivo === 'Admin' ? '8px solid #3b82f6' : '8px solid transparent' }}>
       <motion.div initial="hidden" animate="visible" variants={containerVariants} style={{ maxWidth: '550px', margin: '0 auto' }}>
         
         {/* CABECERA */}

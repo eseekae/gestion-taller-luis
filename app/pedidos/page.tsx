@@ -15,6 +15,7 @@ export default function VerPedidos() {
   const [filtro, setFiltro] = useState('Todos')
   const [ordenarColegio, setOrdenarColegio] = useState(false)
   const [expandidos, setExpandidos] = useState<Record<string, boolean>>({})
+  const [usuarioActivo, setUsuarioActivo] = useState('')
 
   const metodoPagoIcono = (metodo: string) => {
     if (metodo === 'Transferencia') return <Landmark size={14} />
@@ -24,6 +25,7 @@ export default function VerPedidos() {
 
   const cargar = useCallback(async () => {
     if (!sessionStorage.getItem('user_role')) return router.push('/login')
+    setUsuarioActivo(sessionStorage.getItem('user_name') || '')
 
     setLoading(true)
     const [pRes, cRes, iRes, dRes, pagosRes] = await Promise.all([
@@ -187,7 +189,8 @@ export default function VerPedidos() {
         'Total Ítem': '',
         'Total Pedido': formatoMoneda(totalPedido),
         'Abono Pedido': formatoMoneda(abonoPedido),
-        'Saldo Pendiente': formatoMoneda(saldoPendiente)
+        'Saldo Pendiente': formatoMoneda(saldoPendiente),
+        'Usuario': p.creado_por || ''
       })
 
       // Filas detalle por ítem
@@ -217,7 +220,8 @@ export default function VerPedidos() {
           'Total Ítem': formatoMoneda(totalItem),
           'Total Pedido': '',
           'Abono Pedido': '',
-          'Saldo Pendiente': ''
+          'Saldo Pendiente': '',
+          'Usuario': ''
         })
       })
 
@@ -239,7 +243,8 @@ export default function VerPedidos() {
           'Total Ítem': '',
           'Total Pedido': '',
           'Abono Pedido': formatoMoneda(pg.monto || 0),
-          'Saldo Pendiente': pg.metodo_pago || ''
+          'Saldo Pendiente': pg.metodo_pago || '',
+          'Usuario': pg.creado_por || ''
         })
       })
 
@@ -250,7 +255,7 @@ export default function VerPedidos() {
     const ws = XLSX.utils.json_to_sheet(reporte)
 
     const bordeNegro = { rgb: '000000' }
-    const columnasTotales = 16 // A..P
+    const columnasTotales = 17 // A..Q
     const asegurarCelda = (fila: number, col: number) => {
       const dir = XLSX.utils.encode_cell({ r: fila - 1, c: col })
       if (!ws[dir]) ws[dir] = { t: 's', v: '' }
@@ -313,7 +318,8 @@ export default function VerPedidos() {
       pedido_id: pedido.id,
       monto,
       fecha_pago: fechaPago,
-      metodo_pago: metodo
+      metodo_pago: metodo,
+      creado_por: sessionStorage.getItem('user_name') || ''
     }
 
     let snapshot: any[] = []
@@ -344,7 +350,8 @@ export default function VerPedidos() {
         pedido_id: pedido.id,
         monto,
         fecha_pago: fechaPago,
-        metodo_pago: metodo
+        metodo_pago: metodo,
+        creado_por: sessionStorage.getItem('user_name') || ''
       }]).select().single()
       if (error) throw error
 
@@ -368,8 +375,16 @@ export default function VerPedidos() {
 
   const borrarPedido = async (pedidoId: string, detalles: any[], clienteNombre: string) => {
     if(!confirm('⚠️ ¿Borrar pedido completo?')) return
+    const usuario = sessionStorage.getItem('user_name') || ''
+    if (usuario !== 'Admin') {
+      const clave = prompt('🔒 Confirmación requerida. Ingresa clave para borrar:')
+      if (clave !== '1122') {
+        alert('❌ Clave incorrecta. No se eliminó el pedido.')
+        return
+      }
+    }
     void registrarLog(
-      `${sessionStorage.getItem('user_name') || 'Usuario'} eliminó el pedido de ${clienteNombre || 'cliente'}`,
+      `${usuario || 'Usuario'} eliminó el pedido de ${clienteNombre || 'cliente'}`,
       `Pedido ${pedidoId}`
     )
     await supabase.from('pagos').delete().eq('pedido_id', pedidoId)
@@ -399,7 +414,7 @@ export default function VerPedidos() {
   const btnFiltroStyle = (activo: boolean) => ({ backgroundColor: activo ? '#000' : '#fff', color: activo ? '#fff' : '#000', border: `2px solid #000`, borderRadius: '8px', padding: '8px 14px', fontSize: '12px', fontWeight: '800', cursor: 'pointer' })
   
   return (
-    <main style={{ minHeight: '100vh', backgroundColor: '#f8fafc', padding: '20px', fontFamily: 'sans-serif' }}>
+    <main style={{ minHeight: '100vh', backgroundColor: '#f8fafc', padding: '20px', fontFamily: 'sans-serif', borderTop: usuarioActivo === 'Admin' ? '8px solid #3b82f6' : '8px solid transparent' }}>
       <div style={{ maxWidth: '650px', margin: '0 auto' }}>
         
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '25px' }}>
