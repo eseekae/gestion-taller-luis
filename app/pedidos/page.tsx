@@ -27,7 +27,7 @@ export default function VerPedidos() {
       supabase.from('clientes').select('*'),
       supabase.from('inventario').select('*'),
       supabase.from('detalles_pedido').select('*').order('id'),
-      supabase.from('pagos').select('*').order('fecha_pago', { ascending: true }),
+      supabase.from('pagos').select('*').order('created_at', { ascending: true }), // Usamos created_at para la hora exacta
       supabase.from('auditoria').select('*').order('fecha', { ascending: false }).limit(20)
     ])
     setLogs(aRes.data || [])
@@ -135,17 +135,16 @@ export default function VerPedidos() {
       const abonoPedido = Number(p.total_pagado || 0)
       const saldoPendiente = totalPedido - abonoPedido
       
-      // CONFIGURAR FECHA + HORA
-      const fechaHora = new Date(p.created_at).toLocaleString('es-CL', {
+      const fechaHoraPedido = new Date(p.created_at).toLocaleString('es-CL', {
         day: '2-digit', month: '2-digit', year: 'numeric',
         hour: '2-digit', minute: '2-digit'
       })
 
-      // 1. CABECERA CON FECHA Y HORA
+      // 1. CABECERA
       reporte.push({
         'Tipo': 'PEDIDO',
         'ID Pedido': p.id,
-        'Fecha y Hora': fechaHora,
+        'Fecha y Hora': fechaHoraPedido,
         'Cliente': p.c_nombre || 'S/N',
         'Teléfono': p.c_telefono || '',
         'Colegio': p.colegio || 'Particular',
@@ -159,6 +158,7 @@ export default function VerPedidos() {
         'Observaciones': p.observaciones || ''
       })
 
+      // 2. ÍTEMS (CON TALLA)
       p.detalles?.forEach((det: any) => {
         reporte.push({
           'Tipo': 'ÍTEM',
@@ -167,7 +167,7 @@ export default function VerPedidos() {
           'Cliente': '',
           'Teléfono': '',
           'Colegio': '',
-          'Ítem / Pago': det.p_nombre || 'Producto',
+          'Ítem / Pago': `${det.p_nombre || 'Producto'} (Talla: ${det.talla || 'S/T'})`,
           'Cant.': det.cantidad,
           'Entr.': det.cantidad_entregada || 0,
           'Precio / Método': formatoMoneda(det.precio_unitario || 0),
@@ -178,15 +178,21 @@ export default function VerPedidos() {
         })
       })
 
+      // 3. PAGOS (CON HORA)
       p.pagos?.forEach((pg: any) => {
+        const horaPago = new Date(pg.created_at).toLocaleString('es-CL', {
+          day: '2-digit', month: '2-digit', year: 'numeric',
+          hour: '2-digit', minute: '2-digit'
+        })
+
         reporte.push({
           'Tipo': 'PAGO',
           'ID Pedido': '',
-          'Fecha y Hora': pg.fecha_pago ? new Date(pg.fecha_pago).toLocaleDateString('es-CL') : '',
+          'Fecha y Hora': horaPago,
           'Cliente': '',
           'Teléfono': '',
           'Colegio': '',
-          'Ítem / Pago': 'ABONO',
+          'Ítem / Pago': 'ABONO REGISTRADO',
           'Cant.': '',
           'Entr.': '',
           'Precio / Método': pg.metodo_pago || 'Transferencia',
@@ -196,19 +202,15 @@ export default function VerPedidos() {
           'Observaciones': `Por: ${pg.creado_por || 'S/N'}`
         })
       })
-      reporte.push({}) // Espacio entre pedidos
+      reporte.push({}) 
     })
 
     const ws = XLSX.utils.json_to_sheet(reporte)
-
-    // APLICAR BORDES NEGROS A TODAS LAS CELDAS CON DATOS
     const range = XLSX.utils.decode_range(ws['!ref'] || 'A1')
     for (let R = range.s.r; R <= range.e.r; ++R) {
       for (let C = range.s.c; C <= range.e.c; ++C) {
         const cell_address = XLSX.utils.encode_cell({ c: C, r: R })
         if (!ws[cell_address]) continue
-        
-        // Estilo de borde negro fino para cada celda
         ws[cell_address].s = {
           border: {
             top: { style: "thin", color: { rgb: "000000" } },
@@ -218,8 +220,6 @@ export default function VerPedidos() {
           },
           font: { name: "Arial", sz: 10 }
         }
-
-        // Resaltar cabeceras de pedido
         if (ws[cell_address].v === 'PEDIDO') {
            ws[cell_address].s.fill = { fgColor: { rgb: "E2E8F0" } }
            ws[cell_address].s.font.bold = true
@@ -331,7 +331,10 @@ export default function VerPedidos() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '20px' }}>
                     {p.detalles?.map((det: any, idx: number) => (
                       <div key={idx} style={{ padding: '12px', border: '2px solid #000', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', background: '#f8fafc' }}>
-                        <div><p style={{ fontWeight: '800', color: '#000000' }}>{det.p_nombre}</p><p style={{ fontSize: '12px', color: '#000000' }}>{det.cantidad_entregada || 0} de {det.cantidad}</p></div>
+                        <div>
+                          <p style={{ fontWeight: '800', color: '#000000' }}>{det.p_nombre}</p>
+                          <p style={{ fontSize: '12px', color: '#000000' }}>Talla: {det.talla} | {det.cantidad_entregada || 0} de {det.cantidad}</p>
+                        </div>
                         <div style={{ display: 'flex', gap: '5px' }}>
                           <button onClick={() => actualizarEntrega(det, -1)} style={{ border: '2px solid #000', borderRadius: '8px', padding: '5px', background: '#ef4444', color: '#ffffff', fontWeight: '900' }}>-</button>
                           <button onClick={() => actualizarEntrega(det, 1)} style={{ background: '#4ade80', color: '#000', borderRadius: '8px', padding: '5px', border: '2px solid #000', fontWeight: '900' }}>+1</button>
