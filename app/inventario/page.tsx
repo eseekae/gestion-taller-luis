@@ -215,7 +215,7 @@ export default function Inventario() {
 
                 <AnimatePresence>
                   {estaAbierto && (
-                    <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} style={{ backgroundColor: '#ff0000' }}>
+                    <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} style={{ backgroundColor: '#33ff00f1' }}>
                       {Object.keys(productosAgrupados[nombrePrenda]).map(nombreCol => {
                         const variantes = productosAgrupados[nombrePrenda][nombreCol].sort((a: any, b: any) => (ordenTallas[a.talla] || 99) - (ordenTallas[b.talla] || 99))
                         const idUnicoColegio = `${nombrePrenda}-${nombreCol}`
@@ -224,7 +224,7 @@ export default function Inventario() {
 
                         return (
                           <div key={nombreCol} style={{ borderBottom: '2px solid #000' }}>
-                            <div onClick={() => toggleColegio(idUnicoColegio)} style={{ padding: '15px 25px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', backgroundColor: tieneAgotados ? '#000' : 'transparent' }}>
+                            <div onClick={() => toggleColegio(idUnicoColegio)} style={{ padding: '15px 25px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', backgroundColor: tieneAgotados ? '#ff0101' : 'transparent' }}>
                               <span style={{ fontWeight: '900', fontSize: '15px', display: 'flex', alignItems: 'center', gap: '8px', color: '#000' }}>
                                 <School size={16} /> {nombreCol}
                               </span>
