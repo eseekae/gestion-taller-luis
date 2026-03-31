@@ -215,7 +215,7 @@ export default function Inventario() {
 
                 <AnimatePresence>
                   {estaAbierto && (
-                    <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} style={{ backgroundColor: '#000' }}>
+                    <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} style={{ backgroundColor: '#ff0000' }}>
                       {Object.keys(productosAgrupados[nombrePrenda]).map(nombreCol => {
                         const variantes = productosAgrupados[nombrePrenda][nombreCol].sort((a: any, b: any) => (ordenTallas[a.talla] || 99) - (ordenTallas[b.talla] || 99))
                         const idUnicoColegio = `${nombrePrenda}-${nombreCol}`
