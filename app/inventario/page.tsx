@@ -1,19 +1,23 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, PackagePlus, Trash2, ChevronDown, ChevronUp, AlertCircle, Plus, Minus, PackageOpen } from 'lucide-react'
+import * as XLSX from 'xlsx-js-style'
+import { ArrowLeft, PackagePlus, Trash2, ChevronDown, ChevronUp, Plus, Minus, PackageOpen, School, Search, Download } from 'lucide-react'
 
 export default function Inventario() {
   const router = useRouter()
   const [items, setItems] = useState<any[]>([])
   const [nombre, setNombre] = useState('')
+  const [colegio, setColegio] = useState('')
   const [talla, setTalla] = useState('14')
   const [precio, setPrecio] = useState('')
   const [stock, setStock] = useState('')
+  const [busqueda, setBusqueda] = useState('')
   const [loading, setLoading] = useState(false)
   const [abiertos, setAbiertos] = useState<string[]>([])
+  const [colegiosAbiertos, setColegiosAbiertos] = useState<string[]>([])
 
   const ordenTallas: { [key: string]: number } = {
     "10": 1, "12": 2, "14": 3, "16": 4, 
@@ -27,52 +31,100 @@ export default function Inventario() {
 
   useEffect(() => { cargar() }, [cargar])
 
-  const productosAgrupados = items.reduce((acc: any, item) => {
-    if (!acc[item.nombre]) acc[item.nombre] = []
-    acc[item.nombre].push(item)
-    return acc
-  }, {})
+  const itemsFiltrados = useMemo(() => {
+    return items.filter(i => 
+      i.nombre.toLowerCase().includes(busqueda.toLowerCase()) || 
+      (i.colegio && i.colegio.toLowerCase().includes(busqueda.toLowerCase()))
+    )
+  }, [items, busqueda])
+
+  const productosAgrupados = useMemo(() => {
+    return itemsFiltrados.reduce((acc: any, item) => {
+      const prenda = item.nombre
+      const col = item.colegio || 'PARTICULAR'
+      if (!acc[prenda]) acc[prenda] = {}
+      if (!acc[prenda][col]) acc[prenda][col] = []
+      acc[prenda][col].push(item)
+      return acc
+    }, {})
+  }, [itemsFiltrados])
+
+  const exportarExcel = () => {
+    const reporte = itemsFiltrados.map(i => ({
+      'Prenda': i.nombre,
+      'Colegio': i.colegio || 'PARTICULAR',
+      'Talla': i.talla,
+      'Precio': `$${Number(i.precio_base).toLocaleString('es-CL')}`,
+      'Stock Físico': i.stock,
+      'Reservado': i.stock_reservado || 0,
+      'Disponible': i.stock - (i.stock_reservado || 0)
+    }))
+
+    const ws = XLSX.utils.json_to_sheet(reporte)
+    
+    // Aplicar bordes negros al Excel igual que en Pedidos
+    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1')
+    for (let R = range.s.r; R <= range.e.r; ++R) {
+      for (let C = range.s.c; C <= range.e.c; ++C) {
+        const cell = XLSX.utils.encode_cell({ c: C, r: R })
+        if (!ws[cell]) continue
+        ws[cell].s = {
+          border: {
+            top: { style: "thin", color: { rgb: "000000" } },
+            bottom: { style: "thin", color: { rgb: "000000" } },
+            left: { style: "thin", color: { rgb: "000000" } },
+            right: { style: "thin", color: { rgb: "000000" } }
+          }
+        }
+      }
+    }
+
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, "Inventario Don Luis")
+    XLSX.writeFile(wb, `Inventario_Luis_${new Date().toISOString().split('T')[0]}.xlsx`)
+  }
 
   const toggleGrupo = (nombreProd: string) => {
     setAbiertos(prev => prev.includes(nombreProd) ? prev.filter(n => n !== nombreProd) : [...prev, nombreProd])
+  }
+
+  const toggleColegio = (idUnico: string) => {
+    setColegiosAbiertos(prev => prev.includes(idUnico) ? prev.filter(n => n !== idUnico) : [...prev, idUnico])
   }
 
   const agregarVariante = async (e: any) => {
     e.preventDefault()
     setLoading(true)
     const { error } = await supabase.from('inventario').upsert({ 
-      nombre: nombre.toUpperCase().trim(), talla, precio_base: Number(precio), stock: Number(stock), stock_reservado: 0 
-    }, { onConflict: 'nombre,talla' })
+      nombre: nombre.toUpperCase().trim(), 
+      colegio: colegio.toUpperCase().trim() || 'PARTICULAR',
+      talla, 
+      precio_base: Number(precio), 
+      stock: Number(stock), 
+      stock_reservado: 0 
+    }, { onConflict: 'nombre,colegio,talla' })
 
     if (error) alert("❌ ERROR: " + error.message)
-    else { setNombre(''); setPrecio(''); setStock(''); cargar() }
+    else { setNombre(''); setColegio(''); setPrecio(''); setStock(''); cargar() }
     setLoading(false)
   }
 
-  // Ajuste rápido de Stock Físico
   const ajustarStock = (id: string, delta: number) => {
     const itemActual = items.find(i => i.id === id);
     if (!itemActual) return;
     const nuevoStock = itemActual.stock + delta;
     if (nuevoStock < 0) return;
-
-    setItems(prevItems => prevItems.map(item => item.id === id ? { ...item, stock: nuevoStock } : item));
-    supabase.from('inventario').update({ stock: nuevoStock }).eq('id', id).then(({ error }) => {
-      if (error) { console.error(error); cargar(); }
-    });
+    setItems(prev => prev.map(item => item.id === id ? { ...item, stock: nuevoStock } : item));
+    supabase.from('inventario').update({ stock: nuevoStock }).eq('id', id).then(({ error }) => { if (error) cargar(); });
   }
 
-  // NUEVO: Ajuste rápido de Reservas Manuales
   const ajustarReserva = (id: string, delta: number) => {
     const itemActual = items.find(i => i.id === id);
     if (!itemActual) return;
     const nuevaReserva = (itemActual.stock_reservado || 0) + delta;
     if (nuevaReserva < 0) return;
-
-    setItems(prevItems => prevItems.map(item => item.id === id ? { ...item, stock_reservado: nuevaReserva } : item));
-    supabase.from('inventario').update({ stock_reservado: nuevaReserva }).eq('id', id).then(({ error }) => {
-      if (error) { console.error(error); cargar(); }
-    });
+    setItems(prev => prev.map(item => item.id === id ? { ...item, stock_reservado: nuevaReserva } : item));
+    supabase.from('inventario').update({ stock_reservado: nuevaReserva }).eq('id', id).then(({ error }) => { if (error) cargar(); });
   }
 
   const eliminarVariante = async (id: string) => {
@@ -81,148 +133,159 @@ export default function Inventario() {
     cargar()
   }
 
-  const inputStyle = { width: '100%', padding: '12px 16px', border: '1px solid #cbd5e1', borderRadius: '12px', fontSize: '14px', color: '#0f172a', outline: 'none', backgroundColor: '#f8fafc', boxSizing: 'border-box' as const }
-  const labelStyle = { fontSize: '12px', fontWeight: '700', color: '#64748b', marginBottom: '6px', display: 'block', textTransform: 'uppercase' as const }
-
-  const containerVariants = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.1 } } }
-  const itemVariants = { hidden: { y: 15, opacity: 0 }, visible: { y: 0, opacity: 1 } }
+  const cardStyle = { backgroundColor: '#fff', padding: '24px', borderRadius: '24px', border: '3px solid #000', boxShadow: '8px 8px 0px #000', marginBottom: '25px' }
+  const inputStyle = { width: '100%', padding: '12px 16px', border: '3px solid #000', borderRadius: '12px', fontSize: '14px', color: '#000', outline: 'none', backgroundColor: '#fff' }
+  const labelStyle = { fontSize: '12px', fontWeight: '900', color: '#000', marginBottom: '6px', display: 'block', textTransform: 'uppercase' as const }
 
   return (
-    <main style={{ minHeight: '100vh', backgroundColor: '#f8fafc', padding: '20px', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+    <main style={{ minHeight: '100vh', backgroundColor: '#fff', padding: '20px', fontFamily: 'sans-serif' }}>
       <div style={{ maxWidth: '650px', margin: '0 auto' }}>
         
-        <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '25px' }}>
-          <button onClick={() => router.push('/')} style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', padding: '10px', borderRadius: '12px', color: '#0f172a', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
-            <ArrowLeft size={20} />
-          </button>
-          <div>
-            <h1 style={{ margin: 0, fontSize: '24px', fontWeight: '800', color: '#0f172a', letterSpacing: '-0.5px' }}>Control de Inventario</h1>
-            <p style={{ margin: 0, fontSize: '14px', color: '#64748b', fontWeight: '500' }}>Gestión de prendas, tallas y stock</p>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '25px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+            <button onClick={() => router.push('/')} style={{ backgroundColor: '#fff', border: '3px solid #000', padding: '10px', borderRadius: '12px', color: '#000', cursor: 'pointer', boxShadow: '4px 4px 0px #000' }}>
+              <ArrowLeft size={20} />
+            </button>
+            <h1 style={{ margin: 0, fontSize: '26px', fontWeight: '900', color: '#000', letterSpacing: '-1px' }}>Inventario</h1>
           </div>
+          <button onClick={exportarExcel} style={{ backgroundColor: '#166534', color: '#fff', padding: '10px 16px', borderRadius: '12px', fontWeight: '800', border: '3px solid #000', boxShadow: '4px 4px 0px #000', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+            <Download size={18} /> Excel
+          </button>
         </div>
 
-        <motion.div initial="hidden" animate="visible" variants={containerVariants}>
-          
-          <motion.div variants={itemVariants} style={{ backgroundColor: '#fff', padding: '24px', borderRadius: '24px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)', marginBottom: '30px' }}>
-            <h2 style={{ margin: '0 0 20px 0', fontSize: '16px', fontWeight: '700', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <PackagePlus size={18} color="#3b82f6" /> Registrar Prenda
-            </h2>
-            <form onSubmit={agregarVariante} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ position: 'relative', marginBottom: '25px' }}>
+          <Search style={{ position: 'absolute', left: '14px', top: '14px' }} size={20} color="#000" />
+          <input 
+            placeholder="Buscar por Prenda o Colegio..." 
+            style={{ ...inputStyle, paddingLeft: '45px', boxShadow: '4px 4px 0px #000' }} 
+            value={busqueda} 
+            onChange={e => setBusqueda(e.target.value)} 
+          />
+        </div>
+
+        <div style={cardStyle}>
+          <h2 style={{ margin: '0 0 20px 0', fontSize: '18px', fontWeight: '900', color: '#000', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <PackagePlus size={20} /> Nueva Variedad
+          </h2>
+          <form onSubmit={agregarVariante} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div>
-                <label style={labelStyle}>Nombre de la prenda</label>
-                <input required placeholder="Ej: PANTALÓN IN" style={inputStyle} value={nombre} onChange={e => setNombre(e.target.value)} />
+                <label style={labelStyle}>Prenda</label>
+                <input required placeholder="Ej: POLERA" style={inputStyle} value={nombre} onChange={e => setNombre(e.target.value)} />
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={labelStyle}>Talla</label>
-                  <select style={inputStyle} value={talla} onChange={e => setTalla(e.target.value)}>
-                    {Object.keys(ordenTallas).map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label style={labelStyle}>Precio Base $</label>
-                  <input required type="number" placeholder="Ej: 15000" style={inputStyle} value={precio} onChange={e => setPrecio(e.target.value)} />
-                </div>
-                <div>
-                  <label style={labelStyle}>Stock Físico</label>
-                  <input required type="number" placeholder="Ej: 10" style={inputStyle} value={stock} onChange={e => setStock(e.target.value)} />
-                </div>
+              <div>
+                <label style={labelStyle}>Colegio</label>
+                <input required placeholder="Ej: SAN AGUSTIN" style={inputStyle} value={colegio} onChange={e => setColegio(e.target.value)} />
               </div>
-              <motion.button whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} type="submit" disabled={loading} style={{ width: '100%', marginTop: '8px', backgroundColor: '#0f172a', color: '#fff', border: 'none', padding: '14px', borderRadius: '12px', fontWeight: '600', fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                {loading ? 'Guardando...' : <><Plus size={18} /> Añadir al Inventario</>}
-              </motion.button>
-            </form>
-          </motion.div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+              <div>
+                <label style={labelStyle}>Talla</label>
+                <select style={inputStyle} value={talla} onChange={e => setTalla(e.target.value)}>
+                  {Object.keys(ordenTallas).map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={labelStyle}>Precio $</label>
+                <input required type="number" style={inputStyle} value={precio} onChange={e => setPrecio(e.target.value)} />
+              </div>
+              <div>
+                <label style={labelStyle}>Stock</label>
+                <input required type="number" style={inputStyle} value={stock} onChange={e => setStock(e.target.value)} />
+              </div>
+            </div>
+            <button disabled={loading} type="submit" style={{ width: '100%', backgroundColor: '#4ade80', color: '#000', border: '3px solid #000', padding: '14px', borderRadius: '12px', fontWeight: '900', cursor: 'pointer', boxShadow: '4px 4px 0px #000' }}>
+              {loading ? 'GUARDANDO...' : 'AÑADIR AL INVENTARIO'}
+            </button>
+          </form>
+        </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {Object.keys(productosAgrupados).map(nombreProd => {
-              const variantes = productosAgrupados[nombreProd].sort((a: any, b: any) => (ordenTallas[a.talla] || 99) - (ordenTallas[b.talla] || 99))
-              const estaAbierto = abiertos.includes(nombreProd)
-              const fisicoTotal = variantes.reduce((acc: number, v: any) => acc + v.stock, 0)
-              const reservaTotal = variantes.reduce((acc: number, v: any) => acc + (v.stock_reservado || 0), 0)
-              const dispTotal = fisicoTotal - reservaTotal
-              const tieneAgotados = variantes.some((v: any) => (v.stock - (v.stock_reservado || 0)) <= 0)
-
-              return (
-                <motion.div variants={itemVariants} key={nombreProd} style={{ backgroundColor: '#fff', borderRadius: '20px', border: `1px solid ${tieneAgotados ? '#fecaca' : '#e2e8f0'}`, overflow: 'hidden', boxShadow: '0 2px 4px -1px rgba(0, 0, 0, 0.05)' }}>
-                  
-                  <div onClick={() => toggleGrupo(nombreProd)} style={{ padding: '20px', backgroundColor: tieneAgotados ? '#fef2f2' : '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <div style={{ backgroundColor: tieneAgotados ? '#fee2e2' : '#f1f5f9', color: tieneAgotados ? '#ef4444' : '#64748b', padding: '8px', borderRadius: '10px' }}>
-                        {tieneAgotados ? <AlertCircle size={20} /> : <PackageOpen size={20} />}
-                      </div>
-                      <div>
-                        <h3 style={{ margin: '0 0 2px 0', fontWeight: '700', fontSize: '16px', color: '#0f172a' }}>{nombreProd}</h3>
-                        <p style={{ margin: 0, fontSize: '13px', color: '#64748b', fontWeight: '500' }}>Disp: {dispTotal} | Rsv: {reservaTotal}</p>
-                      </div>
-                    </div>
-                    {estaAbierto ? <ChevronUp size={20} color="#94a3b8" /> : <ChevronDown size={20} color="#94a3b8" />}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {Object.keys(productosAgrupados).map(nombrePrenda => {
+            const estaAbierto = abiertos.includes(nombrePrenda)
+            return (
+              <div key={nombrePrenda} style={{ backgroundColor: '#fff', borderRadius: '24px', border: '3px solid #000', overflow: 'hidden', boxShadow: '6px 6px 0px #000' }}>
+                <div onClick={() => toggleGrupo(nombrePrenda)} style={{ padding: '20px', backgroundColor: '#000', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <PackageOpen size={24} />
+                    <h3 style={{ margin: 0, fontWeight: '900', fontSize: '18px', textTransform: 'uppercase' }}>{nombrePrenda}</h3>
                   </div>
+                  {estaAbierto ? <ChevronUp size={24} /> : <ChevronDown size={24} />}
+                </div>
 
-                  <AnimatePresence>
-                    {estaAbierto && (
-                      <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} style={{ borderTop: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
-                        <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                          {variantes.map((i: any) => {
-                            const fisico = i.stock;
-                            const reservado = i.stock_reservado || 0;
-                            const disponible = fisico - reservado;
-                            const agotado = disponible <= 0;
+                <AnimatePresence>
+                  {estaAbierto && (
+                    <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} style={{ backgroundColor: '#f1f5f9' }}>
+                      {Object.keys(productosAgrupados[nombrePrenda]).map(nombreCol => {
+                        const variantes = productosAgrupados[nombrePrenda][nombreCol].sort((a: any, b: any) => (ordenTallas[a.talla] || 99) - (ordenTallas[b.talla] || 99))
+                        const idUnicoColegio = `${nombrePrenda}-${nombreCol}`
+                        const colAbierto = colegiosAbiertos.includes(idUnicoColegio)
+                        const tieneAgotados = variantes.some((v: any) => (v.stock - (v.stock_reservado || 0)) <= 0)
 
-                            return (
-                              <div key={i.id} style={{ backgroundColor: '#fff', padding: '16px', borderRadius: '16px', border: `1px solid ${agotado ? '#fca5a5' : '#e2e8f0'}`, display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                                
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <span style={{ fontWeight: '800', fontSize: '18px', color: '#0f172a' }}>{i.talla}</span>
-                                    <span style={{ fontSize: '13px', fontWeight: '600', color: '#64748b' }}>${Number(i.precio_base).toLocaleString()}</span>
-                                  </div>
-                                  <button onClick={() => eliminarVariante(i.id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px' }}><Trash2 size={16} /></button>
-                                </div>
-                                
-                                {/* CONTROLES DE STOCK MANUALES */}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                  
-                                  {/* Fila Stock Físico */}
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f1f5f9', padding: '6px 12px', borderRadius: '10px' }}>
-                                    <span style={{ fontSize: '12px', fontWeight: '700', color: '#475569', width: '60px' }}>FÍSICO:</span>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                      <button onClick={() => ajustarStock(i.id, -1)} style={{ width: '28px', height: '28px', border: '1px solid #cbd5e1', borderRadius: '6px', backgroundColor: '#fff', color: '#475569', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Minus size={14} /></button>
-                                      <span style={{ fontWeight: '800', fontSize: '15px', color: '#0f172a', width: '24px', textAlign: 'center' }}>{fisico}</span>
-                                      <button onClick={() => ajustarStock(i.id, 1)} style={{ width: '28px', height: '28px', border: '1px solid #cbd5e1', borderRadius: '6px', backgroundColor: '#fff', color: '#475569', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Plus size={14} /></button>
-                                    </div>
-                                  </div>
-
-                                  {/* Fila Stock Reservado */}
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fffbeb', padding: '6px 12px', borderRadius: '10px' }}>
-                                    <span style={{ fontSize: '12px', fontWeight: '700', color: '#b45309', width: '60px' }}>RESERVA:</span>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                      <button onClick={() => ajustarReserva(i.id, -1)} style={{ width: '28px', height: '28px', border: '1px solid #fde68a', borderRadius: '6px', backgroundColor: '#fff', color: '#d97706', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Minus size={14} /></button>
-                                      <span style={{ fontWeight: '800', fontSize: '15px', color: '#b45309', width: '24px', textAlign: 'center' }}>{reservado}</span>
-                                      <button onClick={() => ajustarReserva(i.id, 1)} style={{ width: '28px', height: '28px', border: '1px solid #fde68a', borderRadius: '6px', backgroundColor: '#fff', color: '#d97706', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Plus size={14} /></button>
-                                    </div>
-                                  </div>
-
-                                </div>
-
-                                <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '10px', marginTop: '4px', textAlign: 'right' }}>
-                                  <span style={{ backgroundColor: agotado ? '#fee2e2' : '#dcfce7', color: agotado ? '#991b1b' : '#166534', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '800' }}>
-                                    DISPONIBLE: {disponible}
-                                  </span>
-                                </div>
-
+                        return (
+                          <div key={nombreCol} style={{ borderBottom: '2px solid #000' }}>
+                            <div onClick={() => toggleColegio(idUnicoColegio)} style={{ padding: '15px 25px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', backgroundColor: tieneAgotados ? '#fee2e2' : 'transparent' }}>
+                              <span style={{ fontWeight: '900', fontSize: '15px', display: 'flex', alignItems: 'center', gap: '8px', color: '#000' }}>
+                                <School size={16} /> {nombreCol}
+                              </span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <span style={{ fontSize: '11px', fontWeight: '800', background: '#000', color: '#fff', padding: '2px 8px', borderRadius: '6px' }}>{variantes.length} TALLAS</span>
+                                {colAbierto ? <Minus size={16} color="#000" /> : <Plus size={16} color="#000" />}
                               </div>
-                            )
-                          })}
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </motion.div>
-              )
-            })}
-          </div>
-        </motion.div>
+                            </div>
+
+                            {colAbierto && (
+                              <div style={{ padding: '15px', display: 'flex', flexDirection: 'column', gap: '12px', backgroundColor: '#fff' }}>
+                                {variantes.map((i: any) => {
+                                  const disponible = i.stock - (i.stock_reservado || 0)
+                                  const agotado = disponible <= 0
+                                  return (
+                                    <div key={i.id} style={{ border: '2px solid #000', padding: '15px', borderRadius: '15px', backgroundColor: agotado ? '#fef2f2' : '#fff', boxShadow: '4px 4px 0px #000' }}>
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                          <span style={{ fontWeight: '900', fontSize: '18px' }}>Talla {i.talla}</span>
+                                          <span style={{ fontWeight: '800', color: '#166534' }}>${Number(i.precio_base).toLocaleString()}</span>
+                                        </div>
+                                        <button onClick={() => eliminarVariante(i.id)} style={{ color: '#ef4444', border: 'none', background: 'none', cursor: 'pointer' }}><Trash2 size={18} /></button>
+                                      </div>
+                                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                                        <div style={{ background: '#f1f5f9', padding: '8px', borderRadius: '10px', border: '2px solid #000', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                          <span style={{ fontSize: '10px', fontWeight: '900' }}>FÍSICO:</span>
+                                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                            <button onClick={() => ajustarStock(i.id, -1)} style={{ background: '#ef4444', color: '#fff', border: '1px solid #000', borderRadius: '4px', width: '24px' }}>-</button>
+                                            <span style={{ fontWeight: '900' }}>{i.stock}</span>
+                                            <button onClick={() => ajustarStock(i.id, 1)} style={{ background: '#4ade80', color: '#000', border: '1px solid #000', borderRadius: '4px', width: '24px' }}>+</button>
+                                          </div>
+                                        </div>
+                                        <div style={{ background: '#fffbeb', padding: '8px', borderRadius: '10px', border: '2px solid #000', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                          <span style={{ fontSize: '10px', fontWeight: '900' }}>RSV:</span>
+                                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                            <button onClick={() => ajustarReserva(i.id, -1)} style={{ background: '#f59e0b', color: '#fff', border: '1px solid #000', borderRadius: '4px', width: '24px' }}>-</button>
+                                            <span style={{ fontWeight: '900' }}>{i.stock_reservado || 0}</span>
+                                            <button onClick={() => ajustarReserva(i.id, 1)} style={{ background: '#f59e0b', color: '#fff', border: '1px solid #000', borderRadius: '4px', width: '24px' }}>+</button>
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <div style={{ textAlign: 'right', marginTop: '10px' }}>
+                                        <span style={{ backgroundColor: agotado ? '#000' : '#4ade80', color: agotado ? '#fff' : '#000', padding: '4px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: '900', border: '2px solid #000' }}>
+                                          DISPONIBLE: {disponible}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )
+          })}
+        </div>
       </div>
     </main>
   )
