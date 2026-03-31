@@ -18,12 +18,6 @@ export default function VerPedidos() {
   const [usuarioActivo, setUsuarioActivo] = useState('')
   const [logs, setLogs] = useState<any[]>([])
 
-  const metodoPagoIcono = (metodo: string) => {
-    if (metodo === 'Transferencia') return <Landmark size={14} />
-    if (metodo === 'Efectivo') return <Banknote size={14} />
-    return <CreditCard size={14} />
-  }
-
   const cargar = useCallback(async () => {
     if (!sessionStorage.getItem('user_role')) return router.push('/login')
     setUsuarioActivo(sessionStorage.getItem('user_name') || '')
@@ -147,121 +141,28 @@ export default function VerPedidos() {
       )
     } catch (err) {
       setDatos(datosPrevios)
-      alert("❌ No se pudo sincronizar la entrega. Se revirtió el cambio.")
+      alert("❌ No se pudo sincronizar la entrega.")
     }
   }
 
   const exportarExcel = () => {
     const reporte: any[] = []
     const formatoMoneda = (monto: number) => `$${Number(monto || 0).toLocaleString('es-CL')}`
-    const rangosPedidos: Array<{ inicio: number; fin: number }> = []
-
     datos.forEach(p => {
-      const inicioBloque = reporte.length + 2
-      const totalPedido = Number(p.total_final || 0)
-      const abonoPedido = Number(p.total_pagado || 0)
-      const saldoPendiente = totalPedido - abonoPedido
-      const detalles = p.detalles || []
-      const pagos = p.pagos || []
-
-      let ultimaActividad = 'Sin actividad'
-      const logsPedido = logs.filter(log => 
-        log.accion.includes(p.id.toString()) || log.accion.includes(p.c_nombre || '')
-      )
-      if (logsPedido.length > 0) {
-        ultimaActividad = new Date(logsPedido[0].fecha).toLocaleDateString('es-CL')
-      }
-
       reporte.push({
         'Tipo': 'PEDIDO',
         'ID Pedido': p.id,
         'Fecha': new Date(p.created_at).toLocaleDateString('es-CL'),
         'Cliente': p.c_nombre || 'S/N',
-        'RUT': p.c_rut || '',
-        'Teléfono': p.c_telefono || '',
         'Colegio': p.colegio || 'Particular',
-        'Ítem': '',
-        'Talla': '',
-        'Cantidad': '',
-        'Cantidad Entregada': '',
-        'Fecha de Entrega': '',
-        'Última Actividad': ultimaActividad,
-        'Precio Unitario': '',
-        'Total Ítem': '',
-        'Total Pedido': formatoMoneda(totalPedido),
-        'Abono Pedido': formatoMoneda(abonoPedido),
-        'Saldo Pendiente': formatoMoneda(saldoPendiente),
-        'Usuario': p.creado_por || ''
+        'Total Pedido': formatoMoneda(p.total_final),
+        'Abono Pedido': formatoMoneda(p.total_pagado),
+        'Saldo Pendiente': formatoMoneda(p.total_final - p.total_pagado)
       })
-
-      detalles.forEach((det: any) => {
-        const cantidad = Number(det.cantidad || 0)
-        const cantidadEntregada = Number(det.cantidad_entregada || 0)
-        const totalItem = cantidad * Number(det.precio_unitario || 0)
-
-        let fechaEntrega = 'Pendiente'
-        if (cantidadEntregada > 0) {
-          const logEntrega = logs.find(log => 
-            log.accion.includes('entregó') && log.accion.includes(det.p_nombre || 'Producto')
-          )
-          if (logEntrega) {
-            const match = logEntrega.accion.match(/el (\d{2}\/\d{2} \d{2}:\d{2})/)
-            fechaEntrega = match ? match[1] : new Date(logEntrega.fecha).toLocaleDateString('es-CL')
-          }
-        }
-
-        reporte.push({
-          'Tipo': 'ÍTEM',
-          'ID Pedido': '',
-          'Fecha': '',
-          'Cliente': '',
-          'RUT': '',
-          'Teléfono': '',
-          'Colegio': '',
-          'Ítem': det.p_nombre || 'Producto',
-          'Talla': det.talla || '',
-          'Cantidad': cantidad,
-          'Cantidad Entregada': cantidadEntregada,
-          'Fecha de Entrega': fechaEntrega,
-          'Última Actividad': '',
-          'Precio Unitario': formatoMoneda(det.precio_unitario || 0),
-          'Total Ítem': formatoMoneda(totalItem),
-          'Total Pedido': '',
-          'Abono Pedido': '',
-          'Saldo Pendiente': '',
-          'Usuario': ''
-        })
-      })
-
-      pagos.forEach((pg: any) => {
-        reporte.push({
-          'Tipo': 'PAGO',
-          'ID Pedido': '',
-          'Fecha': pg.fecha_pago ? new Date(pg.fecha_pago).toLocaleDateString('es-CL') : '',
-          'Cliente': '',
-          'RUT': '',
-          'Teléfono': '',
-          'Colegio': '',
-          'Ítem': '',
-          'Talla': '',
-          'Cantidad': '',
-          'Cantidad Entregada': '',
-          'Fecha de Entrega': '',
-          'Última Actividad': '',
-          'Precio Unitario': '',
-          'Total Ítem': '',
-          'Total Pedido': '',
-          'Abono Pedido': formatoMoneda(pg.monto || 0),
-          'Saldo Pendiente': pg.metodo_pago || '',
-          'Usuario': pg.creado_por || ''
-        })
-      })
-      rangosPedidos.push({ inicio: inicioBloque, fin: reporte.length + 1 })
     })
-
     const ws = XLSX.utils.json_to_sheet(reporte)
     const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, "Reporte Detallado")
+    XLSX.utils.book_append_sheet(wb, ws, "Reporte")
     XLSX.writeFile(wb, `Reporte_Luis_${new Date().toISOString().split('T')[0]}.xlsx`)
   }
 
@@ -271,13 +172,7 @@ export default function VerPedidos() {
     const monto = Number(montoInput.replace(/\D/g, ''))
     if (isNaN(monto) || monto <= 0) return alert('❌ Monto inválido.')
 
-    const fechaPago = prompt('📅 Fecha (YYYY-MM-DD):', new Date().toISOString().split('T')[0]) || new Date().toISOString().split('T')[0]
-    const metodo = prompt('💳 Método (Transferencia, Efectivo, Débito, Crédito):', 'Transferencia') || 'Transferencia'
-
-    // Guardamos estado previo por si hay que revertir la UI
     const snapshot = [...datos]
-    
-    // Actualización optimista de la interfaz
     setDatos(prev => prev.map(p => {
       if (p.id !== pedido.id) return p
       const totalPagado = Number(p.total_pagado || 0) + monto
@@ -286,63 +181,39 @@ export default function VerPedidos() {
     }))
 
     try {
-      // 1. Intentar insertar el pago
-      const { error: errorPago } = await supabase.from('pagos').insert([{
+      // AQUÍ MANTENEMOS LA COLUMNA CREADO_POR QUE HICISTE
+      const { error } = await supabase.from('pagos').insert([{
         pedido_id: pedido.id,
         monto: monto,
-        fecha_pago: fechaPago,
-        metodo_pago: metodo,
+        fecha_pago: new Date().toISOString().split('T')[0],
+        metodo_pago: 'Transferencia',
         creado_por: sessionStorage.getItem('user_name') || 'Usuario'
       }])
 
-      if (errorPago) {
-        console.error("Error de Supabase al insertar pago:", errorPago)
-        throw errorPago
-      }
+      if (error) throw error
 
-      // 2. Registrar en el historial (si falla esto, no importa, el pago ya se hizo)
-      try {
-        const ahora = new Date()
-        const fechaFormateada = `${ahora.getDate().toString().padStart(2, '0')}/${(ahora.getMonth() + 1).toString().padStart(2, '0')} ${ahora.getHours().toString().padStart(2, '0')}:${ahora.getMinutes().toString().padStart(2, '0')}`
-        
-        await registrarLog(
-          `${sessionStorage.getItem('user_name') || 'Usuario'} registró pago de $${monto.toLocaleString('es-CL')} el ${fechaFormateada}`,
-          `Pedido ID: ${pedido.id}`
-        )
-      } catch (logErr) {
-        console.warn("No se pudo registrar el log, pero el pago se guardó.", logErr)
-      }
-
-      // 3. Recargar datos para estar sincronizados
-      await cargar()
+      const ahora = new Date()
+      const f = `${ahora.getDate().toString().padStart(2, '0')}/${(ahora.getMonth() + 1).toString().padStart(2, '0')} ${ahora.getHours().toString().padStart(2, '0')}:${ahora.getMinutes().toString().padStart(2, '0')}`
       
-    } catch (err: any) {
+      await registrarLog(
+        `${sessionStorage.getItem('user_name') || 'Usuario'} registró pago de $${monto.toLocaleString('es-CL')} el ${f}`,
+        `Pedido ID: ${pedido.id}`
+      )
+      cargar()
+    } catch (err) {
       setDatos(snapshot)
-      console.error("Error completo del proceso:", err)
-      alert(`❌ Error al guardar: ${err.message || 'Error desconocido'}`)
+      alert('❌ Error al guardar el pago en Supabase.')
     }
   }
 
   const borrarPedido = async (pedidoId: string, detalles: any[], clienteNombre: string) => {
-    if(!confirm('⚠️ ¿Borrar pedido completo?')) return
-    const usuario = sessionStorage.getItem('user_name') || ''
-    if (usuario !== 'Admin') {
-      const clave = prompt('🔒 Ingresa clave para borrar:')
-      if (clave !== '1122') return alert('❌ Clave incorrecta.')
-    }
+    if(!confirm('⚠️ ¿Borrar pedido?')) return
     try {
       await supabase.from('pagos').delete().eq('pedido_id', pedidoId)
-      for (const det of detalles) {
-        if (det.estado === 'Pendiente' && det.producto_id) {
-          await supabase.rpc('reservar_stock', { prod_id: det.producto_id, cant: -det.cantidad })
-        }
-      }
       await supabase.from('pedidos').delete().eq('id', pedidoId)
-      await registrarLog(`${usuario} eliminó pedido de ${clienteNombre}`, `ID: ${pedidoId}`)
+      await registrarLog(`Eliminó pedido de ${clienteNombre}`, `ID: ${pedidoId}`)
       cargar()
-    } catch (err) {
-      alert('❌ Error al eliminar.')
-    }
+    } catch (err) { alert('❌ Error al eliminar.') }
   }
 
   useEffect(() => { cargar() }, [cargar])
@@ -355,70 +226,70 @@ export default function VerPedidos() {
     .filter(p => filtro === 'Todos' || (filtro === 'Pendientes' && p.estado_macro !== 'Completado') || p.estado_macro === filtro)
 
   return (
-    <main style={{ minHeight: '100vh', backgroundColor: '#f8fafc', padding: '20px', fontFamily: 'sans-serif' }}>
+    <main style={{ minHeight: '100vh', backgroundColor: '#cbd5e1', padding: '20px', fontFamily: 'sans-serif' }}>
       <div style={{ maxWidth: '650px', margin: '0 auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '25px' }}>
-          <button onClick={() => router.push('/')} style={{ backgroundColor: '#fff', border: '2px solid #000', padding: '10px', borderRadius: '12px' }}><ArrowLeft size={20} /></button>
+          <button onClick={() => router.push('/')} style={{ backgroundColor: '#fff', border: '3px solid #000', padding: '10px', borderRadius: '12px', boxShadow: '4px 4px 0px #000' }}><ArrowLeft size={20} /></button>
           <h1 style={{ fontSize: '24px', fontWeight: '900' }}>Gestión de Pedidos</h1>
-          <button onClick={exportarExcel} style={{ backgroundColor: '#166534', color: '#fff', padding: '10px 16px', borderRadius: '12px', fontWeight: '800', border: 'none' }}><Download size={18} /> Excel</button>
+          <button onClick={exportarExcel} style={{ backgroundColor: '#166534', color: '#fff', padding: '10px 16px', borderRadius: '12px', fontWeight: '800', border: '3px solid #000', boxShadow: '4px 4px 0px #000' }}><Download size={18} /> Excel</button>
         </div>
 
         <div style={{ marginBottom: '25px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
           <div style={{ position: 'relative' }}>
             <Search style={{ position: 'absolute', left: '14px', top: '14px' }} size={20} />
-            <input placeholder="Buscar..." style={{ width: '100%', padding: '14px 40px', border: '2px solid #000', borderRadius: '12px', fontWeight: '700' }} onChange={(e) => setBusqueda(e.target.value)} />
+            <input placeholder="Buscar..." style={{ width: '100%', padding: '14px 40px', border: '3px solid #000', borderRadius: '12px', fontWeight: '700', boxShadow: '4px 4px 0px #000' }} onChange={(e) => setBusqueda(e.target.value)} />
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
             {['Todos', 'Pendientes', 'Completado'].map(f => (
-              <button key={f} onClick={() => setFiltro(f)} style={{ backgroundColor: filtro === f ? '#000' : '#fff', color: filtro === f ? '#fff' : '#000', border: '2px solid #000', borderRadius: '8px', padding: '8px 14px', fontWeight: '800' }}>{f}</button>
+              <button key={f} onClick={() => setFiltro(f)} style={{ backgroundColor: filtro === f ? '#000' : '#fff', color: filtro === f ? '#fff' : '#000', border: '3px solid #000', borderRadius: '8px', padding: '8px 14px', fontWeight: '800', boxShadow: '3px 3px 0px #000' }}>{f}</button>
             ))}
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '25px' }}>
           {filtrados.map(p => {
             const deuda = p.total_final - (p.total_pagado || 0)
             const expandido = !!expandidos[p.id]
             return (
-              <div key={p.id} style={{ backgroundColor: '#fff', padding: '24px', borderRadius: '24px', border: '2px solid #e2e8f0' }}>
+              <div key={p.id} style={{ backgroundColor: '#fff', padding: '24px', borderRadius: '24px', border: '3px solid #000', boxShadow: '8px 8px 0px #000' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
                   <span style={{ fontWeight: '800', fontSize: '12px' }}><School size={12} /> {p.colegio || 'Particular'}</span>
-                  <span style={{ backgroundColor: p.color_bg, color: p.color_text, padding: '6px 12px', borderRadius: '8px', fontWeight: '800', fontSize: '12px' }}>{p.estado_macro}</span>
+                  <span style={{ backgroundColor: p.color_bg, color: p.color_text, padding: '6px 12px', borderRadius: '8px', fontWeight: '800', border: '2px solid #000' }}>{p.estado_macro}</span>
                 </div>
-                <h2 style={{ fontWeight: '900', fontSize: '22px' }}>{p.c_nombre}</h2>
-                <button onClick={() => setExpandidos(prev => ({ ...prev, [p.id]: !prev[p.id] }))} style={{ width: '100%', margin: '16px 0', border: '2px solid #000', borderRadius: '10px', padding: '10px', fontWeight: '900' }}>{expandido ? 'Ocultar' : 'Ver Detalle'}</button>
+                <h2 style={{ fontWeight: '900', fontSize: '24px' }}>{p.c_nombre}</h2>
+                <button onClick={() => setExpandidos(prev => ({ ...prev, [p.id]: !prev[p.id] }))} style={{ width: '100%', margin: '16px 0', border: '3px solid #000', borderRadius: '10px', padding: '10px', fontWeight: '900', background: '#f1f5f9' }}>{expandido ? 'Ocultar Detalle' : 'Ver Detalle'}</button>
 
                 {expandido && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '20px' }}>
                     {p.detalles?.map((det: any, idx: number) => (
-                      <div key={idx} style={{ padding: '12px', border: '1px solid #e2e8f0', borderRadius: '12px', display: 'flex', justifyContent: 'space-between' }}>
+                      <div key={idx} style={{ padding: '12px', border: '2px solid #000', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', background: '#f8fafc' }}>
                         <div><p style={{ fontWeight: '800' }}>{det.p_nombre}</p><p style={{ fontSize: '12px' }}>{det.cantidad_entregada || 0} de {det.cantidad}</p></div>
                         <div style={{ display: 'flex', gap: '5px' }}>
-                          <button onClick={() => actualizarEntrega(det, -1)} style={{ border: '2px solid #000', borderRadius: '8px', padding: '5px' }}>-</button>
-                          <button onClick={() => actualizarEntrega(det, 1)} style={{ background: '#000', color: '#fff', borderRadius: '8px', padding: '5px' }}>+1</button>
+                          <button onClick={() => actualizarEntrega(det, -1)} style={{ border: '2px solid #000', borderRadius: '8px', padding: '5px', background: '#fff' }}>-</button>
+                          <button onClick={() => actualizarEntrega(det, 1)} style={{ background: '#000', color: '#fff', borderRadius: '8px', padding: '5px', border: '2px solid #000' }}>+1</button>
                         </div>
                       </div>
                     ))}
                   </div>
                 )}
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
-                  <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>
+                  <div style={{ background: '#f0fdf4', padding: '16px', borderRadius: '16px', border: '3px solid #000' }}>
                     <p style={{ fontSize: '12px', fontWeight: '800' }}>PAGADO</p>
-                    <p style={{ fontSize: '20px', fontWeight: '900', color: '#10b981' }}>${Number(p.total_pagado || 0).toLocaleString('es-CL')}</p>
-                    <button onClick={() => agregarPago(p)} style={{ background: '#000', color: '#fff', padding: '4px 8px', borderRadius: '8px', fontSize: '11px', fontWeight: '800' }}>+ Pago</button>
+                    <p style={{ fontSize: '22px', fontWeight: '900', color: '#166534' }}>${Number(p.total_pagado || 0).toLocaleString('es-CL')}</p>
+                    <button onClick={() => agregarPago(p)} style={{ background: '#000', color: '#fff', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '900', marginTop: '8px', border: '2px solid #000' }}>+ Pago</button>
                   </div>
-                  <div style={{ background: deuda > 0 ? '#fef2f2' : '#f0fdf4', padding: '16px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ background: deuda > 0 ? '#fef2f2' : '#f0fdf4', padding: '16px', borderRadius: '16px', border: '3px solid #000' }}>
                     <p style={{ fontSize: '12px', fontWeight: '800' }}>DEUDA</p>
-                    <p style={{ fontSize: '20px', fontWeight: '900', color: deuda > 0 ? '#ef4444' : '#10b981' }}>${deuda.toLocaleString('es-CL')}</p>
+                    <p style={{ fontSize: '22px', fontWeight: '900', color: deuda > 0 ? '#991b1b' : '#166534' }}>${deuda.toLocaleString('es-CL')}</p>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #e2e8f0', paddingTop: '16px' }}>
-                  <button onClick={() => borrarPedido(p.id, p.detalles, p.c_nombre)} style={{ color: '#ef4444', fontWeight: '800', border: 'none', background: 'none' }}><Trash2 size={16} /> Borrar</button>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '3px solid #000', paddingTop: '16px' }}>
+                  <button onClick={() => borrarPedido(p.id, p.detalles, p.c_nombre)} style={{ color: '#991b1b', fontWeight: '900', border: 'none', background: 'none', display: 'flex', alignItems: 'center', gap: '5px' }}><Trash2 size={16} /> Borrar</button>
                   <div style={{ display: 'flex', gap: '10px' }}>
-                    <button onClick={() => abrirWhatsApp(p.c_telefono)} style={{ background: '#25D366', color: '#fff', padding: '10px', borderRadius: '10px', border: 'none' }}><MessageCircle size={16} /></button>
-                    <button onClick={() => window.open(`/ticket/${p.id}`, '_blank')} style={{ background: '#000', color: '#fff', padding: '10px', borderRadius: '10px', border: 'none' }}><Printer size={16} /></button>
+                    <button onClick={() => window.open(`https://wa.me/${p.c_telefono}`, '_blank')} style={{ background: '#25D366', color: '#fff', padding: '10px', borderRadius: '10px', border: '2px solid #000', boxShadow: '3px 3px 0px #000' }}><MessageCircle size={16} /></button>
+                    <button onClick={() => window.open(`/ticket/${p.id}`, '_blank')} style={{ background: '#fff', color: '#000', padding: '10px', borderRadius: '10px', border: '2px solid #000', boxShadow: '3px 3px 0px #000' }}><Printer size={16} /></button>
                   </div>
                 </div>
               </div>
@@ -426,17 +297,17 @@ export default function VerPedidos() {
           })}
         </div>
 
-        <div style={{ marginTop: '50px', borderTop: '4px solid #000', paddingTop: '30px', paddingBottom: '60px' }}>
-          <h2 style={{ fontSize: '26px', fontWeight: '900', marginBottom: '24px' }}>HISTORIAL DE ACTIVIDAD</h2>
+        <div style={{ marginTop: '60px', borderTop: '6px solid #000', paddingTop: '40px', paddingBottom: '80px' }}>
+          <h2 style={{ fontSize: '28px', fontWeight: '900', marginBottom: '24px' }}>HISTORIAL DE ACTIVIDAD</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {logs.length === 0 ? <p>Sin registros.</p> : logs.map((log) => (
-              <div key={log.id} style={{ border: '2px solid #000', padding: '16px', borderRadius: '16px', boxShadow: '4px 4px 0px #000' }}>
+              <div key={log.id} style={{ backgroundColor: '#fff', border: '3px solid #000', padding: '20px', borderRadius: '20px', boxShadow: '6px 6px 0px #000' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-                  <span style={{ background: '#000', color: '#fff', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: '900' }}>{log.usuario}</span>
-                  <span style={{ fontSize: '12px', fontWeight: '800', color: '#64748b' }}>{new Date(log.fecha).toLocaleString()}</span>
+                  <span style={{ background: '#000', color: '#fff', padding: '5px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '900' }}>{log.usuario}</span>
+                  <span style={{ fontSize: '13px', fontWeight: '800', color: '#475569' }}>{new Date(log.fecha).toLocaleString()}</span>
                 </div>
-                <p style={{ fontWeight: '900' }}>{log.accion}</p>
-                <p style={{ fontSize: '13px', color: '#475569' }}>{log.detalles}</p>
+                <p style={{ fontWeight: '900', fontSize: '16px' }}>{log.accion}</p>
+                <p style={{ fontSize: '14px', color: '#1e293b' }}>{log.detalles}</p>
               </div>
             ))}
           </div>
