@@ -104,12 +104,10 @@ export default function VerPedidos() {
     setDatos(prev => prev.map(pedido => {
       const perteneceAlPedido = pedido.id === pedidoObjetivoId || pedido.detalles?.some((d: any) => d.id === det.id)
       if (!perteneceAlPedido) return pedido
-
       const detallesActualizados = (pedido.detalles || []).map((d: any) =>
         d.id === det.id ? { ...d, cantidad_entregada: nuevaCantidad, estado: nuevoEstado } : d
       )
       const { estadoMacro, colorEstadoBg, colorEstadoText, itemsCompletos } = calcularEstadoPedido(pedido, detallesActualizados)
-
       return { ...pedido, detalles: detallesActualizados, estado_macro: estadoMacro, color_bg: colorEstadoBg, color_text: colorEstadoText, itemsCompletos }
     }))
 
@@ -128,7 +126,6 @@ export default function VerPedidos() {
     }
   }
 
-  // RESTAURANDO EL EXCEL DETALLADO QUE ROMPÍ
   const exportarExcel = () => {
     const reporte: any[] = []
     const formatoMoneda = (monto: number) => `$${Number(monto || 0).toLocaleString('es-CL')}`
@@ -137,72 +134,102 @@ export default function VerPedidos() {
       const totalPedido = Number(p.total_final || 0)
       const abonoPedido = Number(p.total_pagado || 0)
       const saldoPendiente = totalPedido - abonoPedido
+      
+      // CONFIGURAR FECHA + HORA
+      const fechaHora = new Date(p.created_at).toLocaleString('es-CL', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+      })
 
-      // 1. FILA DE CABECERA DEL PEDIDO
+      // 1. CABECERA CON FECHA Y HORA
       reporte.push({
         'Tipo': 'PEDIDO',
         'ID Pedido': p.id,
-        'Fecha': new Date(p.created_at).toLocaleDateString('es-CL'),
+        'Fecha y Hora': fechaHora,
         'Cliente': p.c_nombre || 'S/N',
         'Teléfono': p.c_telefono || '',
         'Colegio': p.colegio || 'Particular',
-        'Ítem/Pago': '--- CABECERA ---',
-        'Cantidad': '',
-        'Entregado': '',
-        'Precio/Método': '',
-        'Total Pedido': formatoMoneda(totalPedido),
-        'Abono Actual': formatoMoneda(abonoPedido),
+        'Ítem / Pago': '--- RESUMEN ---',
+        'Cant.': '',
+        'Entr.': '',
+        'Precio / Método': '',
+        'Total': formatoMoneda(totalPedido),
+        'Abonado': formatoMoneda(abonoPedido),
         'Saldo': formatoMoneda(saldoPendiente),
         'Observaciones': p.observaciones || ''
       })
 
-      // 2. FILAS PARA CADA ÍTEM DEL PEDIDO
       p.detalles?.forEach((det: any) => {
         reporte.push({
           'Tipo': 'ÍTEM',
           'ID Pedido': '',
-          'Fecha': '',
+          'Fecha y Hora': '',
           'Cliente': '',
           'Teléfono': '',
           'Colegio': '',
-          'Ítem/Pago': det.p_nombre || 'Producto',
-          'Cantidad': det.cantidad,
-          'Entregado': det.cantidad_entregada || 0,
-          'Precio/Método': formatoMoneda(det.precio_unitario || 0),
-          'Total Pedido': '',
-          'Abono Actual': '',
+          'Ítem / Pago': det.p_nombre || 'Producto',
+          'Cant.': det.cantidad,
+          'Entr.': det.cantidad_entregada || 0,
+          'Precio / Método': formatoMoneda(det.precio_unitario || 0),
+          'Total': '',
+          'Abonado': '',
           'Saldo': '',
           'Observaciones': ''
         })
       })
 
-      // 3. FILAS PARA CADA PAGO REGISTRADO
       p.pagos?.forEach((pg: any) => {
         reporte.push({
           'Tipo': 'PAGO',
           'ID Pedido': '',
-          'Fecha': pg.fecha_pago ? new Date(pg.fecha_pago).toLocaleDateString('es-CL') : '',
+          'Fecha y Hora': pg.fecha_pago ? new Date(pg.fecha_pago).toLocaleDateString('es-CL') : '',
           'Cliente': '',
           'Teléfono': '',
           'Colegio': '',
-          'Ítem/Pago': 'ABONO REGISTRADO',
-          'Cantidad': '',
-          'Entregado': '',
-          'Precio/Método': pg.metodo_pago || 'Transferencia',
-          'Total Pedido': '',
-          'Abono Actual': formatoMoneda(pg.monto || 0),
+          'Ítem / Pago': 'ABONO',
+          'Cant.': '',
+          'Entr.': '',
+          'Precio / Método': pg.metodo_pago || 'Transferencia',
+          'Total': '',
+          'Abonado': formatoMoneda(pg.monto || 0),
           'Saldo': '',
-          'Observaciones': `Registrado por: ${pg.creado_por || 'S/N'}`
+          'Observaciones': `Por: ${pg.creado_por || 'S/N'}`
         })
       })
-      // Fila vacía para separar pedidos
-      reporte.push({})
+      reporte.push({}) // Espacio entre pedidos
     })
 
     const ws = XLSX.utils.json_to_sheet(reporte)
+
+    // APLICAR BORDES NEGROS A TODAS LAS CELDAS CON DATOS
+    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1')
+    for (let R = range.s.r; R <= range.e.r; ++R) {
+      for (let C = range.s.c; C <= range.e.c; ++C) {
+        const cell_address = XLSX.utils.encode_cell({ c: C, r: R })
+        if (!ws[cell_address]) continue
+        
+        // Estilo de borde negro fino para cada celda
+        ws[cell_address].s = {
+          border: {
+            top: { style: "thin", color: { rgb: "000000" } },
+            bottom: { style: "thin", color: { rgb: "000000" } },
+            left: { style: "thin", color: { rgb: "000000" } },
+            right: { style: "thin", color: { rgb: "000000" } }
+          },
+          font: { name: "Arial", sz: 10 }
+        }
+
+        // Resaltar cabeceras de pedido
+        if (ws[cell_address].v === 'PEDIDO') {
+           ws[cell_address].s.fill = { fgColor: { rgb: "E2E8F0" } }
+           ws[cell_address].s.font.bold = true
+        }
+      }
+    }
+
     const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, "Reporte Detallado")
-    XLSX.writeFile(wb, `Reporte_Luis_${new Date().toISOString().split('T')[0]}.xlsx`)
+    XLSX.utils.book_append_sheet(wb, ws, "Reporte Luis")
+    XLSX.writeFile(wb, `Reporte_Luis_Detallado_${new Date().toISOString().split('T')[0]}.xlsx`)
   }
 
   const agregarPago = async (pedido: any) => {
