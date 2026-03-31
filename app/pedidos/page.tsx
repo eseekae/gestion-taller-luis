@@ -1,236 +1,241 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
-import { supabase } from '../../lib/supabase'
-import { motion } from 'framer-motion'
-import * as XLSX from 'xlsx'
-import { ArrowLeft, Search, School, Phone, IdCard, Calendar, Package, Printer, Trash2, Edit3, CheckCircle2, Clock, RotateCcw, MessageCircle, Download } from 'lucide-react'
 
-export default function VerPedidos() {
-  const router = useRouter()
-  const [datos, setDatos] = useState<any[]>([])
+import { useState, useEffect } from 'react'
+import { supabase } from '@/lib/supabase'
+
+export default function PedidosPage() {
+  const [pedidos, setPedidos] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [busqueda, setBusqueda] = useState('')
-  const [filtro, setFiltro] = useState('Todos')
-  const [ordenarColegio, setOrdenarColegio] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [filtro, setFiltro] = useState<'Pendiente' | 'Entregado' | 'Todos'>('Pendiente')
+  const [pedidoExpandido, setPedidoExpandido] = useState<string | null>(null)
 
-  const cargar = useCallback(async () => {
-    if (!sessionStorage.getItem('user_role')) return router.push('/login')
-
-    setLoading(true)
-    const [pRes, cRes, iRes, dRes] = await Promise.all([
-      supabase.from('pedidos').select('*').order('created_at', { ascending: false }),
-      supabase.from('clientes').select('*'),
-      supabase.from('inventario').select('*'),
-      supabase.from('detalles_pedido').select('*').order('id')
-    ])
-    
-    const cruzados = (pRes.data || []).map(p => {
-      const cliente = cRes.data?.find(c => c.id === p.cliente_id)
-      const detalles = dRes.data?.filter(d => d.pedido_id === p.id).map(d => {
-        const prod = iRes.data?.find(inv => inv.id === d.producto_id)
-        return { ...d, p_nombre: prod?.nombre || 'Producto' }
-      })
-
-      const itemsCompletos = detalles?.length > 0 && detalles.every(d => d.estado === 'Entregado')
-      const pagoCompleto = p.abono >= p.total_final
-      
-      let estadoMacro = ''
-      let colorEstadoBg = ''
-      let colorEstadoText = ''
-
-      if (itemsCompletos && pagoCompleto) {
-        estadoMacro = 'Completado'; colorEstadoBg = '#dcfce7'; colorEstadoText = '#166534'
-      } else if (!itemsCompletos && pagoCompleto) {
-        estadoMacro = 'Pend. Entrega'; colorEstadoBg = '#dbeafe'; colorEstadoText = '#1e40af'
-      } else if (itemsCompletos && !pagoCompleto) {
-        estadoMacro = 'Pend. Pago'; colorEstadoBg = '#ffedd5'; colorEstadoText = '#c2410c'
-      } else {
-        estadoMacro = 'Pend. Entrega y Pago'; colorEstadoBg = '#fef3c7'; colorEstadoText = '#b45309'
-      }
-
-      return { 
-        ...p, c_nombre: cliente?.nombre || 'S/N', c_telefono: cliente?.telefono || '', c_rut: cliente?.rut || '', 
-        detalles, estado_macro: estadoMacro, color_bg: colorEstadoBg, color_text: colorEstadoText, itemsCompletos
-      }
-    })
-    setDatos(cruzados)
-    setLoading(false)
-  }, [router])
-
-  const abrirWhatsApp = (telefono: string) => {
-    const numLimpio = telefono.replace(/\D/g, '')
-    const link = `https://wa.me/${numLimpio.startsWith('56') ? numLimpio : '56' + numLimpio}`
-    window.open(link, '_blank')
-  }
-
-  const exportarExcel = () => {
-    const reporte = datos.map(p => ({
-      Fecha: new Date(p.created_at).toLocaleDateString('es-CL'),
-      Cliente: p.c_nombre,
-      Telefono: p.c_telefono,
-      RUT: p.c_rut,
-      Colegio: p.colegio || 'Particular',
-      Total: p.total_final,
-      Abono: p.abono,
-      Saldo: p.total_final - p.abono,
-      Estado: p.estado_macro
-    }))
-    const ws = XLSX.utils.json_to_sheet(reporte)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, "Ventas")
-    XLSX.writeFile(wb, `Respaldo_Ventas_${new Date().toISOString().split('T')[0]}.xlsx`)
-  }
-
-  const toggleDetalle = async (detalle_id: string, actual: string, productoId: string, cantidad: number) => {
-    const nuevoEstado = actual === 'Pendiente' ? 'Entregado' : 'Pendiente'
-    try {
-      if (productoId) {
-        if (nuevoEstado === 'Entregado') await supabase.rpc('entregar_stock', { prod_id: productoId, cant: cantidad })
-        else await supabase.rpc('revertir_entrega_stock', { prod_id: productoId, cant: cantidad })
-      }
-      await supabase.from('detalles_pedido').update({ estado: nuevoEstado }).eq('id', detalle_id)
-      cargar()
-    } catch (err) { alert("Error: " + err) }
-  }
-
-  const actualizarAbono = async (pedidoId: string, totalFinal: number, abonoActual: number) => {
-    const input = prompt(`💰 Modificar Pago\nTotal: $${totalFinal}\nPagado: $${abonoActual}\n\nNUEVO MONTO TOTAL pagado:`, abonoActual.toString());
-    if (input === null) return;
-    const nuevoAbono = Number(input);
-    if (isNaN(nuevoAbono) || nuevoAbono < 0) return alert("❌ Monto inválido.");
-    try {
-      await supabase.from('pedidos').update({ abono: nuevoAbono }).eq('id', pedidoId);
-      cargar(); 
-    } catch (err) { alert("Error al actualizar pago: " + err); }
-  }
-
-  const borrarPedido = async (pedidoId: string, detalles: any[]) => {
-    if(!confirm('⚠️ ¿Borrar pedido completo?')) return
-    for (const det of detalles) {
-      if (det.estado === 'Pendiente' && det.producto_id) {
-        await supabase.rpc('reservar_stock', { prod_id: det.producto_id, cant: -det.cantidad })
-      }
-    }
-    await supabase.from('pedidos').delete().eq('id', pedidoId)
+  useEffect(() => {
     cargar()
+  }, [])
+
+  const cargar = async () => {
+    setLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('pedidos')
+        .select(`
+          *,
+          detalles:detalles_pedido(*)
+        `)
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+      setPedidos(data || [])
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const formatearFecha = (f: string) => new Intl.DateTimeFormat('es-CL', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(f))
-  useEffect(() => { cargar() }, [cargar])
+  // FUNCIÓN CLAVE: Actualiza las cantidades entregadas una por una
+  const actualizarEntrega = async (detalleId: string, cambio: number | 'todo', productoId: string, total: number, actual: number) => {
+    let nuevaCantidad = 0
+    let variacionStock = 0
 
-  const filtrados = datos
-    .filter(p => {
-      const termino = busqueda.toLowerCase();
-      return p.c_nombre.toLowerCase().includes(termino) || p.c_telefono.includes(termino) || p.c_rut.includes(termino) || (p.colegio && p.colegio.toLowerCase().includes(termino))
-    })
-    .filter(p => filtro === 'Todos' || (filtro === 'Pendientes' && p.estado_macro !== 'Completado') || p.estado_macro === filtro)
-    .sort((a, b) => {
-      if (ordenarColegio) return (a.colegio || '').localeCompare(b.colegio || '')
-      return (a.estado_macro === 'Completado' ? 1 : -1) 
-    })
+    if (cambio === 'todo') {
+      nuevaCantidad = total
+      variacionStock = total - actual
+    } else {
+      nuevaCantidad = actual + cambio
+      variacionStock = cambio
+    }
 
-  const inputStyle = { width: '100%', padding: '14px 16px 14px 40px', border: '2px solid #000', borderRadius: '12px', fontSize: '15px', color: '#000', fontWeight: '700', outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' as const }
-  const btnFiltroStyle = (activo: boolean) => ({ backgroundColor: activo ? '#000' : '#fff', color: activo ? '#fff' : '#000', border: `2px solid #000`, borderRadius: '8px', padding: '8px 14px', fontSize: '12px', fontWeight: '800', cursor: 'pointer' })
-  
+    // Validaciones básicas
+    if (nuevaCantidad < 0 || nuevaCantidad > total) return
+    if (variacionStock === 0) return
+
+    try {
+      // 1. Actualizar Stock en Inventario usando las funciones RPC que ya tienes
+      if (productoId) {
+        const rpcName = variacionStock > 0 ? 'entregar_stock' : 'revertir_entrega_stock'
+        const { error: stockError } = await supabase.rpc(rpcName, {
+          prod_id: productoId,
+          cant: Math.abs(variacionStock)
+        })
+        if (stockError) throw stockError
+      }
+
+      // 2. Actualizar el detalle del pedido
+      const nuevoEstado = nuevaCantidad === total ? 'Entregado' : 'Pendiente'
+      const { error: updateError } = await supabase
+        .from('detalles_pedido')
+        .update({ 
+          cantidad_entregada: nuevaCantidad,
+          estado: nuevoEstado 
+        })
+        .eq('id', detalleId)
+
+      if (updateError) throw updateError
+
+      cargar() // Refrescar lista
+    } catch (err: any) {
+      alert("Error al actualizar: " + err.message)
+    }
+  }
+
+  const entregarPedidoCompleto = async (p: any) => {
+    const confirmacion = confirm(`¿Entregar todos los items del pedido de ${p.cliente}?`)
+    if (!confirmacion) return
+
+    try {
+      for (const det of p.detalles) {
+        if (det.cantidad_entregada < det.cantidad) {
+          await actualizarEntrega(det.id, 'todo', det.producto_id, det.cantidad, det.cantidad_entregada || 0)
+        }
+      }
+      cargar()
+    } catch (err: any) {
+      alert("Error: " + err.message)
+    }
+  }
+
+  const pedidosFiltrados = pedidos.filter(p => {
+    const todosEntregados = p.detalles?.every((d: any) => d.cantidad_entregada === d.cantidad)
+    if (filtro === 'Pendiente') return !todosEntregados
+    if (filtro === 'Entregado') return todosEntregados
+    return true
+  })
+
+  if (loading) return <div style={{ padding: '40px', textAlign: 'center', fontWeight: 'bold' }}>Cargando pedidos...</div>
+
   return (
-    <main style={{ minHeight: '100vh', backgroundColor: '#f8fafc', padding: '20px', fontFamily: 'sans-serif' }}>
-      <div style={{ maxWidth: '650px', margin: '0 auto' }}>
-        
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '25px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-            <button onClick={() => router.push('/')} style={{ backgroundColor: '#fff', border: '2px solid #000', padding: '10px', borderRadius: '12px', color: '#000', cursor: 'pointer' }}>
-              <ArrowLeft size={20} />
-            </button>
-            <h1 style={{ margin: 0, fontSize: '24px', fontWeight: '900', color: '#000' }}>Gestión de Pedidos</h1>
-          </div>
-          {/* BOTÓN EXPORTAR EXCEL */}
-          <button onClick={exportarExcel} style={{ backgroundColor: '#166534', color: '#fff', padding: '10px 16px', borderRadius: '12px', fontWeight: '800', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
-            <Download size={18} /> Excel
-          </button>
-        </div>
+    <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto', fontFamily: 'system-ui' }}>
+      <h1 style={{ fontSize: '28px', fontWeight: '900', marginBottom: '20px' }}>Gestión de Pedidos</h1>
 
-        <div style={{ marginBottom: '25px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
-          <div style={{ position: 'relative' }}>
-            <div style={{ position: 'absolute', left: '14px', top: '14px', color: '#000' }}><Search size={20} /></div>
-            <input placeholder="Buscar por Nombre, RUT, Teléfono..." style={inputStyle} onChange={(e) => setBusqueda(e.target.value)} />
-          </div>
-          
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <button onClick={() => setFiltro('Todos')} style={btnFiltroStyle(filtro === 'Todos')}>Todos</button>
-            <button onClick={() => setFiltro('Pendientes')} style={btnFiltroStyle(filtro === 'Pendientes')}>Pendientes</button>
-            <button onClick={() => setFiltro('Completado')} style={btnFiltroStyle(filtro === 'Completado')}>Completados</button>
-          </div>
-        </div>
+      {/* Filtros */}
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '25px', backgroundColor: '#f1f5f9', padding: '5px', borderRadius: '12px' }}>
+        {['Pendiente', 'Entregado', 'Todos'].map((f: any) => (
+          <button
+            key={f}
+            onClick={() => setFiltro(f)}
+            style={{
+              flex: 1,
+              padding: '10px',
+              borderRadius: '8px',
+              border: 'none',
+              backgroundColor: filtro === f ? '#fff' : 'transparent',
+              boxShadow: filtro === f ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
+              fontWeight: '700',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+          >{f}</button>
+        ))}
+      </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          {filtrados.map(p => {
-            const deuda = p.total_final - p.abono;
-            return (
-              <div key={p.id} style={{ backgroundColor: '#fff', padding: '24px', borderRadius: '24px', border: '2px solid #e2e8f0', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
-                
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
-                  <span style={{ backgroundColor: '#f1f5f9', padding: '6px 12px', borderRadius: '8px', fontWeight: '800', fontSize: '12px', color: '#000', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <School size={12} /> {p.colegio || 'Particular'}
-                  </span>
-                  <span style={{ backgroundColor: p.color_bg, color: p.color_text, padding: '6px 12px', borderRadius: '8px', fontWeight: '800', fontSize: '12px' }}>
-                    {p.estado_macro}
-                  </span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+        {pedidosFiltrados.map(p => {
+          const itemsEntregados = p.detalles?.filter((d: any) => d.cantidad_entregada === d.cantidad).length
+          const totalItems = p.detalles?.length
+          const esCompleto = itemsEntregados === totalItems
+
+          return (
+            <div key={p.id} style={{
+              backgroundColor: '#fff',
+              borderRadius: '16px',
+              border: '1px solid #e2e8f0',
+              overflow: 'hidden',
+              boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)'
+            }}>
+              {/* Cabecera del Pedido */}
+              <div 
+                onClick={() => setPedidoExpandido(pedidoExpandido === p.id ? null : p.id)}
+                style={{ padding: '16px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              >
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '800' }}>{p.cliente}</h3>
+                  <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#64748b' }}>
+                    {new Date(p.created_at).toLocaleDateString()} | {itemsEntregados}/{totalItems} items listos
+                  </p>
                 </div>
-
-                <h2 style={{ margin: '0 0 8px 0', fontWeight: '900', fontSize: '22px', color: '#000' }}>{p.c_nombre}</h2>
-                <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', color: '#000', fontWeight: '600', fontSize: '14px' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Phone size={14} /> {p.c_telefono}</span>
-                  {p.c_rut && <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><IdCard size={14} /> {p.c_rut}</span>}
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '24px' }}>
-                  {p.detalles?.map((det: any, idx: number) => {
-                    const entregado = det.estado === 'Entregado';
-                    return (
-                      <div key={idx} style={{ backgroundColor: entregado ? '#f0fdf4' : '#f8fafc', border: `1px solid ${entregado ? '#bbf7d0' : '#e2e8f0'}`, padding: '12px 16px', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                          <p style={{ margin: 0, fontSize: '14px', fontWeight: '800', color: '#000' }}>{det.cantidad}x {det.p_nombre}</p>
-                          <p style={{ margin: 0, fontSize: '12px', fontWeight: '700', color: '#64748b' }}>Talla: {det.talla}</p>
-                        </div>
-                        <button onClick={() => toggleDetalle(det.id, det.estado, det.producto_id, det.cantidad)} style={{ backgroundColor: entregado ? '#fff' : '#000', color: entregado ? '#166534' : '#fff', padding: '8px 12px', borderRadius: '8px', fontWeight: '800', fontSize: '12px', border: `1px solid #000`, cursor: 'pointer' }}>
-                          {entregado ? 'Deshacer' : 'Entregar'}
-                        </button>
-                      </div>
-                    )
-                  })}
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
-                  <div style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '16px' }}>
-                    <p style={{ margin: 0, fontSize: '12px', fontWeight: '800', color: '#000' }}>PAGADO</p>
-                    <p style={{ margin: '4px 0', fontSize: '20px', fontWeight: '900', color: '#10b981' }}>${p.abono.toLocaleString()}</p>
-                    <button onClick={() => actualizarAbono(p.id, p.total_final, p.abono)} style={{ border: '1px solid #000', background: '#000000', padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: '800', cursor: 'pointer' }}>Modificar</button>
-                  </div>
-                  <div style={{ backgroundColor: deuda > 0 ? '#fef2f2' : '#f0fdf4', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '16px' }}>
-                    <p style={{ margin: 0, fontSize: '12px', fontWeight: '800', color: '#000' }}>DEUDA</p>
-                    <p style={{ margin: '4px 0', fontSize: '20px', fontWeight: '900', color: deuda > 0 ? '#ef4444' : '#10b981' }}>${deuda.toLocaleString()}</p>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #e2e8f0', paddingTop: '16px', flexWrap: 'wrap', gap: '10px' }}>
-                  <button onClick={() => borrarPedido(p.id, p.detalles)} style={{ color: '#ef4444', fontWeight: '800', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px' }}>
-                    <Trash2 size={16} /> Eliminar
-                  </button>
-                  <div style={{ display: 'flex', gap: '10px' }}>
-                    <button onClick={() => abrirWhatsApp(p.c_telefono)} style={{ backgroundColor: '#25D366', color: '#fff', padding: '10px 16px', borderRadius: '10px', fontWeight: '800', cursor: 'pointer', border: 'none', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <MessageCircle size={16} /> WhatsApp
-                    </button>
-                    <button onClick={() => window.open(`/ticket/${p.id}`, '_blank')} style={{ backgroundColor: '#000', color: '#fff', padding: '10px 16px', borderRadius: '10px', fontWeight: '800', cursor: 'pointer', border: 'none', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <Printer size={16} /> Ticket
-                    </button>
-                  </div>
+                <div style={{
+                  backgroundColor: esCompleto ? '#dcfce7' : '#fef9c3',
+                  color: esCompleto ? '#166534' : '#854d0e',
+                  padding: '6px 12px',
+                  borderRadius: '20px',
+                  fontSize: '12px',
+                  fontWeight: '800'
+                }}>
+                  {esCompleto ? 'Listo' : 'En proceso'}
                 </div>
               </div>
-            )
-          })}
-        </div>
+
+              {/* Detalles Expandidos */}
+              {pedidoExpandido === p.id && (
+                <div style={{ padding: '16px', backgroundColor: '#f8fafc', borderTop: '1px solid #e2e8f0' }}>
+                  <div style={{ marginBottom: '15px' }}>
+                    {p.detalles?.map((det: any, idx: number) => {
+                      const entregado = det.cantidad_entregada === det.cantidad
+                      return (
+                        <div key={idx} style={{ 
+                          backgroundColor: entregado ? '#f0fdf4' : '#fff', 
+                          border: `1px solid ${entregado ? '#bbf7d0' : '#e2e8f0'}`, 
+                          padding: '12px', 
+                          borderRadius: '12px', 
+                          display: 'flex', 
+                          justifyContent: 'space-between', 
+                          alignItems: 'center', 
+                          marginBottom: '8px' 
+                        }}>
+                          <div>
+                            <p style={{ margin: 0, fontSize: '14px', fontWeight: '800' }}>{det.p_nombre}</p>
+                            <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>
+                              Talla: {det.talla} | <strong>{det.cantidad_entregada || 0} de {det.cantidad}</strong> entregados
+                            </p>
+                          </div>
+                          
+                          <div style={{ display: 'flex', gap: '4px' }}>
+                            {/* BOTÓN DESHACER (-1) */}
+                            <button 
+                              onClick={() => actualizarEntrega(det.id, -1, det.producto_id, det.cantidad, det.cantidad_entregada || 0)}
+                              style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
+                            >-</button>
+
+                            {/* BOTÓN SUMAR (+1) */}
+                            <button 
+                              onClick={() => actualizarEntrega(det.id, 1, det.producto_id, det.cantidad, det.cantidad_entregada || 0)}
+                              style={{ backgroundColor: '#000', color: '#fff', border: 'none', width: '40px', height: '32px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
+                            >+1</button>
+
+                            {/* BOTÓN TODO */}
+                            <button 
+                              onClick={() => actualizarEntrega(det.id, 'todo', det.producto_id, det.cantidad, det.cantidad_entregada || 0)}
+                              style={{ 
+                                backgroundColor: entregado ? '#22c55e' : '#fff', 
+                                color: entregado ? '#fff' : '#000', 
+                                border: '1px solid #e2e8f0', 
+                                padding: '0 10px', 
+                                borderRadius: '8px', 
+                                cursor: 'pointer', 
+                                fontSize: '11px', 
+                                fontWeight: 'bold' 
+                              }}
+                            >{entregado ? '✓' : 'Todo'}</button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {!esCompleto && (
+                    <button 
+                      onClick={() => entregarPedidoCompleto(p)}
+                      style={{ width: '100%', padding: '12px', backgroundColor: '#000', color: '#fff', border: 'none', borderRadius: '12px', fontWeight: '800', cursor: 'pointer' }}
+                    >Entregar Todo el Pedido</button>
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })}
       </div>
-    </main>
+    </div>
   )
 }
