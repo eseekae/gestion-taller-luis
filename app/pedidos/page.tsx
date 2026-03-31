@@ -13,7 +13,6 @@ export default function VerPedidos() {
   const [loading, setLoading] = useState(true)
   const [busqueda, setBusqueda] = useState('')
   const [filtro, setFiltro] = useState('Todos')
-  const [ordenarColegio, setOrdenarColegio] = useState(false)
   const [expandidos, setExpandidos] = useState<Record<string, boolean>>({})
   const [usuarioActivo, setUsuarioActivo] = useState('')
   const [logs, setLogs] = useState<any[]>([])
@@ -119,26 +118,27 @@ export default function VerPedidos() {
         const rpcName = variacion > 0 ? 'entregar_stock' : 'revertir_entrega_stock'
         await supabase.rpc(rpcName, { prod_id: det.producto_id, cant: Math.abs(variacion) })
       }
-
       await supabase.from('detalles_pedido').update({ cantidad_entregada: nuevaCantidad, estado: nuevoEstado }).eq('id', det.id)
-
       const ahora = new Date()
-      const fechaFormateada = `${ahora.getDate().toString().padStart(2, '0')}/${(ahora.getMonth() + 1).toString().padStart(2, '0')} ${ahora.getHours().toString().padStart(2, '0')}:${ahora.getMinutes().toString().padStart(2, '0')}`
-      
-      await registrarLog(
-        `${sessionStorage.getItem('user_name') || 'Usuario'} entregó ${Math.abs(variacion)} de ${det.p_nombre || 'Producto'} el ${fechaFormateada}`,
-        `Cantidad entregada: ${actual} -> ${nuevaCantidad}`
-      )
+      const f = `${ahora.getDate().toString().padStart(2, '0')}/${(ahora.getMonth() + 1).toString().padStart(2, '0')} ${ahora.getHours().toString().padStart(2, '0')}:${ahora.getMinutes().toString().padStart(2, '0')}`
+      await registrarLog(`${sessionStorage.getItem('user_name') || 'Usuario'} entregó ${Math.abs(variacion)} de ${det.p_nombre} el ${f}`, `ID: ${det.id}`)
     } catch (err) {
       setDatos(datosPrevios)
-      alert("❌ No se pudo sincronizar la entrega.")
+      alert("❌ Error en entrega.")
     }
   }
 
+  // RESTAURANDO EL EXCEL DETALLADO QUE ROMPÍ
   const exportarExcel = () => {
     const reporte: any[] = []
     const formatoMoneda = (monto: number) => `$${Number(monto || 0).toLocaleString('es-CL')}`
+    
     datos.forEach(p => {
+      const totalPedido = Number(p.total_final || 0)
+      const abonoPedido = Number(p.total_pagado || 0)
+      const saldoPendiente = totalPedido - abonoPedido
+
+      // 1. FILA DE CABECERA DEL PEDIDO
       reporte.push({
         'Tipo': 'PEDIDO',
         'ID Pedido': p.id,
@@ -146,29 +146,71 @@ export default function VerPedidos() {
         'Cliente': p.c_nombre || 'S/N',
         'Teléfono': p.c_telefono || '',
         'Colegio': p.colegio || 'Particular',
-        'Total Pedido': formatoMoneda(p.total_final),
-        'Abono Pedido': formatoMoneda(p.total_pagado),
-        'Saldo Pendiente': formatoMoneda(p.total_final - p.total_pagado),
+        'Ítem/Pago': '--- CABECERA ---',
+        'Cantidad': '',
+        'Entregado': '',
+        'Precio/Método': '',
+        'Total Pedido': formatoMoneda(totalPedido),
+        'Abono Actual': formatoMoneda(abonoPedido),
+        'Saldo': formatoMoneda(saldoPendiente),
         'Observaciones': p.observaciones || ''
       })
+
+      // 2. FILAS PARA CADA ÍTEM DEL PEDIDO
+      p.detalles?.forEach((det: any) => {
+        reporte.push({
+          'Tipo': 'ÍTEM',
+          'ID Pedido': '',
+          'Fecha': '',
+          'Cliente': '',
+          'Teléfono': '',
+          'Colegio': '',
+          'Ítem/Pago': det.p_nombre || 'Producto',
+          'Cantidad': det.cantidad,
+          'Entregado': det.cantidad_entregada || 0,
+          'Precio/Método': formatoMoneda(det.precio_unitario || 0),
+          'Total Pedido': '',
+          'Abono Actual': '',
+          'Saldo': '',
+          'Observaciones': ''
+        })
+      })
+
+      // 3. FILAS PARA CADA PAGO REGISTRADO
+      p.pagos?.forEach((pg: any) => {
+        reporte.push({
+          'Tipo': 'PAGO',
+          'ID Pedido': '',
+          'Fecha': pg.fecha_pago ? new Date(pg.fecha_pago).toLocaleDateString('es-CL') : '',
+          'Cliente': '',
+          'Teléfono': '',
+          'Colegio': '',
+          'Ítem/Pago': 'ABONO REGISTRADO',
+          'Cantidad': '',
+          'Entregado': '',
+          'Precio/Método': pg.metodo_pago || 'Transferencia',
+          'Total Pedido': '',
+          'Abono Actual': formatoMoneda(pg.monto || 0),
+          'Saldo': '',
+          'Observaciones': `Registrado por: ${pg.creado_por || 'S/N'}`
+        })
+      })
+      // Fila vacía para separar pedidos
+      reporte.push({})
     })
+
     const ws = XLSX.utils.json_to_sheet(reporte)
     const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, "Reporte")
+    XLSX.utils.book_append_sheet(wb, ws, "Reporte Detallado")
     XLSX.writeFile(wb, `Reporte_Luis_${new Date().toISOString().split('T')[0]}.xlsx`)
   }
 
   const agregarPago = async (pedido: any) => {
-    // 1. PREGUNTAR MONTO
     const montoInput = prompt('💰 Nuevo Pago\nMonto:', '')
     if (!montoInput) return
     const monto = Number(montoInput.replace(/\D/g, ''))
     if (isNaN(monto) || monto <= 0) return alert('❌ Monto inválido.')
-
-    // 2. PREGUNTAR FECHA (Por defecto hoy)
     const fechaPago = prompt('📅 Fecha (YYYY-MM-DD):', new Date().toISOString().split('T')[0]) || new Date().toISOString().split('T')[0]
-
-    // 3. PREGUNTAR MÉTODO (Por defecto Transferencia)
     const metodo = prompt('💳 Método (Transferencia, Efectivo, Débito, Crédito):', 'Transferencia') || 'Transferencia'
 
     const snapshot = [...datos]
@@ -180,49 +222,36 @@ export default function VerPedidos() {
     }))
 
     try {
-      // GUARDAMOS CON TODOS LOS DATOS Y LA COLUMNA CREADO_POR
       const { error } = await supabase.from('pagos').insert([{
-        pedido_id: pedido.id,
-        monto: monto,
-        fecha_pago: fechaPago,
-        metodo_pago: metodo,
-        creado_por: sessionStorage.getItem('user_name') || 'Usuario'
+        pedido_id: pedido.id, monto: monto, fecha_pago: fechaPago, metodo_pago: metodo, creado_por: sessionStorage.getItem('user_name') || 'Usuario'
       }])
-
       if (error) throw error
-
       const ahora = new Date()
       const f = `${ahora.getDate().toString().padStart(2, '0')}/${(ahora.getMonth() + 1).toString().padStart(2, '0')} ${ahora.getHours().toString().padStart(2, '0')}:${ahora.getMinutes().toString().padStart(2, '0')}`
-      
-      await registrarLog(
-        `${sessionStorage.getItem('user_name') || 'Usuario'} registró pago de $${monto.toLocaleString('es-CL')} (${metodo}) el ${f}`,
-        `Pedido ID: ${pedido.id}`
-      )
+      await registrarLog(`${sessionStorage.getItem('user_name') || 'Usuario'} registró pago de $${monto.toLocaleString('es-CL')} (${metodo}) el ${f}`, `Pedido ID: ${pedido.id}`)
       cargar()
     } catch (err) {
       setDatos(snapshot)
-      alert('❌ Error al guardar el pago en Supabase.')
+      alert('❌ Error al guardar el pago.')
     }
   }
 
-  const borrarPedido = async (pedidoId: string, detalles: any[], clienteNombre: string) => {
+  const borrarPedido = async (id: string, det: any[], nombre: string) => {
     if(!confirm('⚠️ ¿Borrar pedido?')) return
     try {
-      await supabase.from('pagos').delete().eq('pedido_id', pedidoId)
-      await supabase.from('pedidos').delete().eq('id', pedidoId)
-      await registrarLog(`Eliminó pedido de ${clienteNombre}`, `ID: ${pedidoId}`)
+      await supabase.from('pagos').delete().eq('pedido_id', id)
+      await supabase.from('pedidos').delete().eq('id', id)
+      await registrarLog(`Eliminó pedido de ${nombre}`, `ID: ${id}`)
       cargar()
-    } catch (err) { alert('❌ Error al eliminar.') }
+    } catch (err) { alert('❌ Error.') }
   }
 
   useEffect(() => { cargar() }, [cargar])
 
-  const filtrados = datos
-    .filter(p => {
-      const t = busqueda.toLowerCase()
-      return p.c_nombre.toLowerCase().includes(t) || p.c_telefono.includes(t) || (p.colegio && p.colegio.toLowerCase().includes(t))
-    })
-    .filter(p => filtro === 'Todos' || (filtro === 'Pendientes' && p.estado_macro !== 'Completado') || p.estado_macro === filtro)
+  const filtrados = datos.filter(p => {
+    const t = busqueda.toLowerCase()
+    return p.c_nombre.toLowerCase().includes(t) || p.c_telefono.includes(t) || (p.colegio && p.colegio.toLowerCase().includes(t))
+  }).filter(p => filtro === 'Todos' || (filtro === 'Pendientes' && p.estado_macro !== 'Completado') || p.estado_macro === filtro)
 
   return (
     <main style={{ minHeight: '100vh', backgroundColor: '#ffffff', padding: '20px', fontFamily: 'sans-serif' }}>
@@ -255,7 +284,6 @@ export default function VerPedidos() {
                   <span style={{ fontWeight: '800', fontSize: '12px', color: '#000000', display: 'flex', alignItems: 'center', gap: '4px' }}><School size={12} color="#000" /> {p.colegio || 'Particular'}</span>
                   <span style={{ backgroundColor: p.color_bg, color: p.color_text, padding: '6px 12px', borderRadius: '8px', fontWeight: '800', border: '2px solid #000' }}>{p.estado_macro}</span>
                 </div>
-                
                 <h2 style={{ fontWeight: '900', fontSize: '24px', color: '#000000', marginBottom: '4px' }}>{p.c_nombre}</h2>
                 <p style={{ fontSize: '14px', fontWeight: '800', color: '#000', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '5px' }}>
                   <Phone size={14} color="#000" /> {p.c_telefono || 'Sin teléfono'}
