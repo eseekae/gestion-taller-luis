@@ -7,12 +7,13 @@ import { Lock, ShieldCheck, Scissors } from 'lucide-react'
 export default function Login() {
   const router = useRouter()
   const [clave, setClave] = useState('')
-  const [usuario, setUsuario] = useState<'Luis' | 'Luisa'>('Luis')
+  const [usuario, setUsuario] = useState<'Luis' | 'Luisa' | 'Admin'>('Luis')
   const [error, setError] = useState('')
 
   const handleLogin = async (e: any) => {
     e.preventDefault()
-    if (clave === '1122') {
+    const claveEsperada = usuario === 'Admin' ? '1212' : '1122'
+    if (clave === claveEsperada) {
       const perfilSesion = { nombre: usuario, permiso_ver_lucas: true }
       sessionStorage.setItem('user_role', JSON.stringify(perfilSesion))
       sessionStorage.setItem('user_name', usuario)
@@ -37,12 +38,15 @@ export default function Login() {
         <h1 style={{ margin: '0 0 10px 0', fontSize: '26px', fontWeight: '900', color: '#000' }}>Acceso Taller</h1>
         <p style={{ margin: '0 0 20px 0', fontSize: '15px', color: '#000', fontWeight: '700' }}>Selecciona usuario e ingresa clave</p>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '18px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '18px' }}>
           <button type="button" onClick={() => setUsuario('Luis')} style={{ padding: '12px', border: '2px solid #000', borderRadius: '12px', backgroundColor: usuario === 'Luis' ? '#000' : '#fff', color: usuario === 'Luis' ? '#fff' : '#000', fontWeight: '900', cursor: 'pointer' }}>
             LUIS
           </button>
           <button type="button" onClick={() => setUsuario('Luisa')} style={{ padding: '12px', border: '2px solid #000', borderRadius: '12px', backgroundColor: usuario === 'Luisa' ? '#000' : '#fff', color: usuario === 'Luisa' ? '#fff' : '#000', fontWeight: '900', cursor: 'pointer' }}>
             LUISA
+          </button>
+          <button type="button" onClick={() => setUsuario('Admin')} style={{ padding: '12px', border: '2px solid #000', borderRadius: '12px', backgroundColor: usuario === 'Admin' ? '#000' : '#fff', color: usuario === 'Admin' ? '#fff' : '#000', fontWeight: '900', cursor: 'pointer' }}>
+            ADMIN
           </button>
         </div>
 
