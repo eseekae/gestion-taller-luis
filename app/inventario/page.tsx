@@ -215,7 +215,7 @@ export default function Inventario() {
 
                 <AnimatePresence>
                   {estaAbierto && (
-                    <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} style={{ backgroundColor: '#f1f5f9' }}>
+                    <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} style={{ backgroundColor: '#000' }}>
                       {Object.keys(productosAgrupados[nombrePrenda]).map(nombreCol => {
                         const variantes = productosAgrupados[nombrePrenda][nombreCol].sort((a: any, b: any) => (ordenTallas[a.talla] || 99) - (ordenTallas[b.talla] || 99))
                         const idUnicoColegio = `${nombrePrenda}-${nombreCol}`
@@ -224,7 +224,7 @@ export default function Inventario() {
 
                         return (
                           <div key={nombreCol} style={{ borderBottom: '2px solid #000' }}>
-                            <div onClick={() => toggleColegio(idUnicoColegio)} style={{ padding: '15px 25px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', backgroundColor: tieneAgotados ? '#fee2e2' : 'transparent' }}>
+                            <div onClick={() => toggleColegio(idUnicoColegio)} style={{ padding: '15px 25px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', backgroundColor: tieneAgotados ? '#000' : 'transparent' }}>
                               <span style={{ fontWeight: '900', fontSize: '15px', display: 'flex', alignItems: 'center', gap: '8px', color: '#000' }}>
                                 <School size={16} /> {nombreCol}
                               </span>
@@ -240,7 +240,7 @@ export default function Inventario() {
                                   const disponible = i.stock - (i.stock_reservado || 0)
                                   const agotado = disponible <= 0
                                   return (
-                                    <div key={i.id} style={{ border: '2px solid #000', padding: '15px', borderRadius: '15px', backgroundColor: agotado ? '#fef2f2' : '#fff', boxShadow: '4px 4px 0px #000' }}>
+                                    <div key={i.id} style={{ border: '2px solid #000', padding: '15px', borderRadius: '15px', backgroundColor: agotado ? '#000' : '#fff', boxShadow: '4px 4px 0px #000' }}>
                                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                           <span style={{ fontWeight: '900', fontSize: '18px' }}>Talla {i.talla}</span>
