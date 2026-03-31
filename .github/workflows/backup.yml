@@ -20,7 +20,7 @@ jobs:
           PGPASSWORD: ${{ secrets.DB_PASSWORD }}
         run: |
           mkdir -p backups
-          pg_dump -h db.hkwzuhpptuqzgkqxcqjv.supabase.co -U postgres -d postgres -p 5432 > backups/respaldo_$(date +%Y-%m-%d).sql
+          pg_dump -h aws-0-us-west-2.pooler.supabase.com -U postgres -d postgres -p 6543 > backups/respaldo_$(date +%Y-%m-%d).sql
 
       - name: Subir respaldo al repositorio
         run: |
