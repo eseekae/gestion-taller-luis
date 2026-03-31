@@ -143,39 +143,62 @@ export default function VerPedidos() {
 
   const exportarExcel = () => {
     const reporte: any[] = []
+    const formatoMoneda = (monto: number) => `$${Number(monto || 0).toLocaleString('es-CL')}`
 
     datos.forEach(p => {
-      const saldoPendiente = Number(p.total_final || 0) - Number(p.abono || 0)
+      const totalPedido = Number(p.total_final || 0)
+      const abonoPedido = Number(p.abono || 0)
+      const saldoPendiente = totalPedido - abonoPedido
       const detalles = p.detalles || []
 
+      // Fila encabezado del pedido
+      reporte.push({
+        'Tipo': 'PEDIDO',
+        'ID Pedido': p.id,
+        'Fecha': new Date(p.created_at).toLocaleDateString('es-CL'),
+        'Cliente': p.c_nombre || 'S/N',
+        'RUT': p.c_rut || '',
+        'Teléfono': p.c_telefono || '',
+        'Colegio': p.colegio || 'Particular',
+        'Ítem': '',
+        'Talla': '',
+        'Cantidad': '',
+        'Cantidad Entregada': '',
+        'Precio Unitario': '',
+        'Total Ítem': '',
+        'Total Pedido': formatoMoneda(totalPedido),
+        'Abono Pedido': formatoMoneda(abonoPedido),
+        'Saldo Pendiente': formatoMoneda(saldoPendiente)
+      })
+
+      // Filas detalle por ítem
       detalles.forEach((det: any) => {
-        const cantidadTotal = Number(det.cantidad || 0)
+        const cantidad = Number(det.cantidad || 0)
         const cantidadEntregada = Number(det.cantidad_entregada || 0)
         const precioUnitarioBase =
           det.precio_unitario ??
           det.precio ??
-          (cantidadTotal > 0 ? Number(det.subtotal || 0) / cantidadTotal : 0)
+          (cantidad > 0 ? Number(det.subtotal || 0) / cantidad : 0)
         const precioUnitario = Number(precioUnitarioBase || 0)
-        const totalItem = cantidadTotal * precioUnitario
-        const estadoItem = cantidadEntregada >= cantidadTotal && cantidadTotal > 0 ? 'Entregado' : 'Pendiente'
+        const totalItem = cantidad * precioUnitario
 
         reporte.push({
-          'ID Pedido': p.id,
-          'Fecha': new Date(p.created_at).toLocaleDateString('es-CL'),
-          'Cliente': p.c_nombre || 'S/N',
-          'RUT': p.c_rut || '',
-          'Teléfono': p.c_telefono || '',
-          'Colegio': p.colegio || 'Particular',
-          'Detalle Pedido': `${det.p_nombre || 'Producto'}${det.talla ? ` - Talla ${det.talla}` : ''}`,
-          'Descripción Item': det.p_nombre || 'Producto',
+          'Tipo': 'ÍTEM',
+          'ID Pedido': '',
+          'Fecha': '',
+          'Cliente': '',
+          'RUT': '',
+          'Teléfono': '',
+          'Colegio': '',
+          'Ítem': det.p_nombre || 'Producto',
           'Talla': det.talla || '',
-          'Cantidad Total': cantidadTotal,
+          'Cantidad': cantidad,
           'Cantidad Entregada': cantidadEntregada,
-          'Precio Unitario': precioUnitario,
-          'Total Item': totalItem,
-          'Estado Item': estadoItem,
-          'Abono Pedido': Number(p.abono || 0),
-          'Saldo Pendiente': saldoPendiente
+          'Precio Unitario': formatoMoneda(precioUnitario),
+          'Total Ítem': formatoMoneda(totalItem),
+          'Total Pedido': '',
+          'Abono Pedido': '',
+          'Saldo Pendiente': ''
         })
       })
     })
