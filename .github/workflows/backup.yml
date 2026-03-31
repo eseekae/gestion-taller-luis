@@ -1,0 +1,31 @@
+name: Respaldo Semanal Base de Datos
+
+on:
+  schedule:
+    - cron: '0 0 * * 0' # Esto corre solo los domingos a las 12 AM
+  workflow_dispatch: # Esto nos permite probarlo a mano ahora
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Instalar Postgres Client
+        run: sudo apt-get install -y postgresql-client
+
+      - name: Ejecutar Dump de la base de datos
+        env:
+          PGPASSWORD: ${{ secrets.DB_PASSWORD }}
+        run: |
+          mkdir -p backups
+          pg_dump -h db.hkwzuhpptuqzgkqxcqjv.supabase.co -U postgres -d postgres -p 5432 > backups/respaldo_$(date +%Y-%m-%d).sql
+
+      - name: Subir respaldo al repositorio
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add backups/
+          git commit -m "Backup automático: $(date +%Y-%m-%d)"
+          git push
