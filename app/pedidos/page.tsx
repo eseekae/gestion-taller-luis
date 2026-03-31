@@ -30,17 +30,22 @@ export default function VerPedidos() {
     setUsuarioActivo(sessionStorage.getItem('user_name') || '')
 
     setLoading(true)
+
+
+
+
+
+
+
         const [pRes, cRes, iRes, dRes, pagosRes, aRes] = await Promise.all([
       supabase.from('pedidos').select('*').order('created_at', { ascending: false }),
       supabase.from('clientes').select('*'),
       supabase.from('inventario').select('*'),
       supabase.from('detalles_pedido').select('*').order('id'),
       supabase.from('pagos').select('*').order('fecha_pago', { ascending: true }),
-            supabase.from('auditoria').select('*').order('fecha', { ascending: false }).limit(20)
+      supabase.from('auditoria').select('*').order('fecha', { ascending: false }).limit(20)
     ])
-    console.log("LOGS:", aRes)
     setLogs(aRes.data || [])
-
 
     
     const cruzados = (pRes.data || []).map(p => {
@@ -161,7 +166,7 @@ export default function VerPedidos() {
   }
 
   const abrirWhatsApp = (telefono: string) => {
-    const numLimpio = navigation.replace(/\D/g, '')
+    const numLimpio = telefono.replace(/\D/g, '')
     const link = `https://wa.me/${numLimpio.startsWith('56') ? numLimpio : '56' + numLimpio}`
     window.open(link, '_blank')
   }
@@ -562,6 +567,11 @@ export default function VerPedidos() {
                   </div>
                 </div>
               </div>
+
+
+
+
+
                         )
           })}
         </div>
@@ -600,5 +610,4 @@ export default function VerPedidos() {
     </main>
 
   )
-}
 }
