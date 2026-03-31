@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { registrarLog } from '../../lib/auditoria'
 import { motion } from 'framer-motion'
 import * as XLSX from 'xlsx-js-style'
-import { ArrowLeft, Search, School, Phone, IdCard, Calendar, Package, Printer, Trash2, CreditCard, MessageCircle, Download, Landmark, Banknote, ChevronDown, ChevronUp } from 'lucide-react'
+import { ArrowLeft, Search, School, Phone, IdCard, Calendar, Package, Printer, Trash2, CreditCard, MessageCircle, Download, Landmark, Banknote, ChevronDown, ChevronUp, MessageSquare } from 'lucide-react'
 
 export default function VerPedidos() {
   const router = useRouter()
@@ -154,10 +154,12 @@ export default function VerPedidos() {
         'ID Pedido': p.id,
         'Fecha': new Date(p.created_at).toLocaleDateString('es-CL'),
         'Cliente': p.c_nombre || 'S/N',
+        'Teléfono': p.c_telefono || '', // AGREGADO AL EXCEL
         'Colegio': p.colegio || 'Particular',
         'Total Pedido': formatoMoneda(p.total_final),
         'Abono Pedido': formatoMoneda(p.total_pagado),
-        'Saldo Pendiente': formatoMoneda(p.total_final - p.total_pagado)
+        'Saldo Pendiente': formatoMoneda(p.total_final - p.total_pagado),
+        'Observaciones': p.observaciones || '' // AGREGADO AL EXCEL
       })
     })
     const ws = XLSX.utils.json_to_sheet(reporte)
@@ -255,8 +257,25 @@ export default function VerPedidos() {
                   <span style={{ fontWeight: '800', fontSize: '12px', color: '#000000', display: 'flex', alignItems: 'center', gap: '4px' }}><School size={12} color="#000" /> {p.colegio || 'Particular'}</span>
                   <span style={{ backgroundColor: p.color_bg, color: p.color_text, padding: '6px 12px', borderRadius: '8px', fontWeight: '800', border: '2px solid #000' }}>{p.estado_macro}</span>
                 </div>
-                <h2 style={{ fontWeight: '900', fontSize: '24px', color: '#000000' }}>{p.c_nombre}</h2>
-                <button onClick={() => setExpandidos(prev => ({ ...prev, [p.id]: !prev[p.id] }))} style={{ width: '100%', margin: '16px 0', border: '3px solid #000', borderRadius: '10px', padding: '10px', fontWeight: '900', background: '#f1f5f9', color: '#000000' }}>{expandido ? 'Ocultar Detalle' : 'Ver Detalle'}</button>
+                
+                <h2 style={{ fontWeight: '900', fontSize: '24px', color: '#000000', marginBottom: '4px' }}>{p.c_nombre}</h2>
+                
+                {/* TELÉFONO AGREGADO DEBAJO DEL NOMBRE */}
+                <p style={{ fontSize: '14px', fontWeight: '800', color: '#000', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <Phone size={14} color="#000" /> {p.c_telefono || 'Sin teléfono'}
+                </p>
+
+                {/* CUADRO DE OBSERVACIONES DE DON LUIS */}
+                {p.observaciones && (
+                  <div style={{ backgroundColor: '#fff7ed', border: '2px solid #ea580c', padding: '12px', borderRadius: '12px', marginBottom: '16px' }}>
+                    <p style={{ fontSize: '12px', fontWeight: '900', color: '#ea580c', marginBottom: '4px', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      <MessageSquare size={14} /> Notas de Don Luis:
+                    </p>
+                    <p style={{ fontSize: '14px', color: '#000', margin: 0, fontWeight: '700' }}>{p.observaciones}</p>
+                  </div>
+                )}
+
+                <button onClick={() => setExpandidos(prev => ({ ...prev, [p.id]: !prev[p.id] }))} style={{ width: '100%', margin: '0 0 16px 0', border: '3px solid #000', borderRadius: '10px', padding: '10px', fontWeight: '900', background: '#f1f5f9', color: '#000000' }}>{expandido ? 'Ocultar Detalle' : 'Ver Detalle'}</button>
 
                 {expandido && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '20px' }}>

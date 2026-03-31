@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 import { registrarLog } from '../../lib/auditoria'
 import { motion } from 'framer-motion'
-import { ArrowLeft, User, Phone, IdCard, School, Calendar, ShoppingBag, Plus, X, CreditCard, CheckCircle } from 'lucide-react'
+import { ArrowLeft, User, Phone, IdCard, School, Calendar, ShoppingBag, Plus, X, CreditCard, CheckCircle, MessageSquare } from 'lucide-react'
 
 export default function RegistroPedido() {
   const router = useRouter()
@@ -23,6 +23,7 @@ export default function RegistroPedido() {
   const [telefono, setTelefono] = useState('')
   const [colegio, setColegio] = useState('')
   const [fechaEntrega, setFechaEntrega] = useState('')
+  const [observaciones, setObservaciones] = useState('') // NUEVA VARIABLE
   
   const [abono, setAbono] = useState('')
   const [metodoPagoInicial, setMetodoPagoInicial] = useState('Transferencia')
@@ -70,9 +71,16 @@ export default function RegistroPedido() {
     setLoading(true)
     try {
       const { data: cli } = await supabase.from('clientes').insert([{ nombre: nombreCliente, telefono, rut }]).select().single()
+      
+      // INSERTAMOS CON LA NUEVA COLUMNA OBSERVACIONES
       const { data: ped } = await supabase.from('pedidos').insert([{
-        cliente_id: cli.id, total_final: totalCalculado, abono: 0, estado: 'Pendiente',
-        colegio: colegio || 'Particular', fecha_entrega: fechaEntrega || null,
+        cliente_id: cli.id, 
+        total_final: totalCalculado, 
+        abono: 0, 
+        estado: 'Pendiente',
+        colegio: colegio || 'Particular', 
+        fecha_entrega: fechaEntrega || null,
+        observaciones: observaciones, // SE GUARDA AQUÍ
         creado_por: sessionStorage.getItem('user_name') || ''
       }]).select().single()
 
@@ -93,10 +101,9 @@ export default function RegistroPedido() {
 
       await registrarLog(
         `${sessionStorage.getItem('user_name') || 'Usuario'} creó el pedido de ${nombreCliente}`,
-        `Pedido ${ped.id} por ${Number(totalCalculado).toLocaleString('es-CL')}`
+        `Pedido ${ped.id} - Obs: ${observaciones.substring(0, 20)}...`
       )
 
-      // Reservar stock
       for (const item of carrito) {
         if (item.id_inv) await supabase.rpc('reservar_stock', { prod_id: item.id_inv, cant: item.cantidad })
       }
@@ -106,156 +113,128 @@ export default function RegistroPedido() {
     finally { setLoading(false) }
   }
 
-  // Estilos limpios y modernos
-  const cardStyle = { backgroundColor: '#fff', padding: '24px', borderRadius: '24px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)', marginBottom: '20px' }
-  const inputStyle = { width: '100%', padding: '12px 16px', border: '1px solid #cbd5e1', borderRadius: '12px', fontSize: '15px', color: '#0f172a', outline: 'none', backgroundColor: '#f8fafc', transition: 'border-color 0.2s, box-shadow 0.2s', boxSizing: 'border-box' as const }
-  const labelStyle = { fontSize: '12px', fontWeight: '700', color: '#64748b', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px', textTransform: 'uppercase' as const }
-
-  // Animaciones
-  const containerVariants = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.1 } } }
-  const itemVariants = { hidden: { y: 20, opacity: 0 }, visible: { y: 0, opacity: 1 } }
+  // ESTILOS DE ALTO CONTRASTE (NEUBRUTALISM)
+  const cardStyle = { backgroundColor: '#fff', padding: '24px', borderRadius: '24px', border: '3px solid #000', boxShadow: '8px 8px 0px #000', marginBottom: '20px' }
+  const inputStyle = { width: '100%', padding: '12px 16px', border: '3px solid #000', borderRadius: '12px', fontSize: '15px', color: '#000', outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' as const }
+  const labelStyle = { fontSize: '12px', fontWeight: '900', color: '#000', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px', textTransform: 'uppercase' as const }
 
   return (
-    <main style={{ minHeight: '100vh', backgroundColor: '#f8fafc', padding: '20px', fontFamily: 'system-ui, -apple-system, sans-serif', borderTop: usuarioActivo === 'Admin' ? '8px solid #3b82f6' : '8px solid transparent' }}>
-      <motion.div initial="hidden" animate="visible" variants={containerVariants} style={{ maxWidth: '550px', margin: '0 auto' }}>
+    <main style={{ minHeight: '100vh', backgroundColor: '#fff', padding: '20px', fontFamily: 'sans-serif' }}>
+      <div style={{ maxWidth: '550px', margin: '0 auto' }}>
         
         {/* CABECERA */}
-        <motion.div variants={itemVariants} style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '25px' }}>
-          <button onClick={() => router.push('/')} style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', padding: '10px', borderRadius: '12px', color: '#0f172a', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '25px' }}>
+          <button onClick={() => router.push('/')} style={{ backgroundColor: '#fff', border: '3px solid #000', padding: '10px', borderRadius: '12px', color: '#000', cursor: 'pointer', boxShadow: '4px 4px 0px #000' }}>
             <ArrowLeft size={20} />
           </button>
           <div>
-            <h1 style={{ margin: 0, fontSize: '24px', fontWeight: '800', color: '#0f172a', letterSpacing: '-0.5px' }}>Nueva Venta</h1>
-            <p style={{ margin: 0, fontSize: '14px', color: '#64748b', fontWeight: '500' }}>Registra los datos del cliente y los productos</p>
+            <h1 style={{ margin: 0, fontSize: '24px', fontWeight: '900', color: '#000' }}>Nueva Venta</h1>
           </div>
-        </motion.div>
+        </div>
 
         <form onSubmit={guardar}>
           
           {/* DATOS DEL CLIENTE */}
-          <motion.div variants={itemVariants} style={cardStyle}>
-            <h2 style={{ margin: '0 0 20px 0', fontSize: '16px', fontWeight: '700', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <User size={18} color="#3b82f6" /> Información del Cliente
+          <div style={cardStyle}>
+            <h2 style={{ margin: '0 0 20px 0', fontSize: '16px', fontWeight: '900', color: '#000', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <User size={18} /> Información del Cliente
             </h2>
             
             <div style={{ display: 'grid', gap: '16px' }}>
               <div>
                 <label style={labelStyle}>Nombre Completo</label>
-                <input required placeholder="Ej: Juan Pérez" style={inputStyle} value={nombreCliente} onChange={e => setNombreCliente(e.target.value)} />
+                <input required style={inputStyle} value={nombreCliente} onChange={e => setNombreCliente(e.target.value)} />
               </div>
               
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div>
                   <label style={labelStyle}><IdCard size={14} /> RUT</label>
-                  <input placeholder="Ej: 12345678-9" style={inputStyle} value={rut} onChange={e => setRut(e.target.value)} />
+                  <input style={inputStyle} value={rut} onChange={e => setRut(e.target.value)} />
                 </div>
                 <div>
                   <label style={labelStyle}><Phone size={14} /> Teléfono</label>
-                  <input required placeholder="912345678" style={inputStyle} value={telefono} onChange={e => setTelefono(e.target.value)} />
+                  <input required style={inputStyle} value={telefono} onChange={e => setTelefono(e.target.value)} />
                 </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div>
-                  <label style={labelStyle}><School size={14} /> Colegio / Inst.</label>
-                  <input placeholder="Ej: Liceo 1" style={inputStyle} value={colegio} onChange={e => setColegio(e.target.value)} />
+                  <label style={labelStyle}><School size={14} /> Colegio</label>
+                  <input style={inputStyle} value={colegio} onChange={e => setColegio(e.target.value)} />
                 </div>
                 <div>
                   <label style={labelStyle}><Calendar size={14} /> Entrega</label>
                   <input type="date" style={inputStyle} value={fechaEntrega} onChange={e => setFechaEntrega(e.target.value)} />
                 </div>
               </div>
-            </div>
-          </motion.div>
 
-          {/* CARRITO Y PRENDAS */}
-          <motion.div variants={itemVariants} style={cardStyle}>
-            <h2 style={{ margin: '0 0 20px 0', fontSize: '16px', fontWeight: '700', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <ShoppingBag size={18} color="#10b981" /> Selección de Productos
-            </h2>
-            
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px', marginBottom: '16px' }}>
+              {/* CAMPO DE OBSERVACIONES */}
               <div>
-                <label style={labelStyle}>Prenda</label>
-                <select style={inputStyle} value={nombreSeleccionado} onChange={e => { setNombreSeleccionado(e.target.value); setTallaSeleccionada(inventario.find(i => i.nombre === e.target.value)?.talla || '') }}>
-                  {productosUnicos.map(n => <option key={n} value={n}>{n}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={labelStyle}>Cant.</label>
-                <input type="number" min="1" style={inputStyle} value={cantidad} onChange={e => setCantidad(Number(e.target.value))} />
+                <label style={labelStyle}><MessageSquare size={14} /> Observaciones (Don Luis)</label>
+                <textarea 
+                  style={{ ...inputStyle, height: '80px', resize: 'none', fontFamily: 'sans-serif' }} 
+                  placeholder="Ej: Entregar en portería..." 
+                  value={observaciones} 
+                  onChange={e => setObservaciones(e.target.value)}
+                />
               </div>
             </div>
-            
+          </div>
+
+          {/* SELECCIÓN PRENDAS */}
+          <div style={cardStyle}>
+            <h2 style={{ margin: '0 0 20px 0', fontSize: '16px', fontWeight: '900', color: '#000', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <ShoppingBag size={18} /> Productos
+            </h2>
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px', marginBottom: '16px' }}>
+              <select style={inputStyle} value={nombreSeleccionado} onChange={e => setNombreSeleccionado(e.target.value)}>
+                {productosUnicos.map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+              <input type="number" min="1" style={inputStyle} value={cantidad} onChange={e => setCantidad(Number(e.target.value))} />
+            </div>
             <div style={{ marginBottom: '20px' }}>
-              <label style={labelStyle}>Talla</label>
               <select style={inputStyle} value={tallaSeleccionada} onChange={e => setTallaSeleccionada(e.target.value)}>
                 {tallasDeInventario.map(t => <option key={t.id} value={t.talla}>{t.talla} (${Number(t.precio_base).toLocaleString()})</option>)}
-                <option value="ESPECIAL">✨ Talla Especial (Manual)</option>
+                <option value="ESPECIAL">✨ Talla Especial</option>
               </select>
               {tallaSeleccionada === 'ESPECIAL' && (
-                <motion.input initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} type="number" placeholder="Precio unitario $" style={{ ...inputStyle, marginTop: '12px', border: '1px solid #3b82f6', backgroundColor: '#eff6ff' }} value={precioManualEspecial} onChange={e => setPrecioManualEspecial(e.target.value)} />
+                <input type="number" placeholder="Precio $" style={{ ...inputStyle, marginTop: '12px', border: '3px solid #3b82f6' }} value={precioManualEspecial} onChange={e => setPrecioManualEspecial(e.target.value)} />
               )}
             </div>
+            <button onClick={agregarAlCarrito} type="button" style={{ width: '100%', backgroundColor: '#000', color: '#fff', border: 'none', padding: '14px', borderRadius: '12px', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+              <Plus size={18} /> AGREGAR AL CARRITO
+            </button>
+          </div>
 
-            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={agregarAlCarrito} type="button" style={{ width: '100%', backgroundColor: '#f1f5f9', color: '#0f172a', border: '1px solid #cbd5e1', padding: '14px', borderRadius: '12px', fontWeight: '600', fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-              <Plus size={18} /> Agregar al Pedido
-            </motion.button>
-          </motion.div>
-
-          {/* LISTA DEL PEDIDO */}
+          {/* RESUMEN */}
           {carrito.length > 0 && (
-            <motion.div variants={itemVariants} initial="hidden" animate="visible" style={{ ...cardStyle, border: '1px solid #10b981' }}>
-              <h3 style={{ margin: '0 0 15px 0', fontSize: '14px', fontWeight: '700', color: '#0f172a', textTransform: 'uppercase' }}>Resumen del Pedido</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {carrito.map((item, index) => (
-                  <motion.div initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} key={item.tempId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', backgroundColor: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                    <div>
-                      <p style={{ margin: 0, fontWeight: '700', fontSize: '14px', color: '#0f172a' }}>{item.cantidad}x {item.nombre} <span style={{ color: '#3b82f6' }}>[{item.talla}]</span></p>
-                      <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b', fontWeight: '500' }}>Subtotal: ${(item.precio * item.cantidad).toLocaleString()}</p>
-                    </div>
-                    <button onClick={() => quitarDelCarrito(item.tempId)} style={{ color: '#ef4444', background: '#fee2e2', border: 'none', borderRadius: '8px', padding: '6px', cursor: 'pointer', display: 'flex' }}>
-                      <X size={16} />
-                    </button>
-                  </motion.div>
-                ))}
-              </div>
-            </motion.div>
+            <div style={{ ...cardStyle, background: '#f0fdf4' }}>
+              <h3 style={labelStyle}>Resumen</h3>
+              {carrito.map((item) => (
+                <div key={item.tempId} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #000' }}>
+                  <span style={{ fontWeight: '800' }}>{item.cantidad}x {item.nombre} ({item.talla})</span>
+                  <button onClick={() => quitarDelCarrito(item.tempId)} style={{ color: 'red', border: 'none', background: 'none', fontWeight: '900' }}>X</button>
+                </div>
+              ))}
+            </div>
           )}
 
-          {/* TOTAL Y CONFIRMAR */}
-          <motion.div variants={itemVariants} style={{ backgroundColor: '#0f172a', color: '#fff', padding: '30px', borderRadius: '24px', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' }}>
-            <p style={{ margin: '0 0 5px 0', fontSize: '14px', color: '#94a3b8', textTransform: 'uppercase', fontWeight: '600' }}>Total a Cobrar</p>
-            <p style={{ margin: '0 0 20px 0', fontSize: '36px', fontWeight: '800', color: '#10b981', letterSpacing: '-1px' }}>${totalCalculado.toLocaleString('es-CL')}</p>
+          {/* TOTAL Y PAGO */}
+          <div style={{ backgroundColor: '#000', color: '#fff', padding: '30px', borderRadius: '24px', border: '3px solid #000', boxShadow: '8px 8px 0px #3b82f6' }}>
+            <p style={{ margin: 0, fontSize: '14px', fontWeight: '900' }}>TOTAL</p>
+            <p style={{ margin: '0 0 20px 0', fontSize: '36px', fontWeight: '900', color: '#4ade80' }}>${totalCalculado.toLocaleString('es-CL')}</p>
             
-            <div style={{ marginBottom: '25px' }}>
-              <label style={{ ...labelStyle, color: '#94a3b8' }}><CreditCard size={14} /> Abono Inicial $</label>
-              <input required type="number" placeholder="Ej: 10000" style={{ ...inputStyle, backgroundColor: '#1e293b', border: '1px solid #334155', color: '#fff' }} value={abono} onChange={e => setAbono(e.target.value)} />
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ color: '#fff', fontSize: '12px', fontWeight: '900' }}>ABONO INICIAL $</label>
+              <input type="number" style={{ ...inputStyle, background: '#fff', marginTop: '5px' }} value={abono} onChange={e => setAbono(e.target.value)} />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '25px' }}>
-              <div>
-                <label style={{ ...labelStyle, color: '#94a3b8' }}>Método de Pago</label>
-                <select style={{ ...inputStyle, backgroundColor: '#1e293b', border: '1px solid #334155', color: '#fff' }} value={metodoPagoInicial} onChange={e => setMetodoPagoInicial(e.target.value)}>
-                  <option value="Transferencia">Transferencia</option>
-                  <option value="Efectivo">Efectivo</option>
-                  <option value="Débito">Débito</option>
-                  <option value="Crédito">Crédito</option>
-                </select>
-              </div>
-              <div>
-                <label style={{ ...labelStyle, color: '#94a3b8' }}>Fecha de Pago</label>
-                <input type="date" style={{ ...inputStyle, backgroundColor: '#1e293b', border: '1px solid #334155', color: '#fff' }} value={fechaPagoInicial} onChange={e => setFechaPagoInicial(e.target.value)} />
-              </div>
-            </div>
-
-            <motion.button whileHover={{ scale: 1.02, backgroundColor: '#059669' }} whileTap={{ scale: 0.98 }} type="submit" disabled={loading} style={{ width: '100%', backgroundColor: '#10b981', color: '#fff', border: 'none', padding: '16px', borderRadius: '14px', fontWeight: '700', fontSize: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', boxShadow: '0 4px 6px -1px rgba(16, 185, 129, 0.2)' }}>
-              {loading ? 'Procesando...' : <><CheckCircle size={20} /> Confirmar Pedido</>}
-            </motion.button>
-          </motion.div>
-
+            <button type="submit" disabled={loading} style={{ width: '100%', backgroundColor: '#4ade80', color: '#000', border: '3px solid #000', padding: '16px', borderRadius: '14px', fontWeight: '900', fontSize: '18px', cursor: 'pointer', boxShadow: '4px 4px 0px #fff' }}>
+              {loading ? 'PROCESANDO...' : 'CONFIRMAR PEDIDO'}
+            </button>
+          </div>
         </form>
-      </motion.div>
+      </div>
     </main>
   )
 }
