@@ -17,12 +17,13 @@ export default function RegistroPedido() {
   const [precioManualEspecial, setPrecioManualEspecial] = useState('')
   const [cantidad, setCantidad] = useState(1)
 
+  // DATOS CLIENTE Y PEDIDO
   const [nombreCliente, setNombreCliente] = useState('')
   const [rut, setRut] = useState('')
   const [telefono, setTelefono] = useState('')
   const [colegio, setColegio] = useState('')
   const [fechaEntrega, setFechaEntrega] = useState('')
-  const [observaciones, setObservaciones] = useState('')
+  const [observaciones, setObservaciones] = useState('') 
   
   const [abono, setAbono] = useState('')
   const [metodoPagoInicial, setMetodoPagoInicial] = useState('Transferencia')
@@ -69,10 +70,16 @@ export default function RegistroPedido() {
     if (carrito.length === 0) return alert("Añade algo al pedido primero")
     setLoading(true)
     try {
-      // FIX ERROR 'READING ID': Verificamos que la respuesta no sea nula
+      // 1. REGISTRAR CLIENTE
       const { data: cli, error: cliError } = await supabase.from('clientes').insert([{ nombre: nombreCliente, telefono, rut }]).select().single()
-      if (cliError || !cli) throw new Error("Error al registrar cliente. Revisa los permisos de Supabase.")
       
+      // FIX: Verificamos error de Supabase para evitar el crash de 'reading id'
+      if (cliError || !cli) {
+        console.error("Error cliente:", cliError)
+        throw new Error(`Error al registrar cliente: ${cliError?.message || 'Fallo inesperado'}`)
+      }
+      
+      // 2. REGISTRAR PEDIDO
       const { data: ped, error: pedError } = await supabase.from('pedidos').insert([{
         cliente_id: cli.id, 
         total_final: totalCalculado, 
@@ -83,21 +90,29 @@ export default function RegistroPedido() {
         observaciones: observaciones,
         creado_por: sessionStorage.getItem('user_name') || ''
       }]).select().single()
-      if (pedError || !ped) throw new Error("Error al registrar pedido.")
 
+      if (pedError || !ped) {
+        console.error("Error pedido:", pedError)
+        throw new Error(`Error al registrar pedido: ${pedError?.message || 'Fallo inesperado'}`)
+      }
+
+      // 3. REGISTRAR DETALLES
       const detalles = carrito.map(item => ({
         pedido_id: ped.id, producto_id: item.id_inv, cantidad: item.cantidad, talla: item.talla, precio_unitario: item.precio, estado: 'Pendiente'
       }))
-      await supabase.from('detalles_pedido').insert(detalles)
+      const { error: detError } = await supabase.from('detalles_pedido').insert(detalles)
+      if (detError) throw detError
 
+      // 4. REGISTRAR PAGO SI HAY ABONO
       if (Number(abono) > 0) {
-        await supabase.from('pagos').insert([{
+        const { error: pagoError } = await supabase.from('pagos').insert([{
           pedido_id: ped.id,
           monto: Number(abono),
           fecha_pago: fechaPagoInicial,
-          metodo_pago: metodoPagoInicial,
+          metodo_pago: metodoPagoInicial, // USAMOS LA VARIABLE DEL SELECTOR
           creado_por: sessionStorage.getItem('user_name') || ''
         }])
+        if (pagoError) throw pagoError
       }
 
       await registrarLog(
@@ -111,12 +126,13 @@ export default function RegistroPedido() {
 
       alert("✅ Venta registrada con éxito."); router.push('/pedidos')
     } catch (err: any) { 
-      console.error(err)
-      alert(`❌ Error: ${err.message}`) 
+      // Mostramos el error exacto para saber qué falló en Supabase (RLS, columnas, etc)
+      alert(err.message) 
     }
     finally { setLoading(false) }
   }
 
+  // ESTILOS NEUBRUTALISM
   const cardStyle = { backgroundColor: '#fff', padding: '24px', borderRadius: '24px', border: '3px solid #000', boxShadow: '8px 8px 0px #000', marginBottom: '20px' }
   const inputStyle = { width: '100%', padding: '12px 16px', border: '3px solid #000', borderRadius: '12px', fontSize: '15px', color: '#000', outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' as const }
   const labelStyle = { fontSize: '12px', fontWeight: '900', color: '#000', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px', textTransform: 'uppercase' as const }
@@ -226,7 +242,7 @@ export default function RegistroPedido() {
               <input type="number" style={{ ...inputStyle, background: '#fff', marginTop: '5px' }} value={abono} onChange={e => setAbono(e.target.value)} />
             </div>
 
-            {/* FIX MÉTODO DE PAGO: Agregado selector de método de pago */}
+            {/* SELECTOR DE MÉTODO DE PAGO PARA EL ABONO */}
             <div style={{ marginBottom: '25px' }}>
               <label style={{ color: '#fff', fontSize: '12px', fontWeight: '900' }}>MÉTODO DE PAGO</label>
               <select 
