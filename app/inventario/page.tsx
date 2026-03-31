@@ -240,7 +240,7 @@ export default function Inventario() {
                                   const disponible = i.stock - (i.stock_reservado || 0)
                                   const agotado = disponible <= 0
                                   return (
-                                    <div key={i.id} style={{ border: '2px solid #000', padding: '15px', borderRadius: '15px', backgroundColor: agotado ? '#000' : '#fff', boxShadow: '4px 4px 0px #000' }}>
+                                    <div key={i.id} style={{ border: '2px solid #000', padding: '15px', borderRadius: '15px', backgroundColor: agotado ? '#ff0101' : '#fff', boxShadow: '4px 4px 0px #000' }}>
                                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                           <span style={{ fontWeight: '900', fontSize: '18px' }}>Talla {i.talla}</span>
