@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 import { motion } from 'framer-motion'
 import * as XLSX from 'xlsx'
-import { ArrowLeft, Search, School, Phone, IdCard, Calendar, Package, Printer, Trash2, Edit3, CheckCircle2, Clock, RotateCcw, MessageCircle, Download, Plus, Minus, Check } from 'lucide-react'
+import { ArrowLeft, Search, School, Phone, IdCard, Calendar, Package, Printer, Trash2, Edit3, CheckCircle2, Clock, RotateCcw, MessageCircle, Download } from 'lucide-react'
 
 export default function VerPedidos() {
   const router = useRouter()
@@ -26,21 +26,40 @@ export default function VerPedidos() {
     ])
     
     const cruzados = (pRes.data || []).map(p => {
-      const c = (cRes.data || []).find(cl => cl.id === p.cliente_id)
-      const detalles = (dRes.data || []).filter(d => d.pedido_id === p.id).map(d => {
-        const inv = (iRes.data || []).find(i => i.id === d.producto_id)
-        return { ...d, p_nombre: inv?.nombre || 'Producto eliminado', stock: inv?.stock || 0 }
+      const cliente = cRes.data?.find(c => c.id === p.cliente_id)
+      const detalles = dRes.data?.filter(d => d.pedido_id === p.id).map(d => {
+        const prod = iRes.data?.find(inv => inv.id === d.producto_id)
+        return { ...d, p_nombre: prod?.nombre || 'Producto' }
       })
-      return { ...p, ...c, detalles }
-    })
 
+      // Ahora el estado depende de si las cantidades calzan
+      const itemsCompletos = detalles?.length > 0 && detalles.every(d => (d.cantidad_entregada || 0) === d.cantidad)
+      const pagoCompleto = p.abono >= p.total_final
+      
+      let estadoMacro = ''
+      let colorEstadoBg = ''
+      let colorEstadoText = ''
+
+      if (itemsCompletos && pagoCompleto) {
+        estadoMacro = 'Completado'; colorEstadoBg = '#dcfce7'; colorEstadoText = '#166534'
+      } else if (!itemsCompletos && pagoCompleto) {
+        estadoMacro = 'Pend. Entrega'; colorEstadoBg = '#dbeafe'; colorEstadoText = '#1e40af'
+      } else if (itemsCompletos && !pagoCompleto) {
+        estadoMacro = 'Pend. Pago'; colorEstadoBg = '#ffedd5'; colorEstadoText = '#c2410c'
+      } else {
+        estadoMacro = 'Pend. Entrega y Pago'; colorEstadoBg = '#fef3c7'; colorEstadoText = '#b45309'
+      }
+
+      return { 
+        ...p, c_nombre: cliente?.nombre || 'S/N', c_telefono: cliente?.telefono || '', c_rut: cliente?.rut || '', 
+        detalles, estado_macro: estadoMacro, color_bg: colorEstadoBg, color_text: colorEstadoText, itemsCompletos
+      }
+    })
     setDatos(cruzados)
     setLoading(false)
   }, [router])
 
-  useEffect(() => { cargar() }, [cargar])
-
-  // NUEVA LÓGICA DE ENTREGA PARCIAL
+  // NUEVA FUNCIÓN DE ENTREGA PARCIAL
   const actualizarEntrega = async (det: any, cambio: number | 'todo') => {
     const actual = det.cantidad_entregada || 0
     const total = det.cantidad
@@ -51,6 +70,7 @@ export default function VerPedidos() {
 
     try {
       if (det.producto_id && variacion !== 0) {
+        // Usamos tus funciones RPC originales
         const rpcName = variacion > 0 ? 'entregar_stock' : 'revertir_entrega_stock'
         await supabase.rpc(rpcName, { prod_id: det.producto_id, cant: Math.abs(variacion) })
       }
@@ -62,205 +82,176 @@ export default function VerPedidos() {
       }).eq('id', det.id)
 
       cargar()
-    } catch (err: any) {
-      alert("Error: " + err.message)
-    }
+    } catch (err) { alert("Error: " + err) }
   }
 
-  const borrarPedido = async (id: string, detalles: any[]) => {
-    if (!confirm('¿Eliminar este pedido?')) return
-    for (const d of detalles) {
-      if (d.estado === 'Entregado' && d.producto_id) {
-        await supabase.rpc('revertir_entrega_stock', { prod_id: d.producto_id, cant: d.cantidad_entregada || d.cantidad })
-      }
-    }
-    await supabase.from('pedidos').delete().eq('id', id)
-    cargar()
-  }
-
-  const abrirWhatsApp = (tel: string) => {
-    const limpia = tel.replace(/\D/g, '')
-    window.open(`https://wa.me/${limpia.startsWith('56') ? limpia : '56' + limpia}`, '_blank')
+  const abrirWhatsApp = (telefono: string) => {
+    const numLimpio = telefono.replace(/\D/g, '')
+    const link = `https://wa.me/${numLimpio.startsWith('56') ? numLimpio : '56' + numLimpio}`
+    window.open(link, '_blank')
   }
 
   const exportarExcel = () => {
-    const info = datos.map(p => ({
-      Cliente: p.nombre,
-      Colegio: p.colegio,
-      Fecha: new Date(p.created_at).toLocaleDateString(),
-      Estado: p.detalles.every((d: any) => d.estado === 'Entregado') ? 'Listo' : 'Pendiente',
-      Total: p.total,
+    const reporte = datos.map(p => ({
+      Fecha: new Date(p.created_at).toLocaleDateString('es-CL'),
+      Cliente: p.c_nombre,
+      Telefono: p.c_telefono,
+      RUT: p.c_rut,
+      Colegio: p.colegio || 'Particular',
+      Total: p.total_final,
       Abono: p.abono,
-      Deuda: p.total - p.abono
+      Saldo: p.total_final - p.abono,
+      Estado: p.estado_macro
     }))
-    const ws = XLSX.utils.json_to_sheet(info)
+    const ws = XLSX.utils.json_to_sheet(reporte)
     const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, "Pedidos")
-    XLSX.writeFile(wb, "pedidos_taller.xlsx")
+    XLSX.utils.book_append_sheet(wb, ws, "Ventas")
+    XLSX.writeFile(wb, `Respaldo_Ventas_${new Date().toISOString().split('T')[0]}.xlsx`)
   }
+
+  const actualizarAbono = async (pedidoId: string, totalFinal: number, abonoActual: number) => {
+    const input = prompt(`💰 Modificar Pago\nTotal: $${totalFinal}\nPagado: $${abonoActual}\n\nNUEVO MONTO TOTAL pagado:`, abonoActual.toString());
+    if (input === null) return;
+    const nuevoAbono = Number(input);
+    if (isNaN(nuevoAbono) || nuevoAbono < 0) return alert("❌ Monto inválido.");
+    try {
+      await supabase.from('pedidos').update({ abono: nuevoAbono }).eq('id', pedidoId);
+      cargar(); 
+    } catch (err) { alert("Error al actualizar pago: " + err); }
+  }
+
+  const borrarPedido = async (pedidoId: string, detalles: any[]) => {
+    if(!confirm('⚠️ ¿Borrar pedido completo?')) return
+    for (const det of detalles) {
+      if (det.estado === 'Pendiente' && det.producto_id) {
+        await supabase.rpc('reservar_stock', { prod_id: det.producto_id, cant: -det.cantidad })
+      }
+    }
+    await supabase.from('pedidos').delete().eq('id', pedidoId)
+    cargar()
+  }
+
+  useEffect(() => { cargar() }, [cargar])
 
   const filtrados = datos
     .filter(p => {
-      const match = p.nombre?.toLowerCase().includes(busqueda.toLowerCase()) || p.colegio?.toLowerCase().includes(busqueda.toLowerCase())
-      const todosEntregados = p.detalles.every((d: any) => d.cantidad_entregada === d.cantidad)
-      if (filtro === 'Pendiente') return match && !todosEntregados
-      if (filtro === 'Entregado') return match && todosEntregados
-      return match
+      const termino = busqueda.toLowerCase();
+      return p.c_nombre.toLowerCase().includes(termino) || p.c_telefono.includes(termino) || p.c_rut.includes(termino) || (p.colegio && p.colegio.toLowerCase().includes(termino))
     })
-    .sort((a, b) => ordenarColegio ? a.colegio?.localeCompare(b.colegio) : 0)
+    .filter(p => filtro === 'Todos' || (filtro === 'Pendientes' && p.estado_macro !== 'Completado') || p.estado_macro === filtro)
+    .sort((a, b) => {
+      if (ordenarColegio) return (a.colegio || '').localeCompare(b.colegio || '')
+      return (a.estado_macro === 'Completado' ? 1 : -1) 
+    })
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center font-black text-2xl">CARGANDO...</div>
-
+  const inputStyle = { width: '100%', padding: '14px 16px 14px 40px', border: '2px solid #000', borderRadius: '12px', fontSize: '15px', color: '#000', fontWeight: '700', outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' as const }
+  const btnFiltroStyle = (activo: boolean) => ({ backgroundColor: activo ? '#000' : '#fff', color: activo ? '#fff' : '#000', border: `2px solid #000`, borderRadius: '8px', padding: '8px 14px', fontSize: '12px', fontWeight: '800', cursor: 'pointer' })
+  
   return (
-    <div className="min-h-screen bg-[#f8fafc] pb-20">
-      <div className="max-w-4xl mx-auto p-4">
+    <main style={{ minHeight: '100vh', backgroundColor: '#f8fafc', padding: '20px', fontFamily: 'sans-serif' }}>
+      <div style={{ maxWidth: '650px', margin: '0 auto' }}>
         
-        {/* Cabecera */}
-        <div className="flex items-center justify-between my-8">
-          <button onClick={() => router.push('/')} className="p-3 bg-white rounded-2xl shadow-sm border border-slate-100">
-            <ArrowLeft size={24} />
-          </button>
-          <h1 className="text-3xl font-black tracking-tight">PEDIDOS</h1>
-          <button onClick={exportarExcel} className="p-3 bg-white rounded-2xl shadow-sm border border-slate-100 text-green-600">
-            <Download size={24} />
-          </button>
-        </div>
-
-        {/* Buscador */}
-        <div className="relative mb-6">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-          <input 
-            type="text" 
-            placeholder="Buscar por cliente o colegio..."
-            className="w-full pl-12 pr-4 py-4 bg-white rounded-3xl border-none shadow-sm font-bold text-lg outline-none focus:ring-2 ring-black transition-all"
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-          />
-        </div>
-
-        {/* Filtros */}
-        <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
-          {['Todos', 'Pendiente', 'Entregado'].map(f => (
-            <button
-              key={f}
-              onClick={() => setFiltro(f)}
-              className={`px-6 py-3 rounded-2xl font-black text-sm transition-all whitespace-nowrap ${filtro === f ? 'bg-black text-white' : 'bg-white text-slate-500 border border-slate-100'}`}
-            >
-              {f.toUpperCase()}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '25px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+            <button onClick={() => router.push('/')} style={{ backgroundColor: '#fff', border: '2px solid #000', padding: '10px', borderRadius: '12px', color: '#000', cursor: 'pointer' }}>
+              <ArrowLeft size={20} />
             </button>
-          ))}
-          <button
-            onClick={() => setOrdenarColegio(!ordenarColegio)}
-            className={`px-6 py-3 rounded-2xl font-black text-sm transition-all whitespace-nowrap ${ordenarColegio ? 'bg-blue-600 text-white' : 'bg-white text-slate-500 border border-slate-100'}`}
-          >
-            {ordenarColegio ? 'ORDENADO POR COLEGIO' : 'ORDENAR POR COLEGIO'}
+            <h1 style={{ margin: 0, fontSize: '24px', fontWeight: '900', color: '#000' }}>Gestión de Pedidos</h1>
+          </div>
+          <button onClick={exportarExcel} style={{ backgroundColor: '#166534', color: '#fff', padding: '10px 16px', borderRadius: '12px', fontWeight: '800', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
+            <Download size={18} /> Excel
           </button>
         </div>
 
-        {/* Lista de Pedidos */}
-        <div className="grid gap-6">
-          {filtrados.map((p, i) => {
-            const deuda = p.total - p.abono
-            const todosListos = p.detalles.every((d: any) => d.cantidad_entregada === d.cantidad)
-            const entregadosCount = p.detalles.reduce((acc: number, d: any) => acc + (d.cantidad_entregada || 0), 0)
-            const totalCount = p.detalles.reduce((acc: number, d: any) => acc + d.cantidad, 0)
+        <div style={{ marginBottom: '25px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
+          <div style={{ position: 'relative' }}>
+            <div style={{ position: 'absolute', left: '14px', top: '14px', color: '#000' }}><Search size={20} /></div>
+            <input placeholder="Buscar por Nombre, RUT, Teléfono..." style={inputStyle} onChange={(e) => setBusqueda(e.target.value)} />
+          </div>
+          
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <button onClick={() => setFiltro('Todos')} style={btnFiltroStyle(filtro === 'Todos')}>Todos</button>
+            <button onClick={() => setFiltro('Pendientes')} style={btnFiltroStyle(filtro === 'Pendientes')}>Pendientes</button>
+            <button onClick={() => setFiltro('Completado')} style={btnFiltroStyle(filtro === 'Completado')}>Completados</button>
+          </div>
+        </div>
 
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {filtrados.map(p => {
+            const deuda = p.total_final - p.abono;
             return (
-              <motion.div 
-                initial={{ opacity: 0, y: 20 }} 
-                animate={{ opacity: 1, y: 0 }} 
-                transition={{ delay: i * 0.05 }}
-                key={p.id} 
-                className="bg-white rounded-[32px] p-6 border border-slate-100 shadow-xl shadow-slate-200/50"
-              >
-                <div className="flex justify-between items-start mb-6">
-                  <div>
-                    <h2 className="text-2xl font-black mb-1 flex items-center gap-2">
-                      {p.nombre}
-                      {todosListos && <CheckCircle2 className="text-green-500" size={20} />}
-                    </h2>
-                    <div className="flex flex-wrap gap-3 text-sm font-bold text-slate-500">
-                      <span className="flex items-center gap-1"><School size={14} /> {p.colegio || 'Sin colegio'}</span>
-                      <span className="flex items-center gap-1"><Calendar size={14} /> {new Date(p.created_at).toLocaleDateString()}</span>
-                    </div>
-                  </div>
-                  <div className={`px-4 py-2 rounded-2xl font-black text-xs ${todosListos ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
-                    {todosListos ? 'LISTO' : 'PENDIENTE'}
-                  </div>
+              <div key={p.id} style={{ backgroundColor: '#fff', padding: '24px', borderRadius: '24px', border: '2px solid #e2e8f0', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
+                  <span style={{ backgroundColor: '#f1f5f9', padding: '6px 12px', borderRadius: '8px', fontWeight: '800', fontSize: '12px', color: '#000', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <School size={12} /> {p.colegio || 'Particular'}
+                  </span>
+                  <span style={{ backgroundColor: p.color_bg, color: p.color_text, padding: '6px 12px', borderRadius: '8px', fontWeight: '800', fontSize: '12px' }}>
+                    {p.estado_macro}
+                  </span>
                 </div>
 
-                {/* Items del pedido con la nueva UI de entrega */}
-                <div className="space-y-3 mb-6 bg-slate-50 p-4 rounded-3xl border border-slate-100">
-                  {p.detalles.map((d: any, idx: number) => {
-                    const itemListo = d.cantidad_entregada === d.cantidad
+                <h2 style={{ margin: '0 0 8px 0', fontWeight: '900', fontSize: '22px', color: '#000' }}>{p.c_nombre}</h2>
+                <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', color: '#000', fontWeight: '600', fontSize: '14px' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Phone size={14} /> {p.c_telefono}</span>
+                  {p.c_rut && <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><IdCard size={14} /> {p.c_rut}</span>}
+                </div>
+
+                {/* ITEMS DEL PEDIDO CON BOTONES DE ENTREGA PARCIAL */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '24px' }}>
+                  {p.detalles?.map((det: any, idx: number) => {
+                    const entregadoTotal = (det.cantidad_entregada || 0) === det.cantidad;
                     return (
-                      <div key={idx} className="flex items-center justify-between bg-white p-4 rounded-2xl border border-slate-100">
+                      <div key={idx} style={{ backgroundColor: entregadoTotal ? '#f0fdf4' : '#f8fafc', border: `1px solid ${entregadoTotal ? '#bbf7d0' : '#e2e8f0'}`, padding: '12px 16px', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
-                          <p className="font-black text-slate-900">{d.p_nombre}</p>
-                          <p className="text-xs font-bold text-slate-500">
-                            Talla {d.talla} | <span className="text-black">{d.cantidad_entregada || 0} de {d.cantidad} entregados</span>
+                          <p style={{ margin: 0, fontSize: '14px', fontWeight: '800', color: '#000' }}>{det.p_nombre}</p>
+                          <p style={{ margin: 0, fontSize: '12px', fontWeight: '700', color: '#64748b' }}>
+                            Talla: {det.talla} | <span style={{color:'#000'}}>{det.cantidad_entregada || 0} de {det.cantidad} entregados</span>
                           </p>
                         </div>
                         
-                        {/* BOTONERA MINIMALISTA */}
-                        <div className="flex items-center gap-2">
-                          <button 
-                            onClick={() => actualizarEntrega(d, -1)}
-                            className="w-8 h-8 flex items-center justify-center bg-slate-100 rounded-lg text-slate-600 hover:bg-slate-200"
-                          >
-                            <Minus size={14} />
-                          </button>
-                          <button 
-                            onClick={() => actualizarEntrega(d, 1)}
-                            className="px-3 h-8 flex items-center justify-center bg-black text-white rounded-lg font-black text-xs"
-                          >
-                            +1
-                          </button>
-                          <button 
-                            onClick={() => actualizarEntrega(d, 'todo')}
-                            className={`px-3 h-8 flex items-center justify-center rounded-lg font-black text-xs border ${itemListo ? 'bg-green-500 border-green-500 text-white' : 'bg-white border-slate-200 text-slate-900'}`}
-                          >
-                            {itemListo ? <Check size={14} /> : 'TODO'}
+                        <div style={{ display: 'flex', gap: '5px' }}>
+                          <button onClick={() => actualizarEntrega(det, -1)} style={{ backgroundColor: '#fff', border: '1px solid #000', padding: '5px 10px', borderRadius: '6px', fontWeight: '900', cursor: 'pointer' }}>-</button>
+                          <button onClick={() => actualizarEntrega(det, 1)} style={{ backgroundColor: '#000', color: '#fff', border: 'none', padding: '5px 10px', borderRadius: '6px', fontWeight: '900', cursor: 'pointer' }}>+1</button>
+                          <button onClick={() => actualizarEntrega(det, 'todo')} style={{ backgroundColor: entregadoTotal ? '#10b981' : '#fff', color: entregadoTotal ? '#fff' : '#000', border: '1px solid #000', padding: '5px 10px', borderRadius: '6px', fontWeight: '800', fontSize: '11px', cursor: 'pointer' }}>
+                            {entregadoTotal ? '✓' : 'TODO'}
                           </button>
                         </div>
                       </div>
                     )
                   })}
-                  <div className="pt-2 px-2 flex justify-between items-center text-xs font-black text-slate-400 uppercase">
-                    <span>Progreso Total</span>
-                    <span>{entregadosCount} / {totalCount} Unidades</span>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
+                  <div style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '16px' }}>
+                    <p style={{ margin: 0, fontSize: '12px', fontWeight: '800', color: '#000' }}>PAGADO</p>
+                    <p style={{ margin: '4px 0', fontSize: '20px', fontWeight: '900', color: '#10b981' }}>${p.abono.toLocaleString()}</p>
+                    <button onClick={() => actualizarAbono(p.id, p.total_final, p.abono)} style={{ border: '1px solid #000', background: '#000', color: '#fff', padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: '800', cursor: 'pointer' }}>Modificar</button>
+                  </div>
+                  <div style={{ backgroundColor: deuda > 0 ? '#fef2f2' : '#f0fdf4', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '16px' }}>
+                    <p style={{ margin: 0, fontSize: '12px', fontWeight: '800', color: '#000' }}>DEUDA</p>
+                    <p style={{ margin: '4px 0', fontSize: '20px', fontWeight: '900', color: deuda > 0 ? '#ef4444' : '#10b981' }}>${deuda.toLocaleString()}</p>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                    <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Abonado</p>
-                    <p className="text-xl font-black text-blue-600">${p.abono?.toLocaleString()}</p>
-                  </div>
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                    <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Deuda</p>
-                    <p className={`text-xl font-black ${deuda > 0 ? 'text-red-500' : 'text-green-500'}`}>${deuda.toLocaleString()}</p>
-                  </div>
-                </div>
-
-                <div className="flex justify-between border-top pt-4 gap-2">
-                  <button onClick={() => borrarPedido(p.id, p.detalles)} className="p-4 text-red-500 font-black hover:bg-red-50 rounded-2xl transition-all">
-                    <Trash2 size={20} />
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #e2e8f0', paddingTop: '16px', flexWrap: 'wrap', gap: '10px' }}>
+                  <button onClick={() => borrarPedido(p.id, p.detalles)} style={{ color: '#ef4444', fontWeight: '800', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px' }}>
+                    <Trash2 size={16} /> Eliminar
                   </button>
-                  <div className="flex gap-2">
-                    <button onClick={() => abrirWhatsApp(p.c_telefono)} className="px-6 py-4 bg-[#25D366] text-white rounded-2xl font-black flex items-center gap-2 shadow-lg shadow-green-200">
-                      <MessageCircle size={20} /> WHATSAPP
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <button onClick={() => abrirWhatsApp(p.c_telefono)} style={{ backgroundColor: '#25D366', color: '#fff', padding: '10px 16px', borderRadius: '10px', fontWeight: '800', cursor: 'pointer', border: 'none', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <MessageCircle size={16} /> WhatsApp
                     </button>
-                    <button onClick={() => window.open(`/ticket/${p.id}`, '_blank')} className="px-6 py-4 bg-black text-white rounded-2xl font-black flex items-center gap-2 shadow-lg shadow-slate-200">
-                      <Printer size={20} /> TICKET
+                    <button onClick={() => window.open(`/ticket/${p.id}`, '_blank')} style={{ backgroundColor: '#000', color: '#fff', padding: '10px 16px', borderRadius: '10px', fontWeight: '800', cursor: 'pointer', border: 'none', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Printer size={16} /> Ticket
                     </button>
                   </div>
                 </div>
-              </motion.div>
+              </div>
             )
           })}
         </div>
       </div>
-    </div>
+    </main>
   )
 }
