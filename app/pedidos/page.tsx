@@ -16,6 +16,8 @@ export default function VerPedidos() {
   const [ordenarColegio, setOrdenarColegio] = useState(false)
   const [expandidos, setExpandidos] = useState<Record<string, boolean>>({})
   const [usuarioActivo, setUsuarioActivo] = useState('')
+  const [logs, setLogs] = useState<any[]>([])
+
 
   const metodoPagoIcono = (metodo: string) => {
     if (metodo === 'Transferencia') return <Landmark size={14} />
@@ -28,13 +30,16 @@ export default function VerPedidos() {
     setUsuarioActivo(sessionStorage.getItem('user_name') || '')
 
     setLoading(true)
-    const [pRes, cRes, iRes, dRes, pagosRes] = await Promise.all([
+        const [pRes, cRes, iRes, dRes, pagosRes, aRes] = await Promise.all([
       supabase.from('pedidos').select('*').order('created_at', { ascending: false }),
       supabase.from('clientes').select('*'),
       supabase.from('inventario').select('*'),
       supabase.from('detalles_pedido').select('*').order('id'),
-      supabase.from('pagos').select('*').order('fecha_pago', { ascending: true })
+      supabase.from('pagos').select('*').order('fecha_pago', { ascending: true }),
+      supabase.from('auditoria').select('*').order('fecha', { ascending: false }).limit(20)
     ])
+    setLogs(aRes.data || [])
+
     
     const cruzados = (pRes.data || []).map(p => {
       const cliente = cRes.data?.find(c => c.id === p.cliente_id)
@@ -555,10 +560,42 @@ export default function VerPedidos() {
                   </div>
                 </div>
               </div>
-            )
+                        )
           })}
+        </div>
+
+        {/* HISTORIAL DE ACTIVIDAD */}
+        <div style={{ marginTop: '50px', borderTop: '4px solid #000', paddingTop: '30px', paddingBottom: '60px' }}>
+          <h2 style={{ fontSize: '26px', fontWeight: '900', marginBottom: '24px', color: '#000', textTransform: 'uppercase' }}>HISTORIAL DE ACTIVIDAD</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {logs.length === 0 ? (
+              <p style={{ fontWeight: '800', color: '#64748b' }}>No hay registros en el historial.</p>
+            ) : (
+              logs.map((log) => (
+                <div key={log.id} style={{ 
+                  backgroundColor: log.usuario === 'Admin' ? '#eff6ff' : '#fff', 
+                  border: '2px solid #000', 
+                  padding: '16px', 
+                  borderRadius: '16px', 
+                  boxShadow: '4px 4px 0px #000' 
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <span style={{ backgroundColor: '#000', color: '#fff', padding: '5px 12px', borderRadius: '6px', fontSize: '11px', fontWeight: '900' }}>
+                      {log.usuario}
+                    </span>
+                    <span style={{ fontSize: '12px', fontWeight: '800', color: '#64748b' }}>
+                      {new Date(log.fecha).toLocaleString()}
+                    </span>
+                  </div>
+                  <p style={{ margin: '0 0 6px 0', fontSize: '15px', fontWeight: '900', color: '#000' }}>{log.accion}</p>
+                  <p style={{ margin: 0, fontSize: '13px', fontWeight: '700', color: '#475569' }}>{log.detalles}</p>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </div>
     </main>
+
   )
 }
