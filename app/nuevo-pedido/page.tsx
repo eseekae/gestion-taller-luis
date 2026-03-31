@@ -1,330 +1,267 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 import { registrarLog } from '../../lib/auditoria'
 import { motion } from 'framer-motion'
-import * as XLSX from 'xlsx-js-style'
-import { ArrowLeft, Search, School, Phone, IdCard, Calendar, Package, Printer, Trash2, CreditCard, MessageCircle, Download, Landmark, Banknote, ChevronDown, ChevronUp, MessageSquare } from 'lucide-react'
+import { ArrowLeft, User, Phone, IdCard, School, Calendar, ShoppingBag, Plus, X, CreditCard, CheckCircle, MessageSquare } from 'lucide-react'
 
-export default function VerPedidos() {
+export default function RegistroPedido() {
   const router = useRouter()
-  const [datos, setDatos] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [busqueda, setBusqueda] = useState('')
-  const [filtro, setFiltro] = useState('Todos')
-  const [ordenarColegio, setOrdenarColegio] = useState(false)
-  const [expandidos, setExpandidos] = useState<Record<string, boolean>>({})
   const [usuarioActivo, setUsuarioActivo] = useState('')
-  const [logs, setLogs] = useState<any[]>([])
+  const [inventario, setInventario] = useState<any[]>([])
+  const [carrito, setCarrito] = useState<any[]>([])
+  
+  const [nombreSeleccionado, setNombreSeleccionado] = useState('')
+  const [tallaSeleccionada, setTallaSeleccionada] = useState('')
+  const [precioManualEspecial, setPrecioManualEspecial] = useState('')
+  const [cantidad, setCantidad] = useState(1)
 
-  const cargar = useCallback(async () => {
-    if (!sessionStorage.getItem('user_role')) return router.push('/login')
+  // DATOS CLIENTE Y PEDIDO
+  const [nombreCliente, setNombreCliente] = useState('')
+  const [rut, setRut] = useState('')
+  const [telefono, setTelefono] = useState('')
+  const [colegio, setColegio] = useState('')
+  const [fechaEntrega, setFechaEntrega] = useState('')
+  const [observaciones, setObservaciones] = useState('') 
+  
+  const [abono, setAbono] = useState('')
+  const [metodoPagoInicial, setMetodoPagoInicial] = useState('Transferencia')
+  const [fechaPagoInicial, setFechaPagoInicial] = useState(new Date().toISOString().split('T')[0])
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
     setUsuarioActivo(sessionStorage.getItem('user_name') || '')
-    setLoading(true)
-
-    const [pRes, cRes, iRes, dRes, pagosRes, aRes] = await Promise.all([
-      supabase.from('pedidos').select('*').order('created_at', { ascending: false }),
-      supabase.from('clientes').select('*'),
-      supabase.from('inventario').select('*'),
-      supabase.from('detalles_pedido').select('*').order('id'),
-      supabase.from('pagos').select('*').order('fecha_pago', { ascending: true }),
-      supabase.from('auditoria').select('*').order('fecha', { ascending: false }).limit(20)
-    ])
-    setLogs(aRes.data || [])
-    
-    const cruzados = (pRes.data || []).map(p => {
-      const cliente = cRes.data?.find(c => c.id === p.cliente_id)
-      const pagos = (pagosRes.data || []).filter(pg => pg.pedido_id === p.id)
-      const totalPagado = pagos.reduce((acc, pg) => acc + Number(pg.monto || 0), 0)
-      const detalles = dRes.data?.filter(d => d.pedido_id === p.id).map(d => {
-        const prod = iRes.data?.find(inv => inv.id === d.producto_id)
-        return { ...d, p_nombre: prod?.nombre || 'Producto' }
-      })
-
-      const itemsCompletos = detalles?.length > 0 && detalles.every(d => (d.cantidad_entregada || 0) === d.cantidad)
-      const pagoCompleto = totalPagado >= p.total_final
-      
-      let estadoMacro = ''
-      let colorEstadoBg = ''
-      let colorEstadoText = ''
-
-      if (itemsCompletos && pagoCompleto) {
-        estadoMacro = 'Completado'; colorEstadoBg = '#dcfce7'; colorEstadoText = '#166534'
-      } else if (!itemsCompletos && pagoCompleto) {
-        estadoMacro = 'Pend. Entrega'; colorEstadoBg = '#dbeafe'; colorEstadoText = '#1e40af'
-      } else if (itemsCompletos && !pagoCompleto) {
-        estadoMacro = 'Pend. Pago'; colorEstadoBg = '#ffedd5'; colorEstadoText = '#c2410c'
-      } else {
-        estadoMacro = 'Pend. Entrega y Pago'; colorEstadoBg = '#fef3c7'; colorEstadoText = '#b45309'
+    const fetch = async () => {
+      const { data } = await supabase.from('inventario').select('*').order('nombre')
+      if (data) {
+        setInventario(data)
+        if (data.length > 0) {
+          setNombreSeleccionado(data[0].nombre)
+          setTallaSeleccionada(data[0].talla)
+        }
       }
+    }
+    fetch()
+  }, [])
 
-      return { 
-        ...p, c_nombre: cliente?.nombre || 'S/N', c_telefono: cliente?.telefono || '', c_rut: cliente?.rut || '', 
-        detalles, pagos, total_pagado: totalPagado, estado_macro: estadoMacro, color_bg: colorEstadoBg, color_text: colorEstadoText, itemsCompletos
-      }
-    })
-    setDatos(cruzados)
-    setLoading(false)
-  }, [router])
+  const productosUnicos = useMemo(() => Array.from(new Set(inventario.map(i => i.nombre))), [inventario])
+  const tallasDeInventario = useMemo(() => inventario.filter(i => i.nombre === nombreSeleccionado), [nombreSeleccionado, inventario])
 
-  const calcularEstadoPedido = (pedido: any, detallesActualizados: any[]) => {
-    const itemsCompletos = detallesActualizados?.length > 0 && detallesActualizados.every(d => (d.cantidad_entregada || 0) === d.cantidad)
-    const pagoCompleto = Number(pedido.total_pagado || 0) >= Number(pedido.total_final || 0)
-
-    let estadoMacro = ''
-    let colorEstadoBg = ''
-    let colorEstadoText = ''
-
-    if (itemsCompletos && pagoCompleto) {
-      estadoMacro = 'Completado'; colorEstadoBg = '#dcfce7'; colorEstadoText = '#166534'
-    } else if (!itemsCompletos && pagoCompleto) {
-      estadoMacro = 'Pend. Entrega'; colorEstadoBg = '#dbeafe'; colorEstadoText = '#1e40af'
-    } else if (itemsCompletos && !pagoCompleto) {
-      estadoMacro = 'Pend. Pago'; colorEstadoBg = '#ffedd5'; colorEstadoText = '#c2410c'
+  const agregarAlCarrito = () => {
+    let item; let precio;
+    if (tallaSeleccionada === 'ESPECIAL') {
+      precio = Number(precioManualEspecial)
+      item = { id_inv: tallasDeInventario[0]?.id, nombre: nombreSeleccionado, talla: 'ESPECIAL', precio, cantidad }
     } else {
-      estadoMacro = 'Pend. Entrega y Pago'; colorEstadoBg = '#fef3c7'; colorEstadoText = '#b45309'
+      const invItem = inventario.find(i => i.nombre === nombreSeleccionado && i.talla === tallaSeleccionada)
+      precio = Number(invItem?.precio_base || 0)
+      item = { id_inv: invItem.id, nombre: nombreSeleccionado, talla: tallaSeleccionada, precio, cantidad }
     }
-
-    return { estadoMacro, colorEstadoBg, colorEstadoText, itemsCompletos }
+    setCarrito([...carrito, { ...item, tempId: Date.now() }])
+    setPrecioManualEspecial('')
   }
 
-  const actualizarEntrega = async (det: any, cambio: number | 'todo') => {
-    const actual = det.cantidad_entregada || 0
-    const total = det.cantidad
-    let nuevaCantidad = cambio === 'todo' ? total : actual + cambio
+  const quitarDelCarrito = (id: number) => setCarrito(carrito.filter(c => c.tempId !== id))
+  const totalCalculado = useMemo(() => carrito.reduce((acc, curr) => acc + (curr.precio * curr.cantidad), 0), [carrito])
 
-    if (nuevaCantidad < 0 || nuevaCantidad > total) return
-    const variacion = nuevaCantidad - actual
-    if (variacion === 0) return
-
-    const pedidoObjetivoId = det.pedido_id
-    const nuevoEstado = nuevaCantidad === total ? 'Entregado' : 'Pendiente'
-    let datosPrevios = [...datos]
-
-    setDatos(prev => prev.map(pedido => {
-      const perteneceAlPedido = pedido.id === pedidoObjetivoId || pedido.detalles?.some((d: any) => d.id === det.id)
-      if (!perteneceAlPedido) return pedido
-
-      const detallesActualizados = (pedido.detalles || []).map((d: any) =>
-        d.id === det.id ? { ...d, cantidad_entregada: nuevaCantidad, estado: nuevoEstado } : d
-      )
-      const { estadoMacro, colorEstadoBg, colorEstadoText, itemsCompletos } = calcularEstadoPedido(pedido, detallesActualizados)
-
-      return { ...pedido, detalles: detallesActualizados, estado_macro: estadoMacro, color_bg: colorEstadoBg, color_text: colorEstadoText, itemsCompletos }
-    }))
-
+  const guardar = async (e: any) => {
+    e.preventDefault()
+    if (carrito.length === 0) return alert("Añade algo al pedido primero")
+    setLoading(true)
     try {
-      if (det.producto_id) {
-        const rpcName = variacion > 0 ? 'entregar_stock' : 'revertir_entrega_stock'
-        await supabase.rpc(rpcName, { prod_id: det.producto_id, cant: Math.abs(variacion) })
+      // 1. REGISTRAR CLIENTE
+      const { data: cli, error: cliError } = await supabase.from('clientes').insert([{ nombre: nombreCliente, telefono, rut }]).select().single()
+      
+      // FIX: Verificamos error de Supabase para evitar el crash de 'reading id'
+      if (cliError || !cli) {
+        console.error("Error cliente:", cliError)
+        throw new Error(`Error al registrar cliente: ${cliError?.message || 'Fallo inesperado'}`)
+      }
+      
+      // 2. REGISTRAR PEDIDO
+      const { data: ped, error: pedError } = await supabase.from('pedidos').insert([{
+        cliente_id: cli.id, 
+        total_final: totalCalculado, 
+        abono: 0, 
+        estado: 'Pendiente',
+        colegio: colegio || 'Particular', 
+        fecha_entrega: fechaEntrega || null,
+        observaciones: observaciones,
+        creado_por: sessionStorage.getItem('user_name') || ''
+      }]).select().single()
+
+      if (pedError || !ped) {
+        console.error("Error pedido:", pedError)
+        throw new Error(`Error al registrar pedido: ${pedError?.message || 'Fallo inesperado'}`)
       }
 
-      await supabase.from('detalles_pedido').update({ cantidad_entregada: nuevaCantidad, estado: nuevoEstado }).eq('id', det.id)
+      // 3. REGISTRAR DETALLES
+      const detalles = carrito.map(item => ({
+        pedido_id: ped.id, producto_id: item.id_inv, cantidad: item.cantidad, talla: item.talla, precio_unitario: item.precio, estado: 'Pendiente'
+      }))
+      const { error: detError } = await supabase.from('detalles_pedido').insert(detalles)
+      if (detError) throw detError
 
-      const ahora = new Date()
-      const fechaFormateada = `${ahora.getDate().toString().padStart(2, '0')}/${(ahora.getMonth() + 1).toString().padStart(2, '0')} ${ahora.getHours().toString().padStart(2, '0')}:${ahora.getMinutes().toString().padStart(2, '0')}`
-      
+      // 4. REGISTRAR PAGO SI HAY ABONO
+      if (Number(abono) > 0) {
+        const { error: pagoError } = await supabase.from('pagos').insert([{
+          pedido_id: ped.id,
+          monto: Number(abono),
+          fecha_pago: fechaPagoInicial,
+          metodo_pago: metodoPagoInicial, // USAMOS LA VARIABLE DEL SELECTOR
+          creado_por: sessionStorage.getItem('user_name') || ''
+        }])
+        if (pagoError) throw pagoError
+      }
+
       await registrarLog(
-        `${sessionStorage.getItem('user_name') || 'Usuario'} entregó ${Math.abs(variacion)} de ${det.p_nombre || 'Producto'} el ${fechaFormateada}`,
-        `Cantidad entregada: ${actual} -> ${nuevaCantidad}`
+        `${sessionStorage.getItem('user_name') || 'Usuario'} creó el pedido de ${nombreCliente}`,
+        `Pedido ${ped.id} - Obs: ${observaciones.substring(0, 20)}...`
       )
-    } catch (err) {
-      setDatos(datosPrevios)
-      alert("❌ No se pudo sincronizar la entrega.")
+
+      for (const item of carrito) {
+        if (item.id_inv) await supabase.rpc('reservar_stock', { prod_id: item.id_inv, cant: item.cantidad })
+      }
+
+      alert("✅ Venta registrada con éxito."); router.push('/pedidos')
+    } catch (err: any) { 
+      // Mostramos el error exacto para saber qué falló en Supabase (RLS, columnas, etc)
+      alert(err.message) 
     }
+    finally { setLoading(false) }
   }
 
-  const exportarExcel = () => {
-    const reporte: any[] = []
-    const formatoMoneda = (monto: number) => `$${Number(monto || 0).toLocaleString('es-CL')}`
-    datos.forEach(p => {
-      reporte.push({
-        'Tipo': 'PEDIDO',
-        'ID Pedido': p.id,
-        'Fecha': new Date(p.created_at).toLocaleDateString('es-CL'),
-        'Cliente': p.c_nombre || 'S/N',
-        'Teléfono': p.c_telefono || '',
-        'Colegio': p.colegio || 'Particular',
-        'Total Pedido': formatoMoneda(p.total_final),
-        'Abono Pedido': formatoMoneda(p.total_pagado),
-        'Saldo Pendiente': formatoMoneda(p.total_final - p.total_pagado),
-        'Observaciones': p.observaciones || ''
-      })
-    })
-    const ws = XLSX.utils.json_to_sheet(reporte)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, "Reporte")
-    XLSX.writeFile(wb, `Reporte_Luis_${new Date().toISOString().split('T')[0]}.xlsx`)
-  }
-
-  const agregarPago = async (pedido: any) => {
-    // 1. PREGUNTAR MONTO
-    const montoInput = prompt('💰 Nuevo Pago\nMonto:', '')
-    if (!montoInput) return
-    const monto = Number(montoInput.replace(/\D/g, ''))
-    if (isNaN(monto) || monto <= 0) return alert('❌ Monto inválido.')
-
-    // 2. PREGUNTAR FECHA (Por defecto hoy)
-    const fechaPago = prompt('📅 Fecha (YYYY-MM-DD):', new Date().toISOString().split('T')[0]) || new Date().toISOString().split('T')[0]
-
-    // 3. PREGUNTAR MÉTODO (Por defecto Transferencia)
-    const metodo = prompt('💳 Método (Transferencia, Efectivo, Débito, Crédito):', 'Transferencia') || 'Transferencia'
-
-    const snapshot = [...datos]
-    setDatos(prev => prev.map(p => {
-      if (p.id !== pedido.id) return p
-      const totalPagado = Number(p.total_pagado || 0) + monto
-      const { estadoMacro, colorEstadoBg, colorEstadoText } = calcularEstadoPedido({ ...p, total_pagado: totalPagado }, p.detalles || [])
-      return { ...p, total_pagado: totalPagado, estado_macro: estadoMacro, color_bg: colorEstadoBg, color_text: colorEstadoText }
-    }))
-
-    try {
-      // GUARDAMOS CON TODOS LOS DATOS Y LA COLUMNA CREADO_POR
-      const { error } = await supabase.from('pagos').insert([{
-        pedido_id: pedido.id,
-        monto: monto,
-        fecha_pago: fechaPago,
-        metodo_pago: metodo,
-        creado_por: sessionStorage.getItem('user_name') || 'Usuario'
-      }])
-
-      if (error) throw error
-
-      const ahora = new Date()
-      const f = `${ahora.getDate().toString().padStart(2, '0')}/${(ahora.getMonth() + 1).toString().padStart(2, '0')} ${ahora.getHours().toString().padStart(2, '0')}:${ahora.getMinutes().toString().padStart(2, '0')}`
-      
-      await registrarLog(
-        `${sessionStorage.getItem('user_name') || 'Usuario'} registró pago de $${monto.toLocaleString('es-CL')} (${metodo}) el ${f}`,
-        `Pedido ID: ${pedido.id}`
-      )
-      cargar()
-    } catch (err) {
-      setDatos(snapshot)
-      alert('❌ Error al guardar el pago en Supabase.')
-    }
-  }
-
-  const borrarPedido = async (pedidoId: string, detalles: any[], clienteNombre: string) => {
-    if(!confirm('⚠️ ¿Borrar pedido?')) return
-    try {
-      await supabase.from('pagos').delete().eq('pedido_id', pedidoId)
-      await supabase.from('pedidos').delete().eq('id', pedidoId)
-      await registrarLog(`Eliminó pedido de ${clienteNombre}`, `ID: ${pedidoId}`)
-      cargar()
-    } catch (err) { alert('❌ Error al eliminar.') }
-  }
-
-  useEffect(() => { cargar() }, [cargar])
-
-  const filtrados = datos
-    .filter(p => {
-      const t = busqueda.toLowerCase()
-      return p.c_nombre.toLowerCase().includes(t) || p.c_telefono.includes(t) || (p.colegio && p.colegio.toLowerCase().includes(t))
-    })
-    .filter(p => filtro === 'Todos' || (filtro === 'Pendientes' && p.estado_macro !== 'Completado') || p.estado_macro === filtro)
+  // ESTILOS NEUBRUTALISM
+  const cardStyle = { backgroundColor: '#fff', padding: '24px', borderRadius: '24px', border: '3px solid #000', boxShadow: '8px 8px 0px #000', marginBottom: '20px' }
+  const inputStyle = { width: '100%', padding: '12px 16px', border: '3px solid #000', borderRadius: '12px', fontSize: '15px', color: '#000', outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' as const }
+  const labelStyle = { fontSize: '12px', fontWeight: '900', color: '#000', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px', textTransform: 'uppercase' as const }
 
   return (
-    <main style={{ minHeight: '100vh', backgroundColor: '#ffffff', padding: '20px', fontFamily: 'sans-serif' }}>
-      <div style={{ maxWidth: '650px', margin: '0 auto' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '25px' }}>
-          <button onClick={() => router.push('/')} style={{ backgroundColor: '#fff', border: '3px solid #000', padding: '10px', borderRadius: '12px', boxShadow: '4px 4px 0px #000' }}><ArrowLeft size={20} color="#000" /></button>
-          <h1 style={{ fontSize: '24px', fontWeight: '900', color: '#000000' }}>Gestión de Pedidos</h1>
-          <button onClick={exportarExcel} style={{ backgroundColor: '#166534', color: '#fff', padding: '10px 16px', borderRadius: '12px', fontWeight: '800', border: '3px solid #000', boxShadow: '4px 4px 0px #000' }}><Download size={18} /> Excel</button>
-        </div>
-
-        <div style={{ marginBottom: '25px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
-          <div style={{ position: 'relative' }}>
-            <Search style={{ position: 'absolute', left: '14px', top: '14px' }} size={20} color="#000" />
-            <input placeholder="Buscar..." style={{ width: '100%', padding: '14px 40px', border: '3px solid #000', borderRadius: '12px', fontWeight: '700', boxShadow: '4px 4px 0px #000', color: '#000' }} onChange={(e) => setBusqueda(e.target.value)} />
-          </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            {['Todos', 'Pendientes', 'Completado'].map(f => (
-              <button key={f} onClick={() => setFiltro(f)} style={{ backgroundColor: filtro === f ? '#000' : '#fff', color: filtro === f ? '#fff' : '#000', border: '3px solid #000', borderRadius: '8px', padding: '8px 14px', fontWeight: '800', boxShadow: '3px 3px 0px #000' }}>{f}</button>
-            ))}
+    <main style={{ minHeight: '100vh', backgroundColor: '#fff', padding: '20px', fontFamily: 'sans-serif' }}>
+      <div style={{ maxWidth: '550px', margin: '0 auto' }}>
+        
+        <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '25px' }}>
+          <button onClick={() => router.push('/')} style={{ backgroundColor: '#fff', border: '3px solid #000', padding: '10px', borderRadius: '12px', color: '#000', cursor: 'pointer', boxShadow: '4px 4px 0px #000' }}>
+            <ArrowLeft size={20} />
+          </button>
+          <div>
+            <h1 style={{ margin: 0, fontSize: '24px', fontWeight: '900', color: '#000' }}>Nueva Venta</h1>
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '25px' }}>
-          {filtrados.map(p => {
-            const deuda = p.total_final - (p.total_pagado || 0)
-            const expandido = !!expandidos[p.id]
-            return (
-              <div key={p.id} style={{ backgroundColor: '#fff', padding: '24px', borderRadius: '24px', border: '3px solid #000', boxShadow: '8px 8px 0px #000' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
-                  <span style={{ fontWeight: '800', fontSize: '12px', color: '#000000', display: 'flex', alignItems: 'center', gap: '4px' }}><School size={12} color="#000" /> {p.colegio || 'Particular'}</span>
-                  <span style={{ backgroundColor: p.color_bg, color: p.color_text, padding: '6px 12px', borderRadius: '8px', fontWeight: '800', border: '2px solid #000' }}>{p.estado_macro}</span>
+        <form onSubmit={guardar}>
+          
+          <div style={cardStyle}>
+            <h2 style={{ margin: '0 0 20px 0', fontSize: '16px', fontWeight: '900', color: '#000', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <User size={18} /> Información del Cliente
+            </h2>
+            
+            <div style={{ display: 'grid', gap: '16px' }}>
+              <div>
+                <label style={labelStyle}>Nombre Completo</label>
+                <input required style={inputStyle} value={nombreCliente} onChange={e => setNombreCliente(e.target.value)} />
+              </div>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div>
+                  <label style={labelStyle}><IdCard size={14} /> RUT</label>
+                  <input style={inputStyle} value={rut} onChange={e => setRut(e.target.value)} />
                 </div>
-                
-                <h2 style={{ fontWeight: '900', fontSize: '24px', color: '#000000', marginBottom: '4px' }}>{p.c_nombre}</h2>
-                <p style={{ fontSize: '14px', fontWeight: '800', color: '#000', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                  <Phone size={14} color="#000" /> {p.c_telefono || 'Sin teléfono'}
-                </p>
-
-                {p.observaciones && (
-                  <div style={{ backgroundColor: '#fff7ed', border: '2px solid #ea580c', padding: '12px', borderRadius: '12px', marginBottom: '16px' }}>
-                    <p style={{ fontSize: '12px', fontWeight: '900', color: '#ea580c', marginBottom: '4px', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                      <MessageSquare size={14} /> Notas de Don Luis:
-                    </p>
-                    <p style={{ fontSize: '14px', color: '#000', margin: 0, fontWeight: '700' }}>{p.observaciones}</p>
-                  </div>
-                )}
-
-                <button onClick={() => setExpandidos(prev => ({ ...prev, [p.id]: !prev[p.id] }))} style={{ width: '100%', margin: '0 0 16px 0', border: '3px solid #000', borderRadius: '10px', padding: '10px', fontWeight: '900', background: '#f1f5f9', color: '#000000' }}>{expandido ? 'Ocultar Detalle' : 'Ver Detalle'}</button>
-
-                {expandido && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '20px' }}>
-                    {p.detalles?.map((det: any, idx: number) => (
-                      <div key={idx} style={{ padding: '12px', border: '2px solid #000', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', background: '#f8fafc' }}>
-                        <div><p style={{ fontWeight: '800', color: '#000000' }}>{det.p_nombre}</p><p style={{ fontSize: '12px', color: '#000000' }}>{det.cantidad_entregada || 0} de {det.cantidad}</p></div>
-                        <div style={{ display: 'flex', gap: '5px' }}>
-                          <button onClick={() => actualizarEntrega(det, -1)} style={{ border: '2px solid #000', borderRadius: '8px', padding: '5px', background: '#ef4444', color: '#ffffff', fontWeight: '900' }}>-</button>
-                          <button onClick={() => actualizarEntrega(det, 1)} style={{ background: '#4ade80', color: '#000', borderRadius: '8px', padding: '5px', border: '2px solid #000', fontWeight: '900' }}>+1</button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>
-                  <div style={{ background: '#f0fdf4', padding: '16px', borderRadius: '16px', border: '3px solid #000' }}>
-                    <p style={{ fontSize: '12px', fontWeight: '800', color: '#000000' }}>PAGADO</p>
-                    <p style={{ fontSize: '22px', fontWeight: '900', color: '#166534' }}>${Number(p.total_pagado || 0).toLocaleString('es-CL')}</p>
-                    <button onClick={() => agregarPago(p)} style={{ background: '#000', color: '#fff', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '900', marginTop: '8px', border: '2px solid #000' }}>+ Pago</button>
-                  </div>
-                  <div style={{ background: deuda > 0 ? '#fef2f2' : '#f0fdf4', padding: '16px', borderRadius: '16px', border: '3px solid #000' }}>
-                    <p style={{ fontSize: '12px', fontWeight: '800', color: '#000000' }}>DEUDA</p>
-                    <p style={{ fontSize: '22px', fontWeight: '900', color: deuda > 0 ? '#991b1b' : '#166534' }}>${deuda.toLocaleString('es-CL')}</p>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '3px solid #000', paddingTop: '16px' }}>
-                  <button onClick={() => borrarPedido(p.id, p.detalles, p.c_nombre)} style={{ color: '#991b1b', fontWeight: '900', border: 'none', background: 'none', display: 'flex', alignItems: 'center', gap: '5px' }}><Trash2 size={16} /> Borrar</button>
-                  <div style={{ display: 'flex', gap: '10px' }}>
-                    <button onClick={() => window.open(`https://wa.me/${p.c_telefono}`, '_blank')} style={{ background: '#25D366', color: '#fff', padding: '10px', borderRadius: '10px', border: '2px solid #000', boxShadow: '3px 3px 0px #000' }}><MessageCircle size={16} /></button>
-                    <button onClick={() => window.open(`/ticket/${p.id}`, '_blank')} style={{ background: '#fff', color: '#000', padding: '10px', borderRadius: '10px', border: '2px solid #000', boxShadow: '3px 3px 0px #000' }}><Printer size={16} /></button>
-                  </div>
+                <div>
+                  <label style={labelStyle}><Phone size={14} /> Teléfono</label>
+                  <input required style={inputStyle} value={telefono} onChange={e => setTelefono(e.target.value)} />
                 </div>
               </div>
-            )
-          })}
-        </div>
 
-        <div style={{ marginTop: '60px', borderTop: '6px solid #000', paddingTop: '40px', paddingBottom: '80px' }}>
-          <h2 style={{ fontSize: '28px', fontWeight: '900', marginBottom: '24px', color: '#000000' }}>HISTORIAL DE ACTIVIDAD</h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {logs.length === 0 ? <p style={{ color: '#000' }}>Sin registros.</p> : logs.map((log) => (
-              <div key={log.id} style={{ backgroundColor: '#fff', border: '3px solid #000', padding: '20px', borderRadius: '20px', boxShadow: '6px 6px 0px #000' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-                  <span style={{ background: '#000', color: '#fff', padding: '5px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '900' }}>{log.usuario}</span>
-                  <span style={{ fontSize: '13px', fontWeight: '800', color: '#000000' }}>{new Date(log.fecha).toLocaleString()}</span>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div>
+                  <label style={labelStyle}><School size={14} /> Colegio</label>
+                  <input style={inputStyle} value={colegio} onChange={e => setColegio(e.target.value)} />
                 </div>
-                <p style={{ fontWeight: '900', fontSize: '16px', color: '#000000' }}>{log.accion}</p>
-                <p style={{ fontSize: '14px', color: '#000000' }}>{log.detalles}</p>
+                <div>
+                  <label style={labelStyle}><Calendar size={14} /> Entrega</label>
+                  <input type="date" style={inputStyle} value={fechaEntrega} onChange={e => setFechaEntrega(e.target.value)} />
+                </div>
               </div>
-            ))}
+
+              <div>
+                <label style={labelStyle}><MessageSquare size={14} /> Observaciones (Don Luis)</label>
+                <textarea 
+                  style={{ ...inputStyle, height: '80px', resize: 'none', fontFamily: 'sans-serif' }} 
+                  placeholder="Ej: Entregar en portería..." 
+                  value={observaciones} 
+                  onChange={e => setObservaciones(e.target.value)}
+                />
+              </div>
+            </div>
           </div>
-        </div>
+
+          <div style={cardStyle}>
+            <h2 style={{ margin: '0 0 20px 0', fontSize: '16px', fontWeight: '900', color: '#000', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <ShoppingBag size={18} /> Productos
+            </h2>
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px', marginBottom: '16px' }}>
+              <select style={inputStyle} value={nombreSeleccionado} onChange={e => setNombreSeleccionado(e.target.value)}>
+                {productosUnicos.map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+              <input type="number" min="1" style={inputStyle} value={cantidad} onChange={e => setCantidad(Number(e.target.value))} />
+            </div>
+            <div style={{ marginBottom: '20px' }}>
+              <select style={inputStyle} value={tallaSeleccionada} onChange={e => setTallaSeleccionada(e.target.value)}>
+                {tallasDeInventario.map(t => <option key={t.id} value={t.talla}>{t.talla} (${Number(t.precio_base).toLocaleString()})</option>)}
+                <option value="ESPECIAL">✨ Talla Especial</option>
+              </select>
+              {tallaSeleccionada === 'ESPECIAL' && (
+                <input type="number" placeholder="Precio $" style={{ ...inputStyle, marginTop: '12px', border: '3px solid #3b82f6' }} value={precioManualEspecial} onChange={e => setPrecioManualEspecial(e.target.value)} />
+              )}
+            </div>
+            <button onClick={agregarAlCarrito} type="button" style={{ width: '100%', backgroundColor: '#000', color: '#fff', border: 'none', padding: '14px', borderRadius: '12px', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+              <Plus size={18} /> AGREGAR AL CARRITO
+            </button>
+          </div>
+
+          {carrito.length > 0 && (
+            <div style={{ ...cardStyle, background: '#f0fdf4' }}>
+              <h3 style={labelStyle}>Resumen</h3>
+              {carrito.map((item) => (
+                <div key={item.tempId} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #000' }}>
+                  <span style={{ fontWeight: '800', color: '#000' }}>{item.cantidad}x {item.nombre} ({item.talla})</span>
+                  <button onClick={() => quitarDelCarrito(item.tempId)} style={{ color: 'red', border: 'none', background: 'none', fontWeight: '900', cursor: 'pointer' }}>X</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div style={{ backgroundColor: '#000', color: '#fff', padding: '30px', borderRadius: '24px', border: '3px solid #000', boxShadow: '8px 8px 0px #3b82f6' }}>
+            <p style={{ margin: 0, fontSize: '14px', fontWeight: '900' }}>TOTAL</p>
+            <p style={{ margin: '0 0 20px 0', fontSize: '36px', fontWeight: '900', color: '#4ade80' }}>${totalCalculado.toLocaleString('es-CL')}</p>
+            
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ color: '#fff', fontSize: '12px', fontWeight: '900' }}>ABONO INICIAL $</label>
+              <input type="number" style={{ ...inputStyle, background: '#fff', marginTop: '5px' }} value={abono} onChange={e => setAbono(e.target.value)} />
+            </div>
+
+            {/* SELECTOR DE MÉTODO DE PAGO PARA EL ABONO */}
+            <div style={{ marginBottom: '25px' }}>
+              <label style={{ color: '#fff', fontSize: '12px', fontWeight: '900' }}>MÉTODO DE PAGO</label>
+              <select 
+                style={{ ...inputStyle, background: '#fff', marginTop: '5px' }} 
+                value={metodoPagoInicial} 
+                onChange={e => setMetodoPagoInicial(e.target.value)}
+              >
+                <option value="Transferencia">Transferencia</option>
+                <option value="Efectivo">Efectivo</option>
+                <option value="Débito">Débito</option>
+                <option value="Crédito">Crédito</option>
+              </select>
+            </div>
+
+            <button type="submit" disabled={loading} style={{ width: '100%', backgroundColor: '#4ade80', color: '#000', border: '3px solid #000', padding: '16px', borderRadius: '14px', fontWeight: '900', fontSize: '18px', cursor: 'pointer', boxShadow: '4px 4px 0px #fff' }}>
+              {loading ? 'PROCESANDO...' : 'CONFIRMAR PEDIDO'}
+            </button>
+          </div>
+        </form>
       </div>
     </main>
   )

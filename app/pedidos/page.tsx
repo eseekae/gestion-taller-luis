@@ -111,14 +111,7 @@ export default function VerPedidos() {
       )
       const { estadoMacro, colorEstadoBg, colorEstadoText, itemsCompletos } = calcularEstadoPedido(pedido, detallesActualizados)
 
-      return {
-        ...pedido,
-        detalles: detallesActualizados,
-        estado_macro: estadoMacro,
-        color_bg: colorEstadoBg,
-        color_text: colorEstadoText,
-        itemsCompletos
-      }
+      return { ...pedido, detalles: detallesActualizados, estado_macro: estadoMacro, color_bg: colorEstadoBg, color_text: colorEstadoText, itemsCompletos }
     }))
 
     try {
@@ -127,10 +120,7 @@ export default function VerPedidos() {
         await supabase.rpc(rpcName, { prod_id: det.producto_id, cant: Math.abs(variacion) })
       }
 
-      await supabase.from('detalles_pedido').update({ 
-        cantidad_entregada: nuevaCantidad, 
-        estado: nuevoEstado 
-      }).eq('id', det.id)
+      await supabase.from('detalles_pedido').update({ cantidad_entregada: nuevaCantidad, estado: nuevoEstado }).eq('id', det.id)
 
       const ahora = new Date()
       const fechaFormateada = `${ahora.getDate().toString().padStart(2, '0')}/${(ahora.getMonth() + 1).toString().padStart(2, '0')} ${ahora.getHours().toString().padStart(2, '0')}:${ahora.getMinutes().toString().padStart(2, '0')}`
@@ -154,12 +144,12 @@ export default function VerPedidos() {
         'ID Pedido': p.id,
         'Fecha': new Date(p.created_at).toLocaleDateString('es-CL'),
         'Cliente': p.c_nombre || 'S/N',
-        'Teléfono': p.c_telefono || '', // AGREGADO AL EXCEL
+        'Teléfono': p.c_telefono || '',
         'Colegio': p.colegio || 'Particular',
         'Total Pedido': formatoMoneda(p.total_final),
         'Abono Pedido': formatoMoneda(p.total_pagado),
         'Saldo Pendiente': formatoMoneda(p.total_final - p.total_pagado),
-        'Observaciones': p.observaciones || '' // AGREGADO AL EXCEL
+        'Observaciones': p.observaciones || ''
       })
     })
     const ws = XLSX.utils.json_to_sheet(reporte)
@@ -169,10 +159,17 @@ export default function VerPedidos() {
   }
 
   const agregarPago = async (pedido: any) => {
+    // 1. PREGUNTAR MONTO
     const montoInput = prompt('💰 Nuevo Pago\nMonto:', '')
     if (!montoInput) return
     const monto = Number(montoInput.replace(/\D/g, ''))
     if (isNaN(monto) || monto <= 0) return alert('❌ Monto inválido.')
+
+    // 2. PREGUNTAR FECHA (Por defecto hoy)
+    const fechaPago = prompt('📅 Fecha (YYYY-MM-DD):', new Date().toISOString().split('T')[0]) || new Date().toISOString().split('T')[0]
+
+    // 3. PREGUNTAR MÉTODO (Por defecto Transferencia)
+    const metodo = prompt('💳 Método (Transferencia, Efectivo, Débito, Crédito):', 'Transferencia') || 'Transferencia'
 
     const snapshot = [...datos]
     setDatos(prev => prev.map(p => {
@@ -183,11 +180,12 @@ export default function VerPedidos() {
     }))
 
     try {
+      // GUARDAMOS CON TODOS LOS DATOS Y LA COLUMNA CREADO_POR
       const { error } = await supabase.from('pagos').insert([{
         pedido_id: pedido.id,
         monto: monto,
-        fecha_pago: new Date().toISOString().split('T')[0],
-        metodo_pago: 'Transferencia',
+        fecha_pago: fechaPago,
+        metodo_pago: metodo,
         creado_por: sessionStorage.getItem('user_name') || 'Usuario'
       }])
 
@@ -197,7 +195,7 @@ export default function VerPedidos() {
       const f = `${ahora.getDate().toString().padStart(2, '0')}/${(ahora.getMonth() + 1).toString().padStart(2, '0')} ${ahora.getHours().toString().padStart(2, '0')}:${ahora.getMinutes().toString().padStart(2, '0')}`
       
       await registrarLog(
-        `${sessionStorage.getItem('user_name') || 'Usuario'} registró pago de $${monto.toLocaleString('es-CL')} el ${f}`,
+        `${sessionStorage.getItem('user_name') || 'Usuario'} registró pago de $${monto.toLocaleString('es-CL')} (${metodo}) el ${f}`,
         `Pedido ID: ${pedido.id}`
       )
       cargar()
@@ -259,13 +257,10 @@ export default function VerPedidos() {
                 </div>
                 
                 <h2 style={{ fontWeight: '900', fontSize: '24px', color: '#000000', marginBottom: '4px' }}>{p.c_nombre}</h2>
-                
-                {/* TELÉFONO AGREGADO DEBAJO DEL NOMBRE */}
                 <p style={{ fontSize: '14px', fontWeight: '800', color: '#000', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '5px' }}>
                   <Phone size={14} color="#000" /> {p.c_telefono || 'Sin teléfono'}
                 </p>
 
-                {/* CUADRO DE OBSERVACIONES DE DON LUIS */}
                 {p.observaciones && (
                   <div style={{ backgroundColor: '#fff7ed', border: '2px solid #ea580c', padding: '12px', borderRadius: '12px', marginBottom: '16px' }}>
                     <p style={{ fontSize: '12px', fontWeight: '900', color: '#ea580c', marginBottom: '4px', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '5px' }}>
