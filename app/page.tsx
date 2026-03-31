@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react' // Añadimos hooks para la sesión
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { ShoppingBag, ClipboardList, Package, BarChart3, Scissors, LogOut } from 'lucide-react' // Añadimos LogOut
+import { ShoppingBag, ClipboardList, Package, BarChart3, Scissors, LogOut, History } from 'lucide-react' // Añadimos LogOut
 
 export default function Home() {
   const router = useRouter()
@@ -11,10 +11,12 @@ export default function Home() {
   // 1. Verificación de Seguridad: Obliga a loguearse cada vez que se abre la página
   useEffect(() => {
     const session = sessionStorage.getItem('user_role')
+    const userName = sessionStorage.getItem('user_name')
     if (!session) {
       router.push('/login') 
     } else {
-      setUser(JSON.parse(session))
+      const parsed = JSON.parse(session)
+      setUser({ ...parsed, nombre: userName || parsed.nombre })
     }
   }, [router])
 
@@ -98,6 +100,14 @@ export default function Home() {
             subtitle="Gestión de stock físico e insumos"
             color="#3b82f6" 
             onClick={() => router.push('/inventario')} 
+          />
+
+          <MenuButton
+            icon={<History size={24} />}
+            title="Historial de Movimientos"
+            subtitle="Auditoría de acciones del sistema"
+            color="#0f172a"
+            onClick={() => router.push('/logs')}
           />
 
           {/* Solo el Jefe ve Estadísticas */}

@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
+import { registrarLog } from '../../lib/auditoria'
 import { motion } from 'framer-motion'
 import * as XLSX from 'xlsx-js-style'
 import { ArrowLeft, Search, School, Phone, IdCard, Calendar, Package, Printer, Trash2, CreditCard, MessageCircle, Download, Landmark, Banknote, ChevronDown, ChevronUp } from 'lucide-react'
@@ -138,6 +139,11 @@ export default function VerPedidos() {
         cantidad_entregada: nuevaCantidad, 
         estado: nuevoEstado 
       }).eq('id', det.id)
+
+      void registrarLog(
+        `${sessionStorage.getItem('user_name') || 'Usuario'} modificó entrega de ${det.p_nombre || 'Producto'}`,
+        `Cantidad entregada: ${actual} -> ${nuevaCantidad}`
+      )
     } catch (err) {
       // 3) Si falla backend, revertimos UI local y avisamos
       setDatos(datosPrevios)
@@ -349,14 +355,23 @@ export default function VerPedidos() {
           pagos: (p.pagos || []).map((pg: any) => (String(pg.id).startsWith('temp-') ? (data || pg) : pg))
         }
       }))
+
+      void registrarLog(
+        `${sessionStorage.getItem('user_name') || 'Usuario'} registró un pago de $${Number(monto).toLocaleString('es-CL')} para ${pedido.c_nombre || 'cliente'}`,
+        `Pedido ${pedido.id} - método ${metodo}`
+      )
     } catch (err) {
       setDatos(snapshot)
       alert('❌ Error al guardar el pago. Se revirtió el cambio.')
     }
   }
 
-  const borrarPedido = async (pedidoId: string, detalles: any[]) => {
+  const borrarPedido = async (pedidoId: string, detalles: any[], clienteNombre: string) => {
     if(!confirm('⚠️ ¿Borrar pedido completo?')) return
+    void registrarLog(
+      `${sessionStorage.getItem('user_name') || 'Usuario'} eliminó el pedido de ${clienteNombre || 'cliente'}`,
+      `Pedido ${pedidoId}`
+    )
     await supabase.from('pagos').delete().eq('pedido_id', pedidoId)
     for (const det of detalles) {
       if (det.estado === 'Pendiente' && det.producto_id) {
@@ -508,7 +523,7 @@ export default function VerPedidos() {
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #e2e8f0', paddingTop: '16px', flexWrap: 'wrap', gap: '10px' }}>
-                  <button onClick={() => borrarPedido(p.id, p.detalles)} style={{ color: '#ef4444', fontWeight: '800', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px' }}>
+                  <button onClick={() => borrarPedido(p.id, p.detalles, p.c_nombre)} style={{ color: '#ef4444', fontWeight: '800', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px' }}>
                     <Trash2 size={16} /> Eliminar
                   </button>
                   <div style={{ display: 'flex', gap: '10px' }}>

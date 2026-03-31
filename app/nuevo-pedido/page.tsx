@@ -2,6 +2,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
+import { registrarLog } from '../../lib/auditoria'
 import { motion } from 'framer-motion'
 import { ArrowLeft, User, Phone, IdCard, School, Calendar, ShoppingBag, Plus, X, CreditCard, CheckCircle } from 'lucide-react'
 
@@ -85,6 +86,11 @@ export default function RegistroPedido() {
           metodo_pago: metodoPagoInicial
         }])
       }
+
+      void registrarLog(
+        `${sessionStorage.getItem('user_name') || 'Usuario'} creó el pedido de ${nombreCliente}`,
+        `Pedido ${ped.id} por ${Number(totalCalculado).toLocaleString('es-CL')}`
+      )
 
       // Reservar stock
       for (const item of carrito) {
