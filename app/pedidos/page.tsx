@@ -189,6 +189,17 @@ export default function VerPedidos() {
       const pagos = p.pagos || []
 
       // Fila encabezado del pedido
+      // Determinar última actividad del pedido
+      let ultimaActividad = 'Sin actividad'
+      const logsPedido = logs.filter(log => 
+        log.accion.includes(p.id.toString()) || 
+        log.accion.includes(p.c_nombre || '')
+      )
+      if (logsPedido.length > 0) {
+        const logMasReciente = logsPedido[0] // ya vienen ordenados por fecha descendente
+        ultimaActividad = new Date(logMasReciente.fecha).toLocaleDateString('es-CL')
+      }
+
       reporte.push({
         'Tipo': 'PEDIDO',
         'ID Pedido': p.id,
@@ -202,6 +213,7 @@ export default function VerPedidos() {
         'Cantidad': '',
         'Cantidad Entregada': '',
         'Fecha de Entrega': '',
+        'Última Actividad': ultimaActividad,
         'Precio Unitario': '',
         'Total Ítem': '',
         'Total Pedido': formatoMoneda(totalPedido),
@@ -253,6 +265,7 @@ export default function VerPedidos() {
           'Cantidad': cantidad,
           'Cantidad Entregada': cantidadEntregada,
           'Fecha de Entrega': fechaEntrega,
+          'Última Actividad': '',
           'Precio Unitario': formatoMoneda(precioUnitario),
           'Total Ítem': formatoMoneda(totalItem),
           'Total Pedido': '',
@@ -277,6 +290,7 @@ export default function VerPedidos() {
           'Cantidad': '',
           'Cantidad Entregada': '',
           'Fecha de Entrega': '',
+          'Última Actividad': '',
           'Precio Unitario': '',
           'Total Ítem': '',
           'Total Pedido': '',
@@ -293,7 +307,7 @@ export default function VerPedidos() {
     const ws = XLSX.utils.json_to_sheet(reporte)
 
     const bordeNegro = { rgb: '000000' }
-    const columnasTotales = 18 // A..R (una columna más por Fecha de Entrega)
+    const columnasTotales = 19 // A..S (una columna más por Última Actividad)
     const asegurarCelda = (fila: number, col: number) => {
       const dir = XLSX.utils.encode_cell({ r: fila - 1, c: col })
       if (!ws[dir]) ws[dir] = { t: 's', v: '' }
@@ -384,9 +398,14 @@ export default function VerPedidos() {
     })
 
     try {
+      // Validar que el pedido_id exista
+      if (!pedido.id) {
+        throw new Error('ID de pedido no válido')
+      }
+
       const { data, error } = await supabase.from('pagos').insert([{
         pedido_id: pedido.id,
-        monto,
+        monto: Number(monto),
         fecha_pago: fechaPago,
         metodo_pago: metodo,
         creado_por: sessionStorage.getItem('user_name') || ''
@@ -401,8 +420,12 @@ export default function VerPedidos() {
         }
       }))
 
+      // Formatear fecha y hora actual para el log
+      const ahora = new Date()
+      const fechaFormateada = `${ahora.getDate().toString().padStart(2, '0')}/${(ahora.getMonth() + 1).toString().padStart(2, '0')} ${ahora.getHours().toString().padStart(2, '0')}:${ahora.getMinutes().toString().padStart(2, '0')}`
+      
       await registrarLog(
-        `${sessionStorage.getItem('user_name') || 'Usuario'} registró un pago de $${Number(monto).toLocaleString('es-CL')} para ${pedido.c_nombre || 'cliente'}`,
+        `${sessionStorage.getItem('user_name') || 'Usuario'} registró pago de $${Number(monto).toLocaleString('es-CL')} el ${fechaFormateada}`,
         `Pedido ${pedido.id} - método ${metodo}`
       )
     } catch (err) {
@@ -609,7 +632,7 @@ export default function VerPedidos() {
             {logs.length === 0 ? (
               <p style={{ fontWeight: '800', color: '#64748b' }}>No hay registros en el historial.</p>
             ) : (
-              logs.map((log) => (
+              logs.filter(log => log && log.accion && log.fecha).map((log) => (
                 <div key={log.id} style={{ 
                   backgroundColor: log.usuario === 'Admin' ? '#eff6ff' : '#fff', 
                   border: '2px solid #000', 
@@ -619,14 +642,14 @@ export default function VerPedidos() {
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                     <span style={{ backgroundColor: '#000', color: '#fff', padding: '5px 12px', borderRadius: '6px', fontSize: '11px', fontWeight: '900' }}>
-                      {log.usuario}
+                      {log.usuario || 'Sistema'}
                     </span>
                     <span style={{ fontSize: '12px', fontWeight: '800', color: '#64748b' }}>
-                      {new Date(log.fecha).toLocaleString()}
+                      {log.fecha ? new Date(log.fecha).toLocaleString() : 'Fecha no disponible'}
                     </span>
                   </div>
-                  <p style={{ margin: '0 0 6px 0', fontSize: '15px', fontWeight: '900', color: '#000' }}>{log.accion}</p>
-                  <p style={{ margin: 0, fontSize: '13px', fontWeight: '700', color: '#475569' }}>{log.detalles}</p>
+                  <p style={{ margin: '0 0 6px 0', fontSize: '15px', fontWeight: '900', color: '#000' }}>{log.accion || 'Acción no registrada'}</p>
+                  <p style={{ margin: 0, fontSize: '13px', fontWeight: '700', color: '#475569' }}>{log.detalles || ''}</p>
                 </div>
               ))
             )}
