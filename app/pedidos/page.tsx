@@ -142,21 +142,45 @@ export default function VerPedidos() {
   }
 
   const exportarExcel = () => {
-    const reporte = datos.map(p => ({
-      Fecha: new Date(p.created_at).toLocaleDateString('es-CL'),
-      Cliente: p.c_nombre,
-      Telefono: p.c_telefono,
-      RUT: p.c_rut,
-      Colegio: p.colegio || 'Particular',
-      Total: p.total_final,
-      Abono: p.abono,
-      Saldo: p.total_final - p.abono,
-      Estado: p.estado_macro
-    }))
+    const reporte: any[] = []
+
+    datos.forEach(p => {
+      const saldoPendiente = Number(p.total_final || 0) - Number(p.abono || 0)
+      const detalles = p.detalles || []
+
+      detalles.forEach((det: any) => {
+        const cantidadTotal = Number(det.cantidad || 0)
+        const cantidadEntregada = Number(det.cantidad_entregada || 0)
+        const precioUnitarioBase =
+          det.precio_unitario ??
+          det.precio ??
+          (cantidadTotal > 0 ? Number(det.subtotal || 0) / cantidadTotal : 0)
+        const precioUnitario = Number(precioUnitarioBase || 0)
+        const totalItem = cantidadTotal * precioUnitario
+        const estadoItem = cantidadEntregada >= cantidadTotal && cantidadTotal > 0 ? 'Entregado' : 'Pendiente'
+
+        reporte.push({
+          'ID Pedido': p.id,
+          'Fecha': new Date(p.created_at).toLocaleDateString('es-CL'),
+          'Cliente': p.c_nombre || 'S/N',
+          'Colegio': p.colegio || 'Particular',
+          'Descripción Item': det.p_nombre || 'Producto',
+          'Talla': det.talla || '',
+          'Cantidad Total': cantidadTotal,
+          'Cantidad Entregada': cantidadEntregada,
+          'Precio Unitario': precioUnitario,
+          'Total Item': totalItem,
+          'Estado Item': estadoItem,
+          'Abono Pedido': Number(p.abono || 0),
+          'Saldo Pendiente': saldoPendiente
+        })
+      })
+    })
+
     const ws = XLSX.utils.json_to_sheet(reporte)
     const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, "Ventas")
-    XLSX.writeFile(wb, `Respaldo_Ventas_${new Date().toISOString().split('T')[0]}.xlsx`)
+    XLSX.utils.book_append_sheet(wb, ws, "Reporte Detallado")
+    XLSX.writeFile(wb, `Reporte_Detallado_Ventas_${new Date().toISOString().split('T')[0]}.xlsx`)
   }
 
   const actualizarAbono = async (pedidoId: string, totalFinal: number, abonoActual: number) => {
