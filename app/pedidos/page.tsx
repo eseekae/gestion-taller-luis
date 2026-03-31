@@ -226,11 +226,11 @@ export default function VerPedidos() {
     .filter(p => filtro === 'Todos' || (filtro === 'Pendientes' && p.estado_macro !== 'Completado') || p.estado_macro === filtro)
 
   return (
-    <main style={{ minHeight: '100vh', backgroundColor: '#cbd5e1', padding: '20px', fontFamily: 'sans-serif' }}>
+    <main style={{ minHeight: '100vh', backgroundColor: '#ffffff', padding: '20px', fontFamily: 'sans-serif' }}>
       <div style={{ maxWidth: '650px', margin: '0 auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '25px' }}>
           <button onClick={() => router.push('/')} style={{ backgroundColor: '#fff', border: '3px solid #000', padding: '10px', borderRadius: '12px', boxShadow: '4px 4px 0px #000' }}><ArrowLeft size={20} /></button>
-          <h1 style={{ fontSize: '24px', fontWeight: '900' }}>Gestión de Pedidos</h1>
+          <h1 style={{ fontSize: '24px', fontWeight: '900', color: '#000' }}>Gestión de Pedidos</h1>
           <button onClick={exportarExcel} style={{ backgroundColor: '#166534', color: '#fff', padding: '10px 16px', borderRadius: '12px', fontWeight: '800', border: '3px solid #000', boxShadow: '4px 4px 0px #000' }}><Download size={18} /> Excel</button>
         </div>
 
@@ -253,17 +253,17 @@ export default function VerPedidos() {
             return (
               <div key={p.id} style={{ backgroundColor: '#fff', padding: '24px', borderRadius: '24px', border: '3px solid #000', boxShadow: '8px 8px 0px #000' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
-                  <span style={{ fontWeight: '800', fontSize: '12px' }}><School size={12} /> {p.colegio || 'Particular'}</span>
+                  <span style={{ fontWeight: '800', fontSize: '12px', color: '#000' }}><School size={12} /> {p.colegio || 'Particular'}</span>
                   <span style={{ backgroundColor: p.color_bg, color: p.color_text, padding: '6px 12px', borderRadius: '8px', fontWeight: '800', border: '2px solid #000' }}>{p.estado_macro}</span>
                 </div>
-                <h2 style={{ fontWeight: '900', fontSize: '24px' }}>{p.c_nombre}</h2>
+                <h2 style={{ fontWeight: '900', fontSize: '24px', color: '#000' }}>{p.c_nombre}</h2>
                 <button onClick={() => setExpandidos(prev => ({ ...prev, [p.id]: !prev[p.id] }))} style={{ width: '100%', margin: '16px 0', border: '3px solid #000', borderRadius: '10px', padding: '10px', fontWeight: '900', background: '#f1f5f9' }}>{expandido ? 'Ocultar Detalle' : 'Ver Detalle'}</button>
 
                 {expandido && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '20px' }}>
                     {p.detalles?.map((det: any, idx: number) => (
                       <div key={idx} style={{ padding: '12px', border: '2px solid #000', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', background: '#f8fafc' }}>
-                        <div><p style={{ fontWeight: '800' }}>{det.p_nombre}</p><p style={{ fontSize: '12px' }}>{det.cantidad_entregada || 0} de {det.cantidad}</p></div>
+                        <div><p style={{ fontWeight: '800', color: '#000' }}>{det.p_nombre}</p><p style={{ fontSize: '12px' }}>{det.cantidad_entregada || 0} de {det.cantidad}</p></div>
                         <div style={{ display: 'flex', gap: '5px' }}>
                           <button onClick={() => actualizarEntrega(det, -1)} style={{ border: '2px solid #000', borderRadius: '8px', padding: '5px', background: '#fff' }}>-</button>
                           <button onClick={() => actualizarEntrega(det, 1)} style={{ background: '#000', color: '#fff', borderRadius: '8px', padding: '5px', border: '2px solid #000' }}>+1</button>
