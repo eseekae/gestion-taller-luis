@@ -36,9 +36,11 @@ export default function VerPedidos() {
       supabase.from('inventario').select('*'),
       supabase.from('detalles_pedido').select('*').order('id'),
       supabase.from('pagos').select('*').order('fecha_pago', { ascending: true }),
-      supabase.from('auditoria').select('*').order('fecha', { ascending: false }).limit(20)
+            supabase.from('auditoria').select('*').order('fecha', { ascending: false }).limit(20)
     ])
+    console.log("LOGS:", aRes)
     setLogs(aRes.data || [])
+
 
     
     const cruzados = (pRes.data || []).map(p => {
@@ -159,7 +161,7 @@ export default function VerPedidos() {
   }
 
   const abrirWhatsApp = (telefono: string) => {
-    const numLimpio = telefono.replace(/\D/g, '')
+    const numLimpio = navigation.replace(/\D/g, '')
     const link = `https://wa.me/${numLimpio.startsWith('56') ? numLimpio : '56' + numLimpio}`
     window.open(link, '_blank')
   }
@@ -598,4 +600,5 @@ export default function VerPedidos() {
     </main>
 
   )
+}
 }
