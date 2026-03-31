@@ -243,14 +243,14 @@ export default function Inventario() {
                                     <div key={i.id} style={{ border: '2px solid #000', padding: '15px', borderRadius: '15px', backgroundColor: agotado ? '#ff0101' : '#fff', boxShadow: '4px 4px 0px #000' }}>
                                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                          <span style={{ fontWeight: '900', fontSize: '18px' }}>Talla {i.talla}</span>
+                                          <span style={{ fontWeight: '900', fontSize: '18px', color: '#000' }}>Talla {i.talla}</span>
                                           <span style={{ fontWeight: '800', color: '#166534' }}>${Number(i.precio_base).toLocaleString()}</span>
                                         </div>
                                         <button onClick={() => eliminarVariante(i.id)} style={{ color: '#ef4444', border: 'none', background: 'none', cursor: 'pointer' }}><Trash2 size={18} /></button>
                                       </div>
                                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                                         <div style={{ background: '#f1f5f9', padding: '8px', borderRadius: '10px', border: '2px solid #000', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                          <span style={{ fontSize: '10px', fontWeight: '900' }}>FÍSICO:</span>
+                                          <span style={{ fontSize: '10px', fontWeight: '900', color: '#000' }}>FÍSICO:</span>
                                           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                                             <button onClick={() => ajustarStock(i.id, -1)} style={{ background: '#ef4444', color: '#fff', border: '1px solid #000', borderRadius: '4px', width: '24px' }}>-</button>
                                             <span style={{ fontWeight: '900' }}>{i.stock}</span>
@@ -258,7 +258,7 @@ export default function Inventario() {
                                           </div>
                                         </div>
                                         <div style={{ background: '#fffbeb', padding: '8px', borderRadius: '10px', border: '2px solid #000', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                          <span style={{ fontSize: '10px', fontWeight: '900' }}>RSV:</span>
+                                          <span style={{ fontSize: '10px', fontWeight: '900', color: '#000' }}>RSV:</span>
                                           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                                             <button onClick={() => ajustarReserva(i.id, -1)} style={{ background: '#f59e0b', color: '#fff', border: '1px solid #000', borderRadius: '4px', width: '24px' }}>-</button>
                                             <span style={{ fontWeight: '900' }}>{i.stock_reservado || 0}</span>
