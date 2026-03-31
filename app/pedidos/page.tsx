@@ -59,7 +59,28 @@ export default function VerPedidos() {
     setLoading(false)
   }, [router])
 
-  // NUEVA FUNCIÓN DE ENTREGA PARCIAL
+  const calcularEstadoPedido = (pedido: any, detallesActualizados: any[]) => {
+    const itemsCompletos = detallesActualizados?.length > 0 && detallesActualizados.every(d => (d.cantidad_entregada || 0) === d.cantidad)
+    const pagoCompleto = pedido.abono >= pedido.total_final
+
+    let estadoMacro = ''
+    let colorEstadoBg = ''
+    let colorEstadoText = ''
+
+    if (itemsCompletos && pagoCompleto) {
+      estadoMacro = 'Completado'; colorEstadoBg = '#dcfce7'; colorEstadoText = '#166534'
+    } else if (!itemsCompletos && pagoCompleto) {
+      estadoMacro = 'Pend. Entrega'; colorEstadoBg = '#dbeafe'; colorEstadoText = '#1e40af'
+    } else if (itemsCompletos && !pagoCompleto) {
+      estadoMacro = 'Pend. Pago'; colorEstadoBg = '#ffedd5'; colorEstadoText = '#c2410c'
+    } else {
+      estadoMacro = 'Pend. Entrega y Pago'; colorEstadoBg = '#fef3c7'; colorEstadoText = '#b45309'
+    }
+
+    return { estadoMacro, colorEstadoBg, colorEstadoText, itemsCompletos }
+  }
+
+  // ENTREGA PARCIAL CON OPTIMISTIC UI + ROLLBACK
   const actualizarEntrega = async (det: any, cambio: number | 'todo') => {
     const actual = det.cantidad_entregada || 0
     const total = det.cantidad
@@ -67,22 +88,51 @@ export default function VerPedidos() {
 
     if (nuevaCantidad < 0 || nuevaCantidad > total) return
     const variacion = nuevaCantidad - actual
+    if (variacion === 0) return
+
+    const pedidoObjetivoId = det.pedido_id
+    const nuevoEstado = nuevaCantidad === total ? 'Entregado' : 'Pendiente'
+    let datosPrevios: any[] = []
+
+    // 1) Actualizamos UI local al instante
+    setDatos(prev => {
+      datosPrevios = prev
+      return prev.map(pedido => {
+        const perteneceAlPedido = pedido.id === pedidoObjetivoId || pedido.detalles?.some((d: any) => d.id === det.id)
+        if (!perteneceAlPedido) return pedido
+
+        const detallesActualizados = (pedido.detalles || []).map((d: any) =>
+          d.id === det.id ? { ...d, cantidad_entregada: nuevaCantidad, estado: nuevoEstado } : d
+        )
+        const { estadoMacro, colorEstadoBg, colorEstadoText, itemsCompletos } = calcularEstadoPedido(pedido, detallesActualizados)
+
+        return {
+          ...pedido,
+          detalles: detallesActualizados,
+          estado_macro: estadoMacro,
+          color_bg: colorEstadoBg,
+          color_text: colorEstadoText,
+          itemsCompletos
+        }
+      })
+    })
 
     try {
-      if (det.producto_id && variacion !== 0) {
-        // Usamos tus funciones RPC originales
+      // 2) Sincronizamos en background con Supabase
+      if (det.producto_id) {
         const rpcName = variacion > 0 ? 'entregar_stock' : 'revertir_entrega_stock'
         await supabase.rpc(rpcName, { prod_id: det.producto_id, cant: Math.abs(variacion) })
       }
 
-      const nuevoEstado = nuevaCantidad === total ? 'Entregado' : 'Pendiente'
       await supabase.from('detalles_pedido').update({ 
         cantidad_entregada: nuevaCantidad, 
         estado: nuevoEstado 
       }).eq('id', det.id)
-
-      cargar()
-    } catch (err) { alert("Error: " + err) }
+    } catch (err) {
+      // 3) Si falla backend, revertimos UI local y avisamos
+      setDatos(datosPrevios)
+      alert("❌ No se pudo sincronizar la entrega. Se revirtió el cambio.")
+    }
   }
 
   const abrirWhatsApp = (telefono: string) => {
@@ -211,9 +261,9 @@ export default function VerPedidos() {
                         </div>
                         
                         <div style={{ display: 'flex', gap: '5px' }}>
-                          <button onClick={() => actualizarEntrega(det, -1)} style={{ backgroundColor: '#fff', border: '1px solid #000', padding: '5px 10px', borderRadius: '6px', fontWeight: '900', cursor: 'pointer' }}>-</button>
-                          <button onClick={() => actualizarEntrega(det, 1)} style={{ backgroundColor: '#000', color: '#fff', border: 'none', padding: '5px 10px', borderRadius: '6px', fontWeight: '900', cursor: 'pointer' }}>+1</button>
-                          <button onClick={() => actualizarEntrega(det, 'todo')} style={{ backgroundColor: entregadoTotal ? '#10b981' : '#fff', color: entregadoTotal ? '#fff' : '#000', border: '1px solid #000', padding: '5px 10px', borderRadius: '6px', fontWeight: '800', fontSize: '11px', cursor: 'pointer' }}>
+                          <button onClick={() => actualizarEntrega(det, -1)} style={{ backgroundColor: '#fff', color: '#000', border: '2px solid #000', padding: '5px 10px', borderRadius: '8px', fontWeight: '900', cursor: 'pointer' }}>-</button>
+                          <button onClick={() => actualizarEntrega(det, 1)} style={{ backgroundColor: '#000', color: '#fff', border: '2px solid #000', padding: '5px 10px', borderRadius: '8px', fontWeight: '900', cursor: 'pointer' }}>+1</button>
+                          <button onClick={() => actualizarEntrega(det, 'todo')} style={{ backgroundColor: entregadoTotal ? '#10b981' : '#fff', color: entregadoTotal ? '#fff' : '#000', border: '2px solid #000', padding: '5px 10px', borderRadius: '8px', fontWeight: '800', fontSize: '11px', cursor: 'pointer' }}>
                             {entregadoTotal ? '✓' : 'TODO'}
                           </button>
                         </div>
