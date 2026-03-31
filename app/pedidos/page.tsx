@@ -154,8 +154,12 @@ export default function VerPedidos() {
         estado: nuevoEstado 
       }).eq('id', det.id)
 
+      // Formatear fecha y hora actual para el log
+      const ahora = new Date()
+      const fechaFormateada = `${ahora.getDate().toString().padStart(2, '0')}/${(ahora.getMonth() + 1).toString().padStart(2, '0')} ${ahora.getHours().toString().padStart(2, '0')}:${ahora.getMinutes().toString().padStart(2, '0')}`
+      
       await registrarLog(
-        `${sessionStorage.getItem('user_name') || 'Usuario'} modificó entrega de ${det.p_nombre || 'Producto'}`,
+        `${sessionStorage.getItem('user_name') || 'Usuario'} entregó ${variacion > 0 ? variacion : Math.abs(variacion)} de ${det.p_nombre || 'Producto'} el ${fechaFormateada}`,
         `Cantidad entregada: ${actual} -> ${nuevaCantidad}`
       )
     } catch (err) {
@@ -197,6 +201,7 @@ export default function VerPedidos() {
         'Talla': '',
         'Cantidad': '',
         'Cantidad Entregada': '',
+        'Fecha de Entrega': '',
         'Precio Unitario': '',
         'Total Ítem': '',
         'Total Pedido': formatoMoneda(totalPedido),
@@ -216,6 +221,25 @@ export default function VerPedidos() {
         const precioUnitario = Number(precioUnitarioBase || 0)
         const totalItem = cantidad * precioUnitario
 
+        // Determinar fecha de entrega
+        let fechaEntrega = 'Pendiente'
+        if (cantidadEntregada > 0) {
+          // Buscar el log más reciente de entrega para este producto
+          const logEntrega = logs.find(log => 
+            log.accion.includes('entregó') && 
+            log.accion.includes(det.p_nombre || 'Producto')
+          )
+          if (logEntrega) {
+            // Extraer fecha del log o usar la fecha del log
+            const match = logEntrega.accion.match(/el (\d{2}\/\d{2} \d{2}:\d{2})/)
+            if (match) {
+              fechaEntrega = match[1]
+            } else {
+              fechaEntrega = new Date(logEntrega.fecha).toLocaleDateString('es-CL')
+            }
+          }
+        }
+
         reporte.push({
           'Tipo': 'ÍTEM',
           'ID Pedido': '',
@@ -228,6 +252,7 @@ export default function VerPedidos() {
           'Talla': det.talla || '',
           'Cantidad': cantidad,
           'Cantidad Entregada': cantidadEntregada,
+          'Fecha de Entrega': fechaEntrega,
           'Precio Unitario': formatoMoneda(precioUnitario),
           'Total Ítem': formatoMoneda(totalItem),
           'Total Pedido': '',
@@ -251,6 +276,7 @@ export default function VerPedidos() {
           'Talla': '',
           'Cantidad': '',
           'Cantidad Entregada': '',
+          'Fecha de Entrega': '',
           'Precio Unitario': '',
           'Total Ítem': '',
           'Total Pedido': '',
@@ -267,7 +293,7 @@ export default function VerPedidos() {
     const ws = XLSX.utils.json_to_sheet(reporte)
 
     const bordeNegro = { rgb: '000000' }
-    const columnasTotales = 17 // A..Q
+    const columnasTotales = 18 // A..R (una columna más por Fecha de Entrega)
     const asegurarCelda = (fila: number, col: number) => {
       const dir = XLSX.utils.encode_cell({ r: fila - 1, c: col })
       if (!ws[dir]) ws[dir] = { t: 's', v: '' }
