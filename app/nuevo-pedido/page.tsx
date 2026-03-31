@@ -91,7 +91,7 @@ export default function RegistroPedido() {
         }])
       }
 
-      void registrarLog(
+      await registrarLog(
         `${sessionStorage.getItem('user_name') || 'Usuario'} creó el pedido de ${nombreCliente}`,
         `Pedido ${ped.id} por ${Number(totalCalculado).toLocaleString('es-CL')}`
       )

@@ -142,7 +142,7 @@ export default function VerPedidos() {
         estado: nuevoEstado 
       }).eq('id', det.id)
 
-      void registrarLog(
+      await registrarLog(
         `${sessionStorage.getItem('user_name') || 'Usuario'} modificó entrega de ${det.p_nombre || 'Producto'}`,
         `Cantidad entregada: ${actual} -> ${nuevaCantidad}`
       )
@@ -363,7 +363,7 @@ export default function VerPedidos() {
         }
       }))
 
-      void registrarLog(
+      await registrarLog(
         `${sessionStorage.getItem('user_name') || 'Usuario'} registró un pago de $${Number(monto).toLocaleString('es-CL')} para ${pedido.c_nombre || 'cliente'}`,
         `Pedido ${pedido.id} - método ${metodo}`
       )
@@ -383,18 +383,22 @@ export default function VerPedidos() {
         return
       }
     }
-    void registrarLog(
-      `${usuario || 'Usuario'} eliminó el pedido de ${clienteNombre || 'cliente'}`,
-      `Pedido ${pedidoId}`
-    )
-    await supabase.from('pagos').delete().eq('pedido_id', pedidoId)
-    for (const det of detalles) {
-      if (det.estado === 'Pendiente' && det.producto_id) {
-        await supabase.rpc('reservar_stock', { prod_id: det.producto_id, cant: -det.cantidad })
+    try {
+      await supabase.from('pagos').delete().eq('pedido_id', pedidoId)
+      for (const det of detalles) {
+        if (det.estado === 'Pendiente' && det.producto_id) {
+          await supabase.rpc('reservar_stock', { prod_id: det.producto_id, cant: -det.cantidad })
+        }
       }
+      await supabase.from('pedidos').delete().eq('id', pedidoId)
+      await registrarLog(
+        `${usuario || 'Usuario'} eliminó el pedido de ${clienteNombre || 'cliente'}`,
+        `Pedido ${pedidoId}`
+      )
+      cargar()
+    } catch (err) {
+      alert('❌ No se pudo eliminar el pedido.')
     }
-    await supabase.from('pedidos').delete().eq('id', pedidoId)
-    cargar()
   }
 
   useEffect(() => { cargar() }, [cargar])
