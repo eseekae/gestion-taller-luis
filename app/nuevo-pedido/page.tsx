@@ -10,6 +10,7 @@ export default function RegistroPedido() {
   const router = useRouter()
   const [usuarioActivo, setUsuarioActivo] = useState('')
   const [inventario, setInventario] = useState<any[]>([])
+  const [listaColegios, setListaColegios] = useState<any[]>([]) // NUEVA LISTA
   const [carrito, setCarrito] = useState<any[]>([])
   
   const [nombreSeleccionado, setNombreSeleccionado] = useState('')
@@ -21,7 +22,7 @@ export default function RegistroPedido() {
   const [nombreCliente, setNombreCliente] = useState('')
   const [rut, setRut] = useState('')
   const [telefono, setTelefono] = useState('')
-  const [colegio, setColegio] = useState('')
+  const [colegio, setColegio] = useState('') // AHORA SE LLENA DESDE LA LISTA
   const [fechaEntrega, setFechaEntrega] = useState('')
   const [observaciones, setObservaciones] = useState('') 
   
@@ -33,13 +34,21 @@ export default function RegistroPedido() {
   useEffect(() => {
     setUsuarioActivo(sessionStorage.getItem('user_name') || '')
     const fetch = async () => {
-      const { data } = await supabase.from('inventario').select('*').order('nombre')
-      if (data) {
-        setInventario(data)
-        if (data.length > 0) {
-          setNombreSeleccionado(data[0].nombre)
-          setTallaSeleccionada(data[0].talla)
+      // Cargamos Inventario
+      const { data: inv } = await supabase.from('inventario').select('*').order('nombre')
+      if (inv) {
+        setInventario(inv)
+        if (inv.length > 0) {
+          setNombreSeleccionado(inv[0].nombre)
+          setTallaSeleccionada(inv[0].talla)
         }
+      }
+      
+      // CARGAMOS COLEGIOS DESDE LA TABLA MAESTRA
+      const { data: col } = await supabase.from('colegios').select('*').order('nombre')
+      if (col) {
+        setListaColegios(col)
+        if (col.length > 0) setColegio(col[0].nombre) // Primer colegio por defecto
       }
     }
     fetch()
@@ -70,16 +79,9 @@ export default function RegistroPedido() {
     if (carrito.length === 0) return alert("Añade algo al pedido primero")
     setLoading(true)
     try {
-      // 1. REGISTRAR CLIENTE
       const { data: cli, error: cliError } = await supabase.from('clientes').insert([{ nombre: nombreCliente, telefono, rut }]).select().single()
+      if (cliError || !cli) throw new Error(`Error al registrar cliente: ${cliError?.message}`)
       
-      // FIX: Verificamos error de Supabase para evitar el crash de 'reading id'
-      if (cliError || !cli) {
-        console.error("Error cliente:", cliError)
-        throw new Error(`Error al registrar cliente: ${cliError?.message || 'Fallo inesperado'}`)
-      }
-      
-      // 2. REGISTRAR PEDIDO
       const { data: ped, error: pedError } = await supabase.from('pedidos').insert([{
         cliente_id: cli.id, 
         total_final: totalCalculado, 
@@ -90,34 +92,26 @@ export default function RegistroPedido() {
         observaciones: observaciones,
         creado_por: sessionStorage.getItem('user_name') || ''
       }]).select().single()
+      if (pedError || !ped) throw new Error(`Error al registrar pedido: ${pedError?.message}`)
 
-      if (pedError || !ped) {
-        console.error("Error pedido:", pedError)
-        throw new Error(`Error al registrar pedido: ${pedError?.message || 'Fallo inesperado'}`)
-      }
-
-      // 3. REGISTRAR DETALLES
       const detalles = carrito.map(item => ({
         pedido_id: ped.id, producto_id: item.id_inv, cantidad: item.cantidad, talla: item.talla, precio_unitario: item.precio, estado: 'Pendiente'
       }))
-      const { error: detError } = await supabase.from('detalles_pedido').insert(detalles)
-      if (detError) throw detError
+      await supabase.from('detalles_pedido').insert(detalles)
 
-      // 4. REGISTRAR PAGO SI HAY ABONO
       if (Number(abono) > 0) {
-        const { error: pagoError } = await supabase.from('pagos').insert([{
+        await supabase.from('pagos').insert([{
           pedido_id: ped.id,
           monto: Number(abono),
           fecha_pago: fechaPagoInicial,
-          metodo_pago: metodoPagoInicial, // USAMOS LA VARIABLE DEL SELECTOR
+          metodo_pago: metodoPagoInicial,
           creado_por: sessionStorage.getItem('user_name') || ''
         }])
-        if (pagoError) throw pagoError
       }
 
       await registrarLog(
         `${sessionStorage.getItem('user_name') || 'Usuario'} creó el pedido de ${nombreCliente}`,
-        `Pedido ${ped.id} - Obs: ${observaciones.substring(0, 20)}...`
+        `Pedido ${ped.id} - Col: ${colegio}`
       )
 
       for (const item of carrito) {
@@ -125,14 +119,10 @@ export default function RegistroPedido() {
       }
 
       alert("✅ Venta registrada con éxito."); router.push('/pedidos')
-    } catch (err: any) { 
-      // Mostramos el error exacto para saber qué falló en Supabase (RLS, columnas, etc)
-      alert(err.message) 
-    }
+    } catch (err: any) { alert(err.message) }
     finally { setLoading(false) }
   }
 
-  // ESTILOS NEUBRUTALISM
   const cardStyle = { backgroundColor: '#fff', padding: '24px', borderRadius: '24px', border: '3px solid #000', boxShadow: '8px 8px 0px #000', marginBottom: '20px' }
   const inputStyle = { width: '100%', padding: '12px 16px', border: '3px solid #000', borderRadius: '12px', fontSize: '15px', color: '#000', outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' as const }
   const labelStyle = { fontSize: '12px', fontWeight: '900', color: '#000', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px', textTransform: 'uppercase' as const }
@@ -145,54 +135,36 @@ export default function RegistroPedido() {
           <button onClick={() => router.push('/')} style={{ backgroundColor: '#fff', border: '3px solid #000', padding: '10px', borderRadius: '12px', color: '#000', cursor: 'pointer', boxShadow: '4px 4px 0px #000' }}>
             <ArrowLeft size={20} />
           </button>
-          <div>
-            <h1 style={{ margin: 0, fontSize: '24px', fontWeight: '900', color: '#000' }}>Nueva Venta</h1>
-          </div>
+          <h1 style={{ margin: 0, fontSize: '24px', fontWeight: '900', color: '#000' }}>Nueva Venta</h1>
         </div>
 
         <form onSubmit={guardar}>
-          
           <div style={cardStyle}>
             <h2 style={{ margin: '0 0 20px 0', fontSize: '16px', fontWeight: '900', color: '#000', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <User size={18} /> Información del Cliente
             </h2>
-            
             <div style={{ display: 'grid', gap: '16px' }}>
-              <div>
-                <label style={labelStyle}>Nombre Completo</label>
-                <input required style={inputStyle} value={nombreCliente} onChange={e => setNombreCliente(e.target.value)} />
-              </div>
-              
+              <div><label style={labelStyle}>Nombre Completo</label><input required style={inputStyle} value={nombreCliente} onChange={e => setNombreCliente(e.target.value)} /></div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                <div>
-                  <label style={labelStyle}><IdCard size={14} /> RUT</label>
-                  <input style={inputStyle} value={rut} onChange={e => setRut(e.target.value)} />
-                </div>
-                <div>
-                  <label style={labelStyle}><Phone size={14} /> Teléfono</label>
-                  <input required style={inputStyle} value={telefono} onChange={e => setTelefono(e.target.value)} />
-                </div>
+                <div><label style={labelStyle}><IdCard size={14} /> RUT</label><input style={inputStyle} value={rut} onChange={e => setRut(e.target.value)} /></div>
+                <div><label style={labelStyle}><Phone size={14} /> Teléfono</label><input required style={inputStyle} value={telefono} onChange={e => setTelefono(e.target.value)} /></div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div>
                   <label style={labelStyle}><School size={14} /> Colegio</label>
-                  <input style={inputStyle} value={colegio} onChange={e => setColegio(e.target.value)} />
+                  {/* SELECTOR DE COLEGIO MAESTRO */}
+                  <select style={inputStyle} value={colegio} onChange={e => setColegio(e.target.value)}>
+                    {listaColegios.length === 0 ? <option>Añade colegios en Inventario...</option> : 
+                      listaColegios.map(c => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
+                  </select>
                 </div>
-                <div>
-                  <label style={labelStyle}><Calendar size={14} /> Entrega</label>
-                  <input type="date" style={inputStyle} value={fechaEntrega} onChange={e => setFechaEntrega(e.target.value)} />
-                </div>
+                <div><label style={labelStyle}><Calendar size={14} /> Entrega</label><input type="date" style={inputStyle} value={fechaEntrega} onChange={e => setFechaEntrega(e.target.value)} /></div>
               </div>
 
               <div>
                 <label style={labelStyle}><MessageSquare size={14} /> Observaciones (Don Luis)</label>
-                <textarea 
-                  style={{ ...inputStyle, height: '80px', resize: 'none', fontFamily: 'sans-serif' }} 
-                  placeholder="Ej: Entregar en portería..." 
-                  value={observaciones} 
-                  onChange={e => setObservaciones(e.target.value)}
-                />
+                <textarea style={{ ...inputStyle, height: '80px', resize: 'none', fontFamily: 'sans-serif' }} placeholder="Ej: Entregar en portería..." value={observaciones} onChange={e => setObservaciones(e.target.value)} />
               </div>
             </div>
           </div>
@@ -202,9 +174,7 @@ export default function RegistroPedido() {
               <ShoppingBag size={18} /> Productos
             </h2>
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px', marginBottom: '16px' }}>
-              <select style={inputStyle} value={nombreSeleccionado} onChange={e => setNombreSeleccionado(e.target.value)}>
-                {productosUnicos.map(n => <option key={n} value={n}>{n}</option>)}
-              </select>
+              <select style={inputStyle} value={nombreSeleccionado} onChange={e => setNombreSeleccionado(e.target.value)}>{productosUnicos.map(n => <option key={n} value={n}>{n}</option>)}</select>
               <input type="number" min="1" style={inputStyle} value={cantidad} onChange={e => setCantidad(Number(e.target.value))} />
             </div>
             <div style={{ marginBottom: '20px' }}>
@@ -212,13 +182,9 @@ export default function RegistroPedido() {
                 {tallasDeInventario.map(t => <option key={t.id} value={t.talla}>{t.talla} (${Number(t.precio_base).toLocaleString()})</option>)}
                 <option value="ESPECIAL">✨ Talla Especial</option>
               </select>
-              {tallaSeleccionada === 'ESPECIAL' && (
-                <input type="number" placeholder="Precio $" style={{ ...inputStyle, marginTop: '12px', border: '3px solid #3b82f6' }} value={precioManualEspecial} onChange={e => setPrecioManualEspecial(e.target.value)} />
-              )}
+              {tallaSeleccionada === 'ESPECIAL' && <input type="number" placeholder="Precio $" style={{ ...inputStyle, marginTop: '12px', border: '3px solid #3b82f6' }} value={precioManualEspecial} onChange={e => setPrecioManualEspecial(e.target.value)} />}
             </div>
-            <button onClick={agregarAlCarrito} type="button" style={{ width: '100%', backgroundColor: '#000', color: '#fff', border: 'none', padding: '14px', borderRadius: '12px', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-              <Plus size={18} /> AGREGAR AL CARRITO
-            </button>
+            <button onClick={agregarAlCarrito} type="button" style={{ width: '100%', backgroundColor: '#000', color: '#fff', border: 'none', padding: '14px', borderRadius: '12px', fontWeight: '900', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}><Plus size={18} /> AGREGAR AL CARRITO</button>
           </div>
 
           {carrito.length > 0 && (
@@ -227,7 +193,7 @@ export default function RegistroPedido() {
               {carrito.map((item) => (
                 <div key={item.tempId} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #000' }}>
                   <span style={{ fontWeight: '800', color: '#000' }}>{item.cantidad}x {item.nombre} ({item.talla})</span>
-                  <button onClick={() => quitarDelCarrito(item.tempId)} style={{ color: 'red', border: 'none', background: 'none', fontWeight: '900', cursor: 'pointer' }}>X</button>
+                  <button onClick={() => quitarDelCarrito(item.tempId)} style={{ color: 'red', border: 'none', background: 'none', fontWeight: '900' }}>X</button>
                 </div>
               ))}
             </div>
@@ -236,30 +202,9 @@ export default function RegistroPedido() {
           <div style={{ backgroundColor: '#000', color: '#fff', padding: '30px', borderRadius: '24px', border: '3px solid #000', boxShadow: '8px 8px 0px #3b82f6' }}>
             <p style={{ margin: 0, fontSize: '14px', fontWeight: '900' }}>TOTAL</p>
             <p style={{ margin: '0 0 20px 0', fontSize: '36px', fontWeight: '900', color: '#4ade80' }}>${totalCalculado.toLocaleString('es-CL')}</p>
-            
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ color: '#fff', fontSize: '12px', fontWeight: '900' }}>ABONO INICIAL $</label>
-              <input type="number" style={{ ...inputStyle, background: '#fff', marginTop: '5px' }} value={abono} onChange={e => setAbono(e.target.value)} />
-            </div>
-
-            {/* SELECTOR DE MÉTODO DE PAGO PARA EL ABONO */}
-            <div style={{ marginBottom: '25px' }}>
-              <label style={{ color: '#fff', fontSize: '12px', fontWeight: '900' }}>MÉTODO DE PAGO</label>
-              <select 
-                style={{ ...inputStyle, background: '#fff', marginTop: '5px' }} 
-                value={metodoPagoInicial} 
-                onChange={e => setMetodoPagoInicial(e.target.value)}
-              >
-                <option value="Transferencia">Transferencia</option>
-                <option value="Efectivo">Efectivo</option>
-                <option value="Débito">Débito</option>
-                <option value="Crédito">Crédito</option>
-              </select>
-            </div>
-
-            <button type="submit" disabled={loading} style={{ width: '100%', backgroundColor: '#4ade80', color: '#000', border: '3px solid #000', padding: '16px', borderRadius: '14px', fontWeight: '900', fontSize: '18px', cursor: 'pointer', boxShadow: '4px 4px 0px #fff' }}>
-              {loading ? 'PROCESANDO...' : 'CONFIRMAR PEDIDO'}
-            </button>
+            <div style={{ marginBottom: '20px' }}><label style={{ color: '#fff', fontSize: '12px', fontWeight: '900' }}>ABONO INICIAL $</label><input type="number" style={{ ...inputStyle, background: '#fff', marginTop: '5px' }} value={abono} onChange={e => setAbono(e.target.value)} /></div>
+            <div style={{ marginBottom: '25px' }}><label style={{ color: '#fff', fontSize: '12px', fontWeight: '900' }}>MÉTODO DE PAGO</label><select style={{ ...inputStyle, background: '#fff', marginTop: '5px' }} value={metodoPagoInicial} onChange={e => setMetodoPagoInicial(e.target.value)}><option value="Transferencia">Transferencia</option><option value="Efectivo">Efectivo</option><option value="Débito">Débito</option><option value="Crédito">Crédito</option></select></div>
+            <button type="submit" disabled={loading} style={{ width: '100%', backgroundColor: '#4ade80', color: '#000', border: '3px solid #000', padding: '16px', borderRadius: '14px', fontWeight: '900', fontSize: '18px', boxShadow: '4px 4px 0px #fff' }}>{loading ? 'PROCESANDO...' : 'CONFIRMAR PEDIDO'}</button>
           </div>
         </form>
       </div>
