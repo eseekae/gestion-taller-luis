@@ -179,7 +179,7 @@ export default function Inventario() {
             <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
               <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} style={{ ...cardStyle, width: '100%', maxWidth: '400px', margin: 0 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
-                  <h2 style={{ fontSize: '18px', fontWeight: '900', margin: 0 }}>Lista de Colegios</h2>
+                  <h2 style={{ fontSize: '18px', fontWeight: '900', margin: 0, color: '#000' }}>Lista de Colegios</h2>
                   <button onClick={() => setMostrarGestionColegios(false)}><X /></button>
                 </div>
                 <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
