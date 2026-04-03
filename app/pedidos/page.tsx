@@ -182,10 +182,10 @@ export default function VerPedidos() {
                 {expandido && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '20px' }}>
                     {p.detalles?.map((det: any, idx: number) => (
-                      <div key={idx} style={{ padding: '12px', border: '2px solid #000', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', background: '#f8fafc' }}>
+                      <div key={idx} style={{ padding: '12px', border: '2px solid #000', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', background: '#000000' }}>
                         <div>
                           <p style={{ fontWeight: '800', color: '#000' }}>{det.p_nombre}</p>
-                          <p style={{ fontSize: '12px' }}>Talla: {det.talla} | {det.cantidad_entregada || 0} de {det.cantidad}</p>
+                          <p style={{ fontSize: '12px', color: '#000' }}>Talla: {det.talla} | {det.cantidad_entregada || 0} de {det.cantidad}</p>
                         </div>
                         <div style={{ display: 'flex', gap: '5px' }}>
                           <button onClick={() => actualizarEntrega(det, -1)} style={{ border: '2px solid #000', borderRadius: '8px', padding: '5px', background: '#ef4444', color: '#fff' }}>-</button>
