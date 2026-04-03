@@ -204,15 +204,31 @@ export default function VerPedidos() {
     const { pedidoId, monto, fecha, metodo, nombreCliente, esCorreccion } = modalPago
     const valorNum = Number(monto)
     if (!monto || valorNum <= 0) return alert("Ingresa un monto válido")
+    
     const montoFinal = esCorreccion ? valorNum * -1 : valorNum
+    
     try {
-      // FIX: Usamos localStorage para el nombre del usuario
-      await supabase.from('pagos').insert([{ pedido_id: pedidoId, monto: montoFinal, fecha_pago: fecha, metodo_pago: metodo, creado_por: localStorage.getItem('user_name') || 'Don Luis' }])
+      // FIX: Aseguramos que se guarde el pago y luego se recargue la vista
+      const { error } = await supabase.from('pagos').insert([{ 
+        pedido_id: pedidoId, 
+        monto: montoFinal, 
+        fecha_pago: fecha, 
+        metodo_pago: metodo, 
+        creado_por: localStorage.getItem('user_name') || 'Don Luis' 
+      }])
+
+      if (error) throw error
+
       const tipoMsg = esCorreccion ? "CORRIGIÓ/DESCONTÓ" : "Registró"
       await registrarLog(`${tipoMsg} pago de $${valorNum} (${metodo})`, `Cliente: ${nombreCliente}`)
+      
+      // Reset de modal y recarga de datos
       setModalPago({ ...modalPago, open: false, monto: '', esCorreccion: false, pedidoId: null })
-      cargar()
-    } catch (err) { alert("Error al guardar pago") }
+      await cargar() 
+
+    } catch (err: any) { 
+      alert("Error al guardar pago: " + err.message) 
+    }
   }
 
   const borrarPedido = async (id: number, nombre: string) => {
@@ -309,7 +325,8 @@ export default function VerPedidos() {
                               <p style={{ margin: 0, fontWeight: '900', fontSize: '15px', color: '#000' }}>{det.cantidad}x {det.p_nombre}</p>
                               <p style={{ margin: 0, fontSize: '12px', fontWeight: '800', color: '#64748b' }}>Talla: {det.talla} • ${Number(det.precio_unitario).toLocaleString()} c/u</p>
                               <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <span style={{ fontSize: '11px', fontWeight: '900', backgroundColor: det.cantidad_entregada === det.cantidad ? '#4ade80' : '#f1f5f9', padding: '2px 8px', borderRadius: '6px', border: '1px solid #000' }}>
+                                {/* FIX: Color de texto cambiado a negro para mejor visibilidad */}
+                                <span style={{ fontSize: '11px', fontWeight: '900', color: '#000', backgroundColor: det.cantidad_entregada === det.cantidad ? '#4ade80' : '#f1f5f9', padding: '2px 8px', borderRadius: '6px', border: '1px solid #000' }}>
                                   ENTREGADO: {det.cantidad_entregada || 0} de {det.cantidad}
                                 </span>
                               </div>
