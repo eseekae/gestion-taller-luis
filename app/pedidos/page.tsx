@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { 
   ArrowLeft, Search, School, Phone, Calendar, Printer, Trash2, 
   MessageCircle, MessageSquare, Bell, Package, CheckCircle, 
-  X, History, User, CreditCard, Plus, Clock, Minus, ChevronDown, ChevronUp, Tag
+  X, History, User, CreditCard, Plus, Clock, Minus, ChevronDown, ChevronUp, Tag, Boxes
 } from 'lucide-react'
 
 export default function VerPedidos() {
@@ -83,6 +83,30 @@ export default function VerPedidos() {
 
   useEffect(() => { cargar() }, [cargar])
 
+  // --- ACCIONES DE ENTREGA PARCIAL / TOTAL ---
+  
+  const actualizarEntregaItem = async (det: any, cambio: number) => {
+    const actual = det.cantidad_entregada || 0
+    const nuevaCantidad = actual + cambio
+    if (nuevaCantidad < 0 || nuevaCantidad > det.cantidad) return
+
+    try {
+      // Actualizar stock mediante RPC
+      const rpcFunc = cambio > 0 ? 'entregar_stock' : 'revertir_entrega_stock'
+      await supabase.rpc(rpcFunc, { prod_id: det.producto_id, cant: Math.abs(cambio) })
+
+      // Actualizar el detalle
+      const nuevoEstado = nuevaCantidad === det.cantidad ? 'Entregado' : 'Pendiente'
+      await supabase.from('detalles_pedido').update({
+        cantidad_entregada: nuevaCantidad,
+        estado: nuevoEstado
+      }).eq('id', det.id)
+
+      await registrarLog(`${cambio > 0 ? 'Entregó' : 'Restó'} ${Math.abs(cambio)} unidad(es) de ${det.p_nombre}`, `Pedido ${det.pedido_id}`)
+      cargar()
+    } catch (err) { alert("Error al actualizar entrega") }
+  }
+
   const notificarCliente = async (pedido: any) => {
     if (!confirm(`¿Confirmar aviso a ${pedido.c_nombre}?`)) return
     try {
@@ -93,12 +117,18 @@ export default function VerPedidos() {
   }
 
   const entregarTodo = async (pedido: any) => {
-    if (!confirm(`¿Marcar pedido como RETIRADO por el cliente?`)) return
+    if (!confirm(`¿Marcar TODO el pedido como RETIRADO?`)) return
     try {
-      const promesas = pedido.detalles.map((det: any) => 
-        supabase.from('detalles_pedido').update({ estado: 'Entregado', cantidad_entregada: det.cantidad }).eq('id', det.id)
-      )
-      await Promise.all(promesas)
+      for (const det of pedido.detalles) {
+        const faltante = det.cantidad - det.cantidad_entregada
+        if (faltante > 0) {
+          await supabase.rpc('entregar_stock', { prod_id: det.producto_id, cant: faltante })
+          await supabase.from('detalles_pedido').update({
+            cantidad_entregada: det.cantidad,
+            estado: 'Entregado'
+          }).eq('id', det.id)
+        }
+      }
       await supabase.from('pedidos').update({ estado: 'Completado' }).eq('id', pedido.id)
       await registrarLog(`ENTREGA TOTAL a ${pedido.c_nombre}`, `Pedido ${pedido.id}`)
       cargar()
@@ -143,6 +173,7 @@ export default function VerPedidos() {
     return p.c_nombre.toLowerCase().includes(t) || p.c_telefono.includes(t) || (p.colegio && p.colegio.toLowerCase().includes(t))
   }).filter(p => filtro === 'Todos' || (filtro === 'Pendientes' && p.estado_macro !== 'FINALIZADO (OK)') || p.estado_macro === filtro)
 
+  // ESTILOS
   const containerStyle = { minHeight: '100vh', backgroundColor: '#f8fafc', backgroundImage: `radial-gradient(#cbd5e1 1.5px, transparent 1.5px)`, backgroundSize: '32px 32px', padding: '40px 20px', fontFamily: 'system-ui, -apple-system, sans-serif' }
   const cardStyle = { backgroundColor: '#fff', padding: '24px', borderRadius: '28px', border: '4px solid #000', boxShadow: '8px 8px 0px #000' }
   const labelStyle = { fontSize: '11px', fontWeight: '950', color: '#64748b', marginBottom: '4px', textTransform: 'uppercase' as const }
@@ -178,7 +209,6 @@ export default function VerPedidos() {
             return (
               <motion.div key={p.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.05 }} style={cardStyle}>
                 
-                {/* CABECERA DE LA FICHA */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', alignItems: 'flex-start' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <div style={{ display: 'flex', gap: '8px' }}>
@@ -193,33 +223,40 @@ export default function VerPedidos() {
                   </div>
                 </div>
 
-                {/* NOMBRE Y TELÉFONO */}
                 <div style={{ marginBottom: '16px' }}>
                   <h2 style={{ fontWeight: '950', fontSize: '26px', color: '#000', margin: '0 0 4px 0', letterSpacing: '-0.5px' }}>{p.c_nombre}</h2>
                   <span style={{ fontSize: '14px', fontWeight: '800', color: '#000', display: 'flex', alignItems: 'center', gap: '6px' }}><Phone size={14} /> {p.c_telefono}</span>
                 </div>
 
-                {/* BOTÓN EXPANDIR DETALLES (NUEVO) */}
                 <motion.button 
                   onClick={() => toggleExpandir(p.id)}
-                  style={{ width: '100%', padding: '10px', border: '3px solid #000', borderRadius: '14px', marginBottom: '16px', backgroundColor: '#f1f5f9', fontWeight: '900', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' }}
+                  style={{ width: '100%', padding: '12px', border: '3px solid #000', borderRadius: '14px', marginBottom: '16px', backgroundColor: '#f1f5f9', fontWeight: '950', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', color: '#000' }}
                 >
                   {expandido ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
-                  {expandido ? 'OCULTAR PRODUCTOS' : 'VER PRODUCTOS Y DETALLES'}
+                  {expandido ? 'OCULTAR DETALLES' : 'VER ARTÍCULOS Y NOTAS'}
                 </motion.button>
 
                 <AnimatePresence>
                   {expandido && (
                     <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} style={{ overflow: 'hidden', marginBottom: '20px' }}>
-                      <div style={{ padding: '16px', border: '3px solid #000', borderRadius: '20px', backgroundColor: '#fff', boxShadow: '4px 4px 0px #000' }}>
-                        <p style={labelStyle}>Artículos en este pedido:</p>
+                      <div style={{ padding: '20px', border: '3px solid #000', borderRadius: '20px', backgroundColor: '#fff', boxShadow: '4px 4px 0px #000' }}>
+                        <p style={labelStyle}><Boxes size={12} inline/> Artículos y Entregas:</p>
                         {p.detalles?.map((det: any, i: number) => (
-                          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: i === p.detalles.length - 1 ? 'none' : '1px solid #e2e8f0' }}>
-                            <div>
-                              <p style={{ margin: 0, fontWeight: '900', fontSize: '14px' }}>{det.cantidad}x {det.p_nombre}</p>
-                              <p style={{ margin: 0, fontSize: '11px', fontWeight: '800', color: '#64748b' }}>Talla: {det.talla} • ${Number(det.precio_unitario).toLocaleString()} c/u</p>
+                          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: i === p.detalles.length - 1 ? 'none' : '1px solid #e2e8f0' }}>
+                            <div style={{ flex: 1 }}>
+                              <p style={{ margin: 0, fontWeight: '900', fontSize: '15px', color: '#000' }}>{det.cantidad}x {det.p_nombre}</p>
+                              <p style={{ margin: 0, fontSize: '12px', fontWeight: '800', color: '#64748b' }}>Talla: {det.talla} • ${Number(det.precio_unitario).toLocaleString()} c/u</p>
+                              <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ fontSize: '11px', fontWeight: '900', backgroundColor: det.cantidad_entregada === det.cantidad ? '#4ade80' : '#f1f5f9', padding: '2px 8px', borderRadius: '6px', border: '1px solid #000' }}>
+                                  ENTREGADO: {det.cantidad_entregada || 0} de {det.cantidad}
+                                </span>
+                              </div>
                             </div>
-                            <p style={{ margin: 0, fontWeight: '950', fontSize: '14px' }}>${(det.cantidad * det.precio_unitario).toLocaleString()}</p>
+                            {/* BOTONES DE CONTROL INDIVIDUAL */}
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                              <button onClick={() => actualizarEntregaItem(det, -1)} style={{ background: '#ef4444', color: '#fff', border: '2px solid #000', borderRadius: '8px', width: '30px', height: '30px', fontWeight: '950', cursor: 'pointer' }}>-</button>
+                              <button onClick={() => actualizarEntregaItem(det, 1)} style={{ background: '#4ade80', color: '#000', border: '2px solid #000', borderRadius: '8px', width: '30px', height: '30px', fontWeight: '950', cursor: 'pointer' }}>+</button>
+                            </div>
                           </div>
                         ))}
                         
@@ -234,13 +271,11 @@ export default function VerPedidos() {
                   )}
                 </AnimatePresence>
 
-                {/* ACCIONES RÁPIDAS */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '24px' }}>
                   <motion.button whileTap={{ y: 2 }} onClick={() => notificarCliente(p)} disabled={p.itemsEntregados} style={{ backgroundColor: '#3b82f6', color: '#fff', border: '3px solid #000', padding: '14px', borderRadius: '16px', fontWeight: '950', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '4px 4px 0px #000', cursor: 'pointer', opacity: p.itemsEntregados ? 0.3 : 1 }}><Bell size={18} /> AVISAR</motion.button>
-                  <motion.button whileTap={{ y: 2 }} onClick={() => entregarTodo(p)} disabled={p.itemsEntregados} style={{ backgroundColor: '#4ade80', color: '#000', border: '3px solid #000', padding: '14px', borderRadius: '16px', fontWeight: '950', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '4px 4px 0px #000', cursor: 'pointer', opacity: p.itemsEntregados ? 0.3 : 1 }}><Package size={18} /> ENTREGAR</motion.button>
+                  <motion.button whileTap={{ y: 2 }} onClick={() => entregarTodo(p)} disabled={p.itemsEntregados} style={{ backgroundColor: '#4ade80', color: '#000', border: '3px solid #000', padding: '14px', borderRadius: '16px', fontWeight: '950', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '4px 4px 0px #000', cursor: 'pointer', opacity: p.itemsEntregados ? 0.3 : 1 }}><Package size={18} /> ENTREGAR TODO</motion.button>
                 </div>
 
-                {/* FINANZAS (INCLUYE TOTAL FINAL) */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '24px' }}>
                   <div style={{ background: '#f1f5f9', padding: '12px', borderRadius: '16px', border: '3px solid #000' }}>
                     <p style={labelStyle}>VALOR TOTAL</p>
