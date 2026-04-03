@@ -22,7 +22,9 @@ export default function RegistroPedido() {
   const [nombreSeleccionado, setNombreSeleccionado] = useState('')
   const [tallaSeleccionada, setTallaSeleccionada] = useState('')
   const [precioManualEspecial, setPrecioManualEspecial] = useState('')
-  const [cantidad, setCantidad] = useState(1)
+  
+  // FIX PREVIO: Estado inicial vacío para obligar al ingreso manual
+  const [cantidad, setCantidad] = useState<number | string>('')
 
   const [nombreCliente, setNombreCliente] = useState('')
   const [rut, setRut] = useState('')
@@ -43,7 +45,7 @@ export default function RegistroPedido() {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    setUsuarioActivo(sessionStorage.getItem('user_name') || '')
+    setUsuarioActivo(localStorage.getItem('user_name') || '')
     const fetch = async () => {
       const { data: inv } = await supabase.from('inventario').select('*').order('nombre')
       if (inv) {
@@ -66,18 +68,23 @@ export default function RegistroPedido() {
   const tallasDeInventario = useMemo(() => inventario.filter(i => i.nombre === nombreSeleccionado), [nombreSeleccionado, inventario])
 
   const agregarAlCarrito = () => {
+    if (cantidad === '' || Number(cantidad) <= 0) {
+      return alert("Tienes que ingresar una cantidad válida antes de añadir al pedido.")
+    }
+
     let item; let precio;
     if (tallaSeleccionada === 'ESPECIAL') {
       if (!precioManualEspecial) return alert("Ingresa el precio para la talla especial")
       precio = Number(precioManualEspecial)
-      item = { id_inv: tallasDeInventario[0]?.id, nombre: nombreSeleccionado, talla: 'ESPECIAL', precio, cantidad }
+      item = { id_inv: tallasDeInventario[0]?.id, nombre: nombreSeleccionado, talla: 'ESPECIAL', precio, cantidad: Number(cantidad) }
     } else {
       const invItem = inventario.find(i => i.nombre === nombreSeleccionado && i.talla === tallaSeleccionada)
       precio = Number(invItem?.precio_base || 0)
-      item = { id_inv: invItem.id, nombre: nombreSeleccionado, talla: tallaSeleccionada, precio, cantidad }
+      item = { id_inv: invItem.id, nombre: nombreSeleccionado, talla: tallaSeleccionada, precio, cantidad: Number(cantidad) }
     }
     setCarrito([...carrito, { ...item, tempId: Date.now() }])
     setPrecioManualEspecial('')
+    setCantidad('')
   }
 
   const quitarDelCarrito = (id: number) => setCarrito(carrito.filter(c => c.tempId !== id))
@@ -93,6 +100,7 @@ export default function RegistroPedido() {
   const guardar = async (e: any) => {
     e.preventDefault()
     if (carrito.length === 0) return alert("Añade productos al pedido")
+    // VALIDACIÓN: Asegura exactamente 8 números antes de guardar
     if (telefono.length !== 8) return alert("El teléfono debe tener exactamente 8 números.")
     if (tipoEntrega === 'agendada' && !fechaEntrega) return alert("Selecciona una fecha de entrega")
     
@@ -136,13 +144,13 @@ export default function RegistroPedido() {
         }
       }
       
-      await registrarLog(`${usuarioActivo} creó venta de $${totalConDescuento}`, `Pedido ${ped.id}`)
-      alert("✅ Venta registrada correctamente."); router.push('/pedidos')
+      await registrarLog(`${usuarioActivo} creó venta de $${totalConDescuento}`, `Pedido #${ped.id}`)
+      alert(`✅ Venta registrada correctamente como Pedido #${ped.id}`); 
+      router.push('/pedidos')
     } catch (err: any) { alert(err.message) }
     finally { setLoading(false) }
   }
 
-  // ESTILOS
   const cardStyle = { backgroundColor: '#fff', padding: '20px', borderRadius: '28px', border: '4px solid #000', boxShadow: '8px 8px 0px #000', marginBottom: '24px' }
   const inputStyle = { width: '100%', padding: '16px', border: '3px solid #000', borderRadius: '16px', fontSize: '16px', fontWeight: '800', color: '#000', backgroundColor: '#fff', boxSizing: 'border-box' as const, outline: 'none' }
   const labelStyle = { fontSize: '11px', fontWeight: '950', color: '#000', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase' as const, letterSpacing: '0.5px' }
@@ -167,7 +175,6 @@ export default function RegistroPedido() {
 
         <form onSubmit={guardar}>
           
-          {/* PRIORIDAD */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} style={cardStyle}>
             <label style={labelStyle}><Rocket size={16} /> Prioridad de Pedido</label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '10px', marginBottom: tipoEntrega === 'agendada' ? '15px' : '0' }}>
@@ -188,7 +195,6 @@ export default function RegistroPedido() {
             </AnimatePresence>
           </motion.div>
 
-          {/* FICHA CLIENTE - FIX MÓVIL */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} style={cardStyle}>
             <h2 style={{ margin: '0 0 20px 0', fontSize: '18px', fontWeight: '950', color: '#000', display: 'flex', alignItems: 'center', gap: '10px' }}>
               <User size={20} color="#3b82f6" /> FICHA CLIENTE
@@ -206,8 +212,24 @@ export default function RegistroPedido() {
                 <label style={labelStyle}><Phone size={14} /> Teléfono Móvil</label>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <div style={{ padding: '16px 10px', border: '3px solid #000', borderRadius: '16px', fontSize: '14px', fontWeight: '950', backgroundColor: '#e2e8f0', color: '#000', display: 'flex', alignItems: 'center' }}>+569</div>
-                  <input required type="tel" maxLength={8} style={inputStyle} value={telefono} onChange={e => setTelefono(e.target.value.replace(/\D/g, '').slice(0, 8))} />
+                  
+                  {/* AJUSTE: Limitamos a 8 números y mantenemos el prefijo predeterminado */}
+                  <input 
+                    required 
+                    type="tel" 
+                    maxLength={8} 
+                    style={inputStyle} 
+                    value={telefono} 
+                    onChange={e => setTelefono(e.target.value.replace(/\D/g, '').slice(0, 8))} 
+                    placeholder="87654321"
+                  />
                 </div>
+                {/* ADVERTENCIA VISUAL: Avisa en tiempo real si faltan números */}
+                {telefono.length > 0 && telefono.length < 8 && (
+                  <p style={{ color: '#ef4444', fontSize: '11px', fontWeight: '900', marginTop: '5px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <AlertCircle size={12} /> FALTAN {8 - telefono.length} NÚMEROS
+                  </p>
+                )}
               </div>
               <div>
                 <label style={labelStyle}><School size={16} /> Institución / Colegio</label>
@@ -218,7 +240,6 @@ export default function RegistroPedido() {
             </div>
           </motion.div>
 
-          {/* PRENDAS */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} style={cardStyle}>
             <h2 style={{ margin: '0 0 20px 0', fontSize: '18px', fontWeight: '950', color: '#000', display: 'flex', alignItems: 'center', gap: '10px' }}>
               <ShoppingBag size={20} color="#f472b6" /> PRENDAS
@@ -227,7 +248,13 @@ export default function RegistroPedido() {
               <select style={inputStyle} value={nombreSeleccionado} onChange={e => setNombreSeleccionado(e.target.value)}>
                 {productosUnicos.map(n => <option key={n} value={n}>{n}</option>)}
               </select>
-              <input type="number" min="1" style={inputStyle} value={cantidad} onChange={e => setCantidad(Number(e.target.value))} />
+              <input 
+                type="number" 
+                placeholder="CANT." 
+                style={{...inputStyle, textAlign: 'center'}} 
+                value={cantidad} 
+                onChange={e => setCantidad(e.target.value === '' ? '' : Number(e.target.value))} 
+              />
             </div>
             <div style={{ marginBottom: '20px' }}>
               <select style={inputStyle} value={tallaSeleccionada} onChange={e => setTallaSeleccionada(e.target.value)}>
@@ -246,7 +273,6 @@ export default function RegistroPedido() {
             </motion.button>
           </motion.div>
 
-          {/* CARRITO CON SUBTOTAL */}
           <AnimatePresence>
             {carrito.length > 0 && (
               <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} style={{ ...cardStyle, background: '#fff', borderStyle: 'dashed' }}>
@@ -258,7 +284,6 @@ export default function RegistroPedido() {
                   </div>
                 ))}
                 
-                {/* FIX: SUBTOTAL DEBAJO DEL CARRITO */}
                 <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '4px solid #000', textAlign: 'right' }}>
                   <p style={{ margin: 0, fontSize: '12px', fontWeight: '900', color: '#64748b' }}>SUBTOTAL PRENDAS</p>
                   <p style={{ margin: 0, fontSize: '24px', fontWeight: '950', color: '#000' }}>${totalOriginal.toLocaleString('es-CL')}</p>
@@ -267,7 +292,6 @@ export default function RegistroPedido() {
             )}
           </AnimatePresence>
 
-          {/* BLOQUE FINAL */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} style={{ backgroundColor: '#000', color: '#fff', padding: '24px', borderRadius: '32px', border: '4px solid #000', boxShadow: '8px 8px 0px #3b82f6' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '20px' }}>
               <motion.button type="button" onClick={() => setMostrarDescuento(!mostrarDescuento)} style={{ width: '100%', backgroundColor: '#3b82f6', color: '#fff', border: '2px solid #fff', padding: '12px', borderRadius: '14px', fontWeight: '950', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer', fontSize: '12px' }}>

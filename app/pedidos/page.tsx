@@ -22,7 +22,7 @@ export default function VerPedidos() {
 
   const [modalPago, setModalPago] = useState({
     open: false,
-    pedidoId: null as string | null,
+    pedidoId: null as number | null, 
     nombreCliente: '',
     monto: '',
     fecha: new Date().toISOString().split('T')[0],
@@ -31,7 +31,7 @@ export default function VerPedidos() {
   })
 
   const cargar = useCallback(async () => {
-    if (!sessionStorage.getItem('user_role')) return router.push('/login')
+    if (!localStorage.getItem('user_role')) return router.push('/login')
     setLoading(true)
 
     const [pRes, cRes, iRes, dRes, pagosRes, aRes] = await Promise.all([
@@ -84,11 +84,8 @@ export default function VerPedidos() {
 
   useEffect(() => { cargar() }, [cargar])
 
-  // --- EXPORTACIÓN EXCEL ULTRA DETALLADA CON DISEÑO ---
   const exportarExcel = () => {
     const dataFilas: any[] = []
-    
-    // Encabezados con estilo
     const headers = [
       'ID PEDIDO', 'FECHA REG.', 'HORA REG.', 'CLIENTE', 'TELEFONO', 'COLEGIO',
       'PRODUCTO', 'TALLA', 'CANT.', 'ENTREGADO', 'VALOR UNIT.', 'SUBTOTAL',
@@ -101,7 +98,6 @@ export default function VerPedidos() {
       const hora = fechaObj.toLocaleTimeString('es-CL')
       const deuda = p.total_final - p.total_pagado
       
-      // Combinamos pagos en un solo texto para que no sea un desorden
       const historialPagos = p.pagos.map((pg: any) => 
         `[${new Date(pg.fecha_pago).toLocaleDateString('es-CL')}] $${Number(pg.monto).toLocaleString()} (${pg.metodo_pago})`
       ).join(' | ')
@@ -128,53 +124,16 @@ export default function VerPedidos() {
           'OBSERVACIONES': index === 0 ? p.observaciones || '' : ''
         })
       })
-
-      // Fila de separación gris para diferenciar pedidos
       dataFilas.push(Object.fromEntries(headers.map(h => [h, '---'])))
     })
 
     const ws = XLSX.utils.json_to_sheet(dataFilas)
-
-    // Aplicamos estilos a las celdas (Requiere xlsx-js-style)
-    const range = XLSX.utils.decode_range(ws['!ref']!)
-    for (let R = range.s.r; R <= range.e.r; ++R) {
-      for (let C = range.s.c; C <= range.e.c; ++C) {
-        const cell_address = { c: C, r: R }
-        const cell_ref = XLSX.utils.encode_cell(cell_address)
-        if (!ws[cell_ref]) continue
-
-        // Estilo base: Bordes para todos
-        ws[cell_ref].s = {
-          border: {
-            top: { style: "thin", color: { rgb: "000000" } },
-            bottom: { style: "thin", color: { rgb: "000000" } },
-            left: { style: "thin", color: { rgb: "000000" } },
-            right: { style: "thin", color: { rgb: "000000" } }
-          },
-          font: { name: "Arial", sz: 10 }
-        }
-
-        // Estilo de encabezado
-        if (R === 0) {
-          ws[cell_ref].s.fill = { fgColor: { rgb: "000000" } }
-          ws[cell_ref].s.font = { color: { rgb: "FFFFFF" }, bold: true, sz: 11 }
-        }
-
-        // Estilo fila separadora
-        if (ws[cell_ref].v === '---') {
-          ws[cell_ref].s.fill = { fgColor: { rgb: "E2E8F0" } }
-          ws[cell_ref].s.font = { color: { rgb: "E2E8F0" } } // Ocultamos el texto
-        }
-      }
-    }
-
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, "PEDIDOS YOVI")
     XLSX.writeFile(wb, `Reporte_Taller_Yovi_${new Date().toISOString().split('T')[0]}.xlsx`)
     registrarLog("Exportó Excel de pedidos", "Reporte detallado con pagos y horas")
   }
 
-  // --- ACCIONES DE ENTREGA PARCIAL / TOTAL ---
   const actualizarEntregaItem = async (det: any, cambio: number) => {
     const actual = det.cantidad_entregada || 0
     const nuevaCantidad = actual + cambio
@@ -218,17 +177,32 @@ export default function VerPedidos() {
     const { pedidoId, monto, fecha, metodo, nombreCliente, esCorreccion } = modalPago
     const valorNum = Number(monto)
     if (!monto || valorNum <= 0) return alert("Ingresa un monto válido")
+    
     const montoFinal = esCorreccion ? valorNum * -1 : valorNum
+    
     try {
-      await supabase.from('pagos').insert([{ pedido_id: pedidoId, monto: montoFinal, fecha_pago: fecha, metodo_pago: metodo, creado_por: sessionStorage.getItem('user_name') || 'Don Luis' }])
+      const { error } = await supabase.from('pagos').insert([{ 
+        pedido_id: pedidoId, 
+        monto: montoFinal, 
+        fecha_pago: fecha, 
+        metodo_pago: metodo, 
+        creado_por: localStorage.getItem('user_name') || 'Don Luis' 
+      }])
+
+      if (error) throw error
+
       const tipoMsg = esCorreccion ? "CORRIGIÓ/DESCONTÓ" : "Registró"
       await registrarLog(`${tipoMsg} pago de $${valorNum} (${metodo})`, `Cliente: ${nombreCliente}`)
-      setModalPago({ ...modalPago, open: false, monto: '', esCorreccion: false })
-      cargar()
-    } catch (err) { alert("Error al guardar pago") }
+      
+      setModalPago({ ...modalPago, open: false, monto: '', esCorreccion: false, pedidoId: null })
+      await cargar() 
+
+    } catch (err: any) { 
+      alert("Error al guardar pago: " + err.message) 
+    }
   }
 
-  const borrarPedido = async (id: string, nombre: string) => {
+  const borrarPedido = async (id: number, nombre: string) => {
     if(!confirm('⚠️ ¿Borrar pedido?')) return
     try {
       await supabase.from('pagos').delete().eq('pedido_id', id)
@@ -258,26 +232,18 @@ export default function VerPedidos() {
     <main style={containerStyle}>
       <div style={{ maxWidth: '650px', margin: '0 auto' }}>
         
-        {/* HEADER CON BOTÓN EXCEL */}
         <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '32px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-            <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => router.push('/')} style={{ backgroundColor: '#fff', border: '3px solid #000', padding: '12px', borderRadius: '16px', boxShadow: '4px 4px 0px #000', cursor: 'pointer' }}>
+            <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => router.push('/')} style={{ backgroundColor: '#fff', border: '3px solid #000', padding: '10px', borderRadius: '16px', boxShadow: '4px 4px 0px #000', cursor: 'pointer' }}>
               <ArrowLeft size={24} color="#000" />
             </motion.button>
             <h1 style={{ margin: 0, fontSize: '32px', fontWeight: '950', color: '#000', letterSpacing: '-1.5px' }}>GESTIÓN PEDIDOS</h1>
           </div>
-          
-          <motion.button 
-            whileHover={{ scale: 1.05, y: -2 }}
-            whileTap={{ scale: 0.95, y: 0 }}
-            onClick={exportarExcel}
-            style={{ backgroundColor: '#166534', color: '#fff', border: '3px solid #000', padding: '12px 18px', borderRadius: '16px', boxShadow: '4px 4px 0px #000', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '900' }}
-          >
+          <motion.button whileHover={{ scale: 1.05, y: -2 }} whileTap={{ scale: 0.95, y: 0 }} onClick={exportarExcel} style={{ backgroundColor: '#166534', color: '#fff', border: '3px solid #000', padding: '12px 18px', borderRadius: '16px', boxShadow: '4px 4px 0px #000', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '900' }}>
             <Download size={20} /> <span style={{fontSize: '13px'}}>REPORTE VENTAS</span>
           </motion.button>
         </motion.div>
 
-        {/* BUSCADOR */}
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} style={{ marginBottom: '32px' }}>
           <div style={{ position: 'relative' }}>
             <Search style={{ position: 'absolute', left: '16px', top: '16px' }} size={22} color="#000" />
@@ -285,26 +251,26 @@ export default function VerPedidos() {
           </div>
         </motion.div>
 
-        {/* LISTADO DE PEDIDOS */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
           {filtrados.map((p, idx) => {
             const deuda = p.total_final - (p.total_pagado || 0)
             const fechaEntrega = p.fecha_entrega ? new Date(p.fecha_entrega).toLocaleDateString('es-CL') : 'S/F'
             const expandido = !!expandidos[p.id]
+            const idFormateado = p.id.toString().padStart(4, '0')
 
             return (
               <motion.div key={p.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.05 }} style={cardStyle}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', alignItems: 'flex-start' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <div style={{ display: 'flex', gap: '8px' }}>
-                      <span style={{ background: '#fbbf24', border: '2px solid #000', padding: '4px 10px', borderRadius: '10px', fontSize: '12px', fontWeight: '950', color: '#000' }}>#{p.id}</span>
+                      <span style={{ background: '#fbbf24', border: '2px solid #000', padding: '4px 10px', borderRadius: '10px', fontSize: '12px', fontWeight: '950', color: '#000' }}>#{idFormateado}</span>
                       <span style={{ backgroundColor: p.color_bg, color: p.color_text, padding: '4px 12px', borderRadius: '10px', fontWeight: '900', border: '2px solid #000', fontSize: '11px' }}>{p.estado_macro}</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#000', fontWeight: '900', fontSize: '12px' }}><Calendar size={14} /> ENTREGA: {fechaEntrega}</div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <p style={labelStyle}>Institución</p>
-                    <p style={{ margin: 0, fontWeight: '950', fontSize: '14px', color: '#000' }}><School size={14} inline /> {p.colegio || 'Particular'}</p>
+                    <p style={{ margin: 0, fontWeight: '950', fontSize: '14px', color: '#000' }}><School size={14} /> {p.colegio || 'Particular'}</p>
                   </div>
                 </div>
 
@@ -322,14 +288,14 @@ export default function VerPedidos() {
                   {expandido && (
                     <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} style={{ overflow: 'hidden', marginBottom: '20px' }}>
                       <div style={{ padding: '20px', border: '3px solid #000', borderRadius: '20px', backgroundColor: '#fff', boxShadow: '4px 4px 0px #000' }}>
-                        <p style={labelStyle}><Boxes size={12} inline/> Artículos y Entregas:</p>
+                        <p style={labelStyle}><Boxes size={12}/> Artículos y Entregas:</p>
                         {p.detalles?.map((det: any, i: number) => (
                           <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: i === p.detalles.length - 1 ? 'none' : '1px solid #e2e8f0' }}>
                             <div style={{ flex: 1 }}>
                               <p style={{ margin: 0, fontWeight: '900', fontSize: '15px', color: '#000' }}>{det.cantidad}x {det.p_nombre}</p>
                               <p style={{ margin: 0, fontSize: '12px', fontWeight: '800', color: '#64748b' }}>Talla: {det.talla} • ${Number(det.precio_unitario).toLocaleString()} c/u</p>
                               <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <span style={{ fontSize: '11px', fontWeight: '900', backgroundColor: det.cantidad_entregada === det.cantidad ? '#4ade80' : '#f1f5f9', padding: '2px 8px', borderRadius: '6px', border: '1px solid #000' }}>
+                                <span style={{ fontSize: '11px', fontWeight: '900', color: '#000', backgroundColor: det.cantidad_entregada === det.cantidad ? '#4ade80' : '#f1f5f9', padding: '2px 8px', borderRadius: '6px', border: '1px solid #000' }}>
                                   ENTREGADO: {det.cantidad_entregada || 0} de {det.cantidad}
                                 </span>
                               </div>
@@ -342,7 +308,7 @@ export default function VerPedidos() {
                         ))}
                         {p.observaciones && (
                           <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '2px dashed #000' }}>
-                            <p style={labelStyle}><MessageSquare size={12} inline/> Notas Especiales:</p>
+                            <p style={labelStyle}><MessageSquare size={12}/> Notas Especiales:</p>
                             <p style={{ margin: 0, fontSize: '13px', fontWeight: '800', color: '#000' }}>{p.observaciones}</p>
                           </div>
                         )}
@@ -351,9 +317,25 @@ export default function VerPedidos() {
                   )}
                 </AnimatePresence>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '24px' }}>
-                  <motion.button whileTap={{ y: 2 }} onClick={() => notificarCliente(p)} disabled={p.itemsEntregados} style={{ backgroundColor: '#3b82f6', color: '#fff', border: '3px solid #000', padding: '14px', borderRadius: '16px', fontWeight: '950', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '4px 4px 0px #000', cursor: 'pointer', opacity: p.itemsEntregados ? 0.3 : 1 }}><Bell size={18} /> AVISAR</motion.button>
-                  <motion.button whileTap={{ y: 2 }} onClick={() => entregarTodo(p)} disabled={p.itemsEntregados} style={{ backgroundColor: '#4ade80', color: '#000', border: '3px solid #000', padding: '14px', borderRadius: '16px', fontWeight: '950', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '4px 4px 0px #000', cursor: 'pointer', opacity: p.itemsEntregados ? 0.3 : 1 }}><Package size={18} /> ENTREGAR TODO</motion.button>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '24px' }}>
+                  {/* FIX: Botones siempre disponibles y resaltados con sombra Neubrutalista pesada */}
+                  <motion.button 
+                    whileHover={{ scale: 1.02, y: -2 }} 
+                    whileTap={{ scale: 0.98, y: 0 }} 
+                    onClick={() => notificarCliente(p)} 
+                    style={{ backgroundColor: '#3b82f6', color: '#fff', border: '3px solid #000', padding: '16px', borderRadius: '18px', fontWeight: '950', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '6px 6px 0px #000', cursor: 'pointer' }}
+                  >
+                    <Bell size={20} /> AVISAR AL CLIENTE
+                  </motion.button>
+                  
+                  <motion.button 
+                    whileHover={{ scale: 1.02, y: -2 }} 
+                    whileTap={{ scale: 0.98, y: 0 }} 
+                    onClick={() => entregarTodo(p)} 
+                    style={{ backgroundColor: '#4ade80', color: '#000', border: '3px solid #000', padding: '16px', borderRadius: '18px', fontWeight: '950', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '6px 6px 0px #000', cursor: 'pointer' }}
+                  >
+                    <Package size={20} /> ENTREGA TOTAL
+                  </motion.button>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '24px' }}>
@@ -387,7 +369,6 @@ export default function VerPedidos() {
           })}
         </div>
 
-        {/* AUDITORÍA */}
         <div style={{ marginTop: '60px', marginBottom: '60px' }}>
           <h2 style={{ fontSize: '22px', fontWeight: '950', color: '#000', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px' }}><History size={26} /> HISTORIAL RECIENTE</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
@@ -407,7 +388,6 @@ export default function VerPedidos() {
           </div>
         </div>
 
-        {/* MODAL DE PAGO */}
         <AnimatePresence>
           {modalPago.open && (
             <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
