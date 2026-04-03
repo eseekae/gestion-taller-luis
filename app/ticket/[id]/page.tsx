@@ -40,18 +40,16 @@ export default function TicketPedido() {
   const fechaHoy = new Date().toLocaleDateString('es-CL')
   const fechaEntrega = pedido.fecha_entrega ? new Date(pedido.fecha_entrega).toLocaleDateString('es-CL') : 'Por definir'
 
-  // FUNCIÓN PARA COMPARTIR COMO IMAGEN (FIXED)
   const compartirTicket = async () => {
     if (!ticketRef.current) return
     setCompartiendo(true)
     try {
-      // Configuraciones para que la foto salga perfecta y sin cortes
       const opciones = {
         backgroundColor: '#fff',
-        width: 320, // Forzamos ancho en px para la captura
+        width: 320,
         style: {
           margin: '0',
-          padding: '20px', // Aire para que el texto no toque el borde en la foto
+          padding: '20px',
         }
       }
 
@@ -98,7 +96,7 @@ export default function TicketPedido() {
         </button>
       </div>
 
-      {/* ÁREA DEL TICKET (75mm para térmica) */}
+      {/* ÁREA DEL TICKET */}
       <div ref={ticketRef} style={{ 
         width: '75mm', 
         minWidth: '75mm',
@@ -121,10 +119,11 @@ export default function TicketPedido() {
 
         <div style={{ borderTop: '1px dashed #000', margin: '10px 0' }}></div>
 
-        {/* INFO CLIENTE */}
+        {/* INFO CLIENTE ACTUALIZADA */}
         <div style={{ marginBottom: '10px' }}>
           <p style={{ margin: '2px 0' }}><b>TICKET N°:</b> {pedido.id}</p>
-          <p style={{ margin: '2px 0' }}><b>FECHA:</b> {fechaHoy}</p>
+          <p style={{ margin: '2px 0' }}><b>EMISIÓN:</b> {fechaHoy}</p>
+          <p style={{ margin: '2px 0' }}><b>ENTREGA:</b> {fechaEntrega}</p> {/* FECHA DE ENTREGA AÑADIDA AQUÍ */}
           <p style={{ margin: '2px 0' }}><b>CLIENTE:</b> {pedido.clientes.nombre}</p>
           <p style={{ margin: '2px 0' }}><b>COLEGIO:</b> {pedido.colegio}</p>
         </div>
@@ -175,7 +174,6 @@ export default function TicketPedido() {
 
       </div>
 
-      {/* CSS PARA IMPRESIÓN TÉRMICA */}
       <style jsx global>{`
         @media print {
           .no-print { display: none !important; }
