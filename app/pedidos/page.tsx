@@ -184,7 +184,7 @@ export default function VerPedidos() {
                     {p.detalles?.map((det: any, idx: number) => (
                       <div key={idx} style={{ padding: '12px', border: '2px solid #000', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', background: '#f8fafc' }}>
                         <div>
-                          <p style={{ fontWeight: '800' }}>{det.p_nombre}</p>
+                          <p style={{ fontWeight: '800', color '#000' }}>{det.p_nombre}</p>
                           <p style={{ fontSize: '12px', color: '#000' }}>Talla: {det.talla} | {det.cantidad_entregada || 0} de {det.cantidad}</p>
                         </div>
                         <div style={{ display: 'flex', gap: '5px' }}>
