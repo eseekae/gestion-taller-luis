@@ -142,7 +142,7 @@ export default function RegistroPedido() {
     finally { setLoading(false) }
   }
 
-  // ESTILOS AJUSTADOS PARA MÓVIL
+  // ESTILOS
   const cardStyle = { backgroundColor: '#fff', padding: '20px', borderRadius: '28px', border: '4px solid #000', boxShadow: '8px 8px 0px #000', marginBottom: '24px' }
   const inputStyle = { width: '100%', padding: '16px', border: '3px solid #000', borderRadius: '16px', fontSize: '16px', fontWeight: '800', color: '#000', backgroundColor: '#fff', boxSizing: 'border-box' as const, outline: 'none' }
   const labelStyle = { fontSize: '11px', fontWeight: '950', color: '#000', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase' as const, letterSpacing: '0.5px' }
@@ -153,13 +153,13 @@ export default function RegistroPedido() {
       backgroundColor: '#f8fafc', 
       backgroundImage: `radial-gradient(#cbd5e1 1.5px, transparent 1.5px)`,
       backgroundSize: '32px 32px',
-      padding: '30px 15px', // Menos padding lateral para ganar espacio en el celu
+      padding: '30px 15px', 
       fontFamily: 'system-ui, -apple-system, sans-serif' 
     }}>
       <div style={{ maxWidth: '600px', margin: '0 auto' }}>
         
         <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '25px' }}>
-          <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} type="button" onClick={() => router.push('/')} style={{ backgroundColor: '#fff', border: '3px solid #000', padding: '10px', borderRadius: '14px', boxShadow: '4px 4px 0px #000', cursor: 'pointer' }}>
+          <motion.button whileTap={{ scale: 0.9 }} type="button" onClick={() => router.push('/')} style={{ backgroundColor: '#fff', border: '3px solid #000', padding: '10px', borderRadius: '14px', boxShadow: '4px 4px 0px #000', cursor: 'pointer' }}>
             <ArrowLeft size={22} color="#000" />
           </motion.button>
           <h1 style={{ margin: 0, fontSize: '28px', fontWeight: '950', color: '#000', letterSpacing: '-1px' }}>NUEVA VENTA</h1>
@@ -167,13 +167,14 @@ export default function RegistroPedido() {
 
         <form onSubmit={guardar}>
           
+          {/* PRIORIDAD */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} style={cardStyle}>
             <label style={labelStyle}><Rocket size={16} /> Prioridad de Pedido</label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '10px', marginBottom: tipoEntrega === 'agendada' ? '15px' : '0' }}>
-              <motion.button type="button" onClick={() => setTipoEntrega('agendada')} style={{ padding: '14px', borderRadius: '18px', border: '4px solid #000', fontWeight: '900', color: '#000', fontSize: '13px', backgroundColor: tipoEntrega === 'agendada' ? '#fbbf24' : '#fff', boxShadow: tipoEntrega === 'agendada' ? 'inset 3px 3px 0px rgba(0,0,0,0.1)' : '3px 3px 0px #000', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' }}>
+              <motion.button type="button" onClick={() => setTipoEntrega('agendada')} style={{ padding: '14px', borderRadius: '18px', border: '3px solid #000', fontWeight: '900', color: '#000', fontSize: '13px', backgroundColor: tipoEntrega === 'agendada' ? '#fbbf24' : '#fff', boxShadow: tipoEntrega === 'agendada' ? 'inset 3px 3px 0px rgba(0,0,0,0.1)' : '3px 3px 0px #000', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' }}>
                 <Clock size={18} /> AGENDAR
               </motion.button>
-              <motion.button type="button" onClick={() => setTipoEntrega('inmediata')} style={{ padding: '14px', borderRadius: '18px', border: '4px solid #000', fontWeight: '900', color: '#000', fontSize: '13px', backgroundColor: tipoEntrega === 'inmediata' ? '#4ade80' : '#fff', boxShadow: tipoEntrega === 'inmediata' ? 'inset 3px 3px 0px rgba(0,0,0,0.1)' : '3px 3px 0px #000', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' }}>
+              <motion.button type="button" onClick={() => setTipoEntrega('inmediata')} style={{ padding: '14px', borderRadius: '18px', border: '3px solid #000', fontWeight: '900', color: '#000', fontSize: '13px', backgroundColor: tipoEntrega === 'inmediata' ? '#4ade80' : '#fff', boxShadow: tipoEntrega === 'inmediata' ? 'inset 3px 3px 0px rgba(0,0,0,0.1)' : '3px 3px 0px #000', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' }}>
                 <CheckCircle size={18} /> INMEDIATA
               </motion.button>
             </div>
@@ -188,6 +189,7 @@ export default function RegistroPedido() {
             </AnimatePresence>
           </motion.div>
 
+          {/* FICHA CLIENTE - FIX MÓVIL */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} style={cardStyle}>
             <h2 style={{ margin: '0 0 20px 0', fontSize: '18px', fontWeight: '950', color: '#000', display: 'flex', alignItems: 'center', gap: '10px' }}>
               <User size={20} color="#3b82f6" /> FICHA CLIENTE
@@ -197,31 +199,17 @@ export default function RegistroPedido() {
                 <label style={labelStyle}>Nombre Completo</label>
                 <input required style={inputStyle} value={nombreCliente} onChange={e => setNombreCliente(e.target.value)} placeholder="Ej: Eduardo Vargas" />
               </div>
-
-              {/* FIX MÓVIL: RUT Y TELÉFONO EN FILAS SEPARADAS */}
               <div>
                 <label style={labelStyle}><IdCard size={14} /> R.U.T</label>
                 <input style={inputStyle} value={rut} onChange={e => setRut(e.target.value)} placeholder="12.345.678-9" />
               </div>
-              
               <div>
                 <label style={labelStyle}><Phone size={14} /> Teléfono Móvil</label>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <div style={{ 
-                    padding: '16px 10px', 
-                    border: '3px solid #000', 
-                    borderRadius: '16px', 
-                    fontSize: '14px', 
-                    fontWeight: '950', 
-                    backgroundColor: '#e2e8f0', 
-                    color: '#000',
-                    display: 'flex',
-                    alignItems: 'center'
-                  }}>+569</div>
+                  <div style={{ padding: '16px 10px', border: '3px solid #000', borderRadius: '16px', fontSize: '14px', fontWeight: '950', backgroundColor: '#e2e8f0', color: '#000', display: 'flex', alignItems: 'center' }}>+569</div>
                   <input required type="tel" maxLength={8} style={inputStyle} value={telefono} onChange={e => setTelefono(e.target.value.replace(/\D/g, '').slice(0, 8))} />
                 </div>
               </div>
-
               <div>
                 <label style={labelStyle}><School size={16} /> Institución / Colegio</label>
                 <select style={inputStyle} value={colegio} onChange={e => setColegio(e.target.value)}>
@@ -231,7 +219,7 @@ export default function RegistroPedido() {
             </div>
           </motion.div>
 
-          {/* SELECCIÓN PRODUCTOS */}
+          {/* PRENDAS */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} style={cardStyle}>
             <h2 style={{ margin: '0 0 20px 0', fontSize: '18px', fontWeight: '950', color: '#000', display: 'flex', alignItems: 'center', gap: '10px' }}>
               <ShoppingBag size={20} color="#f472b6" /> PRENDAS
@@ -247,7 +235,6 @@ export default function RegistroPedido() {
                 {tallasDeInventario.map(t => <option key={t.id} value={t.talla}>{t.talla} (${Number(t.precio_base).toLocaleString()})</option>)}
                 <option value="ESPECIAL">✨ TALLA ESPECIAL</option>
               </select>
-              
               {tallaSeleccionada === 'ESPECIAL' && (
                 <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} style={{ marginTop: '12px' }}>
                   <label style={labelStyle}><Banknote size={14} /> Precio Acordado ($)</label>
@@ -255,11 +242,12 @@ export default function RegistroPedido() {
                 </motion.div>
               )}
             </div>
-            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={agregarAlCarrito} type="button" style={{ width: '100%', backgroundColor: '#000', color: '#fff', border: 'none', padding: '18px', borderRadius: '18px', fontWeight: '950', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', cursor: 'pointer' }}>
+            <motion.button whileTap={{ scale: 0.98 }} onClick={agregarAlCarrito} type="button" style={{ width: '100%', backgroundColor: '#000', color: '#fff', border: 'none', padding: '18px', borderRadius: '18px', fontWeight: '950', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', cursor: 'pointer' }}>
               <Plus size={22} /> AÑADIR
             </motion.button>
           </motion.div>
 
+          {/* CARRITO */}
           <AnimatePresence>
             {carrito.length > 0 && (
               <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} style={{ ...cardStyle, background: '#fff', borderStyle: 'dashed' }}>
@@ -274,6 +262,7 @@ export default function RegistroPedido() {
             )}
           </AnimatePresence>
 
+          {/* BLOQUE FINAL - FIX BOTONES */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} style={{ backgroundColor: '#000', color: '#fff', padding: '24px', borderRadius: '32px', border: '4px solid #000', boxShadow: '8px 8px 0px #3b82f6' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '20px' }}>
               <motion.button type="button" onClick={() => setMostrarDescuento(!mostrarDescuento)} style={{ width: '100%', backgroundColor: '#3b82f6', color: '#fff', border: '2px solid #fff', padding: '12px', borderRadius: '14px', fontWeight: '950', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', fontSize: '12px' }}>
@@ -283,6 +272,26 @@ export default function RegistroPedido() {
                 <Edit3 size={16} /> AJUSTE
               </motion.button>
             </div>
+
+            {/* PANELES OCULTOS QUE AHORA SÍ APARECEN */}
+            <AnimatePresence>
+              {mostrarDescuento && (
+                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} style={{ marginBottom: '20px', padding: '15px', border: '2px dashed #fff', borderRadius: '20px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '12px' }}>
+                    <button type="button" onClick={() => setTipoDescuento('monto')} style={{ padding: '10px', borderRadius: '10px', border: '2px solid #fff', fontWeight: '900', background: tipoDescuento === 'monto' ? '#fff' : 'transparent', color: tipoDescuento === 'monto' ? '#000' : '#fff', fontSize: '11px' }}>$ PESOS</button>
+                    <button type="button" onClick={() => setTipoDescuento('porcentaje')} style={{ padding: '10px', borderRadius: '10px', border: '2px solid #fff', fontWeight: '900', background: tipoDescuento === 'porcentaje' ? '#fff' : 'transparent', color: tipoDescuento === 'porcentaje' ? '#000' : '#fff', fontSize: '11px' }}>% PORC.</button>
+                  </div>
+                  <input type="number" style={{ ...inputStyle, textAlign: 'center' }} value={valorDescuento} onChange={(e) => setValorDescuento(Number(e.target.value))} placeholder="0" />
+                </motion.div>
+              )}
+
+              {mostrarAjuste && (
+                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} style={{ marginBottom: '20px', padding: '15px', border: '2px dashed #a78bfa', borderRadius: '20px' }}>
+                   <label style={{ fontSize: '11px', fontWeight: '900', color: '#fff', marginBottom: '8px', display: 'block' }}>AJUSTE AL TOTAL ($)</label>
+                   <input type="number" placeholder="Ej: -2000 o 500" style={{ ...inputStyle, textAlign: 'center', color: '#a78bfa' }} value={valorAjuste} onChange={(e) => setValorAjuste(Number(e.target.value))} />
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             <div style={{ textAlign: 'right', marginBottom: '20px' }}>
               <p style={{ margin: 0, fontSize: '14px', fontWeight: '950', color: '#4ade80' }}>PRECIO FINAL</p>
