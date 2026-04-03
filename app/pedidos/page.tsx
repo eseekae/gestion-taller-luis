@@ -242,7 +242,7 @@ export default function VerPedidos() {
                 </div>
                 <p style={{ fontSize: '14px', fontWeight: '800', marginBottom: '15px', color: '#0000' }}>Cliente: {modalPago.nombreCliente}</p>
                 
-                <label style={{ fontSize: '11px', fontWeight: '900', display: 'block', marginBottom: '5px', color: '#ffffff00' }}>MONTO $</label>
+                <label style={{ fontSize: '11px', fontWeight: '900', display: 'block', marginBottom: '5px', color: '#ffffff' }}>MONTO $</label>
                 <input type="number" style={{ width: '100%', padding: '12px', border: '3px solid #000', borderRadius: '12px', fontWeight: '900', marginBottom: '15px', color: '#0000' }} value={modalPago.monto} onChange={e => setModalPago({...modalPago, monto: e.target.value})} />
                 
                 <label style={{ fontSize: '11px', fontWeight: '900', display: 'block', marginBottom: '5px', color: '#0000' }}>FECHA</label>
