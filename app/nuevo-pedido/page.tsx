@@ -171,10 +171,10 @@ export default function RegistroPedido() {
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} style={cardStyle}>
             <label style={labelStyle}><Rocket size={16} /> Prioridad de Pedido</label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '12px', marginBottom: tipoEntrega === 'agendada' ? '20px' : '0' }}>
-              <motion.button type="button" onClick={() => setTipoEntrega('agendada')} style={{ padding: '16px', borderRadius: '20px', border: '4px solid #000', fontWeight: '900', fontSize: '14px', backgroundColor: tipoEntrega === 'agendada' ? '#fbbf24' : '#fff', boxShadow: tipoEntrega === 'agendada' ? 'inset 4px 4px 0px rgba(0,0,0,0.1)' : '4px 4px 0px #000', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' }}>
+              <motion.button type="button" onClick={() => setTipoEntrega('agendada')} style={{ padding: '16px', borderRadius: '20px', border: '4px solid #000', fontWeight: '900', color: '#000', fontSize: '14px', backgroundColor: tipoEntrega === 'agendada' ? '#fbbf24' : '#fff', boxShadow: tipoEntrega === 'agendada' ? 'inset 4px 4px 0px rgba(0,0,0,0.1)' : '4px 4px 0px #000', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' }}>
                 <Clock size={20} /> AGENDAR
               </motion.button>
-              <motion.button type="button" onClick={() => setTipoEntrega('inmediata')} style={{ padding: '16px', borderRadius: '20px', border: '4px solid #000', fontWeight: '900', fontSize: '14px', backgroundColor: tipoEntrega === 'inmediata' ? '#4ade80' : '#fff', boxShadow: tipoEntrega === 'inmediata' ? 'inset 4px 4px 0px rgba(0,0,0,0.1)' : '4px 4px 0px #000', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' }}>
+              <motion.button type="button" onClick={() => setTipoEntrega('inmediata')} style={{ padding: '16px', borderRadius: '20px', border: '4px solid #000', fontWeight: '900', color: '#000', fontSize: '14px', backgroundColor: tipoEntrega === 'inmediata' ? '#4ade80' : '#fff', boxShadow: tipoEntrega === 'inmediata' ? 'inset 4px 4px 0px rgba(0,0,0,0.1)' : '4px 4px 0px #000', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' }}>
                 <CheckCircle size={20} /> INMEDIATA
               </motion.button>
             </div>
@@ -197,7 +197,7 @@ export default function RegistroPedido() {
             <div style={{ display: 'grid', gap: '20px' }}>
               <div>
                 <label style={labelStyle}>Nombre Completo</label>
-                <input required style={inputStyle} value={nombreCliente} onChange={e => setNombreCliente(e.target.value)} placeholder="Ej: Sebastian Ramirez" />
+                <input required style={inputStyle} value={nombreCliente} onChange={e => setNombreCliente(e.target.value)} placeholder="Ej: Eduardo Vargas" />
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                 <div><label style={labelStyle}><IdCard size={14} /> RUT</label><input style={inputStyle} value={rut} onChange={e => setRut(e.target.value)} placeholder="12.345.678-9" /></div>
