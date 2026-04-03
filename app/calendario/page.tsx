@@ -72,9 +72,9 @@ export default function CalendarioLiteral() {
             <ArrowLeft size={20} />
           </button>
           <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-            <button onClick={() => cambiarMes(-1)} style={{ border: '3px solid #000', borderRadius: '8px', padding: '5px' }}><ChevronLeft /></button>
-            <h2 style={{ margin: 0, textTransform: 'uppercase', fontWeight: '900', fontSize: '18px', width: '160px', textAlign: 'center' }}>{nombreMes}</h2>
-            <button onClick={() => cambiarMes(1)} style={{ border: '3px solid #000', borderRadius: '8px', padding: '5px' }}><ChevronRight /></button>
+            <button onClick={() => cambiarMes(-1)} style={{ border: '3px solid #000', borderRadius: '8px', padding: '5px', color: '#000' }}><ChevronLeft /></button>
+            <h2 style={{ margin: 0, textTransform: 'uppercase', fontWeight: '900', fontSize: '18px', width: '160px', textAlign: 'center', color: '#000' }}>{nombreMes}</h2>
+            <button onClick={() => cambiarMes(1)} style={{ border: '3px solid #000', borderRadius: '8px', padding: '5px', color: '#000' }}><ChevronRight /></button>
           </div>
           <div style={{ width: '45px' }}></div>
         </div>
