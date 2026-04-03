@@ -2,7 +2,8 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { ShoppingBag, ClipboardList, Package, BarChart3, Scissors, LogOut, History, Box } from 'lucide-react'
+// Añadimos Calendar a los iconos
+import { ShoppingBag, ClipboardList, Package, Scissors, LogOut, Calendar } from 'lucide-react'
 
 export default function Home() {
   const router = useRouter()
@@ -87,11 +88,18 @@ export default function Home() {
             onClick={() => router.push('/pedidos')} 
           />
 
-          {/* NUEVO BOTÓN DE PRODUCCIÓN */}
+          {/* NUEVO BOTÓN DE CALENDARIO / AGENDA */}
+          <MenuButton 
+            icon={<Calendar size={24} />} 
+            title="Agenda de Entregas" 
+            subtitle="Próximos vencimientos"
+            color="#3b82f6" // Azul para diferenciarlo
+            onClick={() => router.push('/calendario')} 
+          />
+
           <MenuButton 
             icon={<Scissors size={24} />} 
-            title="Prendas Pendientes" 
-            subtitle="Lo que falta fabricar por colegio"
+            title="Pendientes" 
             color="#f472b6" 
             onClick={() => router.push('/pendientes')} 
           />
@@ -99,8 +107,8 @@ export default function Home() {
           <MenuButton 
             icon={<Package size={24} />} 
             title="Inventario" 
-            subtitle="Stock de productos e insumos"
-            color="#60a5fa" 
+            subtitle="Stock y Variedades"
+            color="#a78bfa" 
             onClick={() => router.push('/inventario')} 
           />
 
