@@ -4,10 +4,11 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 import { registrarLog } from '../../lib/auditoria'
 import { motion, AnimatePresence } from 'framer-motion'
+import * as XLSX from 'xlsx-js-style'
 import { 
   ArrowLeft, Search, School, Phone, Calendar, Printer, Trash2, 
   MessageCircle, MessageSquare, Bell, Package, CheckCircle, 
-  X, History, User, CreditCard, Plus, Clock, Minus, ChevronDown, ChevronUp, Tag, Boxes
+  X, History, User, CreditCard, Plus, Clock, Minus, ChevronDown, ChevronUp, Tag, Boxes, Download
 } from 'lucide-react'
 
 export default function VerPedidos() {
@@ -83,25 +84,51 @@ export default function VerPedidos() {
 
   useEffect(() => { cargar() }, [cargar])
 
+  // --- LÓGICA DE EXPORTACIÓN EXCEL ---
+  const exportarExcel = () => {
+    const filas: any[] = []
+    
+    datos.forEach(p => {
+      p.detalles?.forEach((d: any) => {
+        filas.push({
+          'ID': p.id,
+          'FECHA REGISTRO': new Date(p.created_at).toLocaleDateString('es-CL'),
+          'CLIENTE': p.c_nombre,
+          'TELÉFONO': p.c_telefono,
+          'COLEGIO': p.colegio || 'Particular',
+          'PRODUCTO': d.p_nombre,
+          'TALLA': d.talla,
+          'CANT. PEDIDA': d.cantidad,
+          'CANT. ENTREGADA': d.cantidad_entregada || 0,
+          'ESTADO ÍTEM': d.estado,
+          'PRECIO UNIT.': d.precio_unitario,
+          'SUBTOTAL ÍTEM': d.cantidad * d.precio_unitario,
+          'TOTAL PEDIDO': p.total_final,
+          'TOTAL PAGADO': p.total_pagado,
+          'DEUDA RESTANTE': p.total_final - p.total_pagado,
+          'ESTADO GENERAL': p.estado_macro,
+          'OBSERVACIONES': p.observaciones || ''
+        })
+      })
+    })
+
+    const ws = XLSX.utils.json_to_sheet(filas)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, "Reporte Pedidos")
+    XLSX.writeFile(wb, `Pedidos_Creaciones_Yovi_${new Date().toISOString().split('T')[0]}.xlsx`)
+    registrarLog("Exportó listado de pedidos a Excel", "Descarga de reporte completo")
+  }
+
   // --- ACCIONES DE ENTREGA PARCIAL / TOTAL ---
-  
   const actualizarEntregaItem = async (det: any, cambio: number) => {
     const actual = det.cantidad_entregada || 0
     const nuevaCantidad = actual + cambio
     if (nuevaCantidad < 0 || nuevaCantidad > det.cantidad) return
-
     try {
-      // Actualizar stock mediante RPC
       const rpcFunc = cambio > 0 ? 'entregar_stock' : 'revertir_entrega_stock'
       await supabase.rpc(rpcFunc, { prod_id: det.producto_id, cant: Math.abs(cambio) })
-
-      // Actualizar el detalle
       const nuevoEstado = nuevaCantidad === det.cantidad ? 'Entregado' : 'Pendiente'
-      await supabase.from('detalles_pedido').update({
-        cantidad_entregada: nuevaCantidad,
-        estado: nuevoEstado
-      }).eq('id', det.id)
-
+      await supabase.from('detalles_pedido').update({ cantidad_entregada: nuevaCantidad, estado: nuevoEstado }).eq('id', det.id)
       await registrarLog(`${cambio > 0 ? 'Entregó' : 'Restó'} ${Math.abs(cambio)} unidad(es) de ${det.p_nombre}`, `Pedido ${det.pedido_id}`)
       cargar()
     } catch (err) { alert("Error al actualizar entrega") }
@@ -120,13 +147,10 @@ export default function VerPedidos() {
     if (!confirm(`¿Marcar TODO el pedido como RETIRADO?`)) return
     try {
       for (const det of pedido.detalles) {
-        const faltante = det.cantidad - det.cantidad_entregada
+        const faltante = det.cantidad - (det.cantidad_entregada || 0)
         if (faltante > 0) {
           await supabase.rpc('entregar_stock', { prod_id: det.producto_id, cant: faltante })
-          await supabase.from('detalles_pedido').update({
-            cantidad_entregada: det.cantidad,
-            estado: 'Entregado'
-          }).eq('id', det.id)
+          await supabase.from('detalles_pedido').update({ cantidad_entregada: det.cantidad, estado: 'Entregado' }).eq('id', det.id)
         }
       }
       await supabase.from('pedidos').update({ estado: 'Completado' }).eq('id', pedido.id)
@@ -140,12 +164,8 @@ export default function VerPedidos() {
     const valorNum = Number(monto)
     if (!monto || valorNum <= 0) return alert("Ingresa un monto válido")
     const montoFinal = esCorreccion ? valorNum * -1 : valorNum
-
     try {
-      await supabase.from('pagos').insert([{
-        pedido_id: pedidoId, monto: montoFinal, fecha_pago: fecha, 
-        metodo_pago: metodo, creado_por: sessionStorage.getItem('user_name') || 'Don Luis'
-      }])
+      await supabase.from('pagos').insert([{ pedido_id: pedidoId, monto: montoFinal, fecha_pago: fecha, metodo_pago: metodo, creado_por: sessionStorage.getItem('user_name') || 'Don Luis' }])
       const tipoMsg = esCorreccion ? "CORRIGIÓ/DESCONTÓ" : "Registró"
       await registrarLog(`${tipoMsg} pago de $${valorNum} (${metodo})`, `Cliente: ${nombreCliente}`)
       setModalPago({ ...modalPago, open: false, monto: '', esCorreccion: false })
@@ -170,10 +190,9 @@ export default function VerPedidos() {
 
   const filtrados = datos.filter(p => {
     const t = busqueda.toLowerCase()
-    return p.c_nombre.toLowerCase().includes(t) || p.c_telefono.includes(t) || (p.colegio && p.colegio.toLowerCase().includes(t))
+    return p.c_nombre.toLowerCase().includes(t) || p.c_telefono.includes(t) || (p.colegio && p.colegio.toLowerCase().includes(t)) || p.id.toString().includes(t)
   }).filter(p => filtro === 'Todos' || (filtro === 'Pendientes' && p.estado_macro !== 'FINALIZADO (OK)') || p.estado_macro === filtro)
 
-  // ESTILOS
   const containerStyle = { minHeight: '100vh', backgroundColor: '#f8fafc', backgroundImage: `radial-gradient(#cbd5e1 1.5px, transparent 1.5px)`, backgroundSize: '32px 32px', padding: '40px 20px', fontFamily: 'system-ui, -apple-system, sans-serif' }
   const cardStyle = { backgroundColor: '#fff', padding: '24px', borderRadius: '28px', border: '4px solid #000', boxShadow: '8px 8px 0px #000' }
   const labelStyle = { fontSize: '11px', fontWeight: '950', color: '#64748b', marginBottom: '4px', textTransform: 'uppercase' as const }
@@ -183,12 +202,23 @@ export default function VerPedidos() {
     <main style={containerStyle}>
       <div style={{ maxWidth: '650px', margin: '0 auto' }}>
         
-        {/* HEADER */}
-        <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '32px' }}>
-          <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => router.push('/')} style={{ backgroundColor: '#fff', border: '3px solid #000', padding: '12px', borderRadius: '16px', boxShadow: '4px 4px 0px #000', cursor: 'pointer' }}>
-            <ArrowLeft size={24} color="#000" />
+        {/* HEADER CON BOTÓN EXCEL */}
+        <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '32px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+            <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => router.push('/')} style={{ backgroundColor: '#fff', border: '3px solid #000', padding: '12px', borderRadius: '16px', boxShadow: '4px 4px 0px #000', cursor: 'pointer' }}>
+              <ArrowLeft size={24} color="#000" />
+            </motion.button>
+            <h1 style={{ margin: 0, fontSize: '32px', fontWeight: '950', color: '#000', letterSpacing: '-1.5px' }}>GESTIÓN PEDIDOS</h1>
+          </div>
+          
+          <motion.button 
+            whileHover={{ scale: 1.05, y: -2 }}
+            whileTap={{ scale: 0.95, y: 0 }}
+            onClick={exportarExcel}
+            style={{ backgroundColor: '#166534', color: '#fff', border: '3px solid #000', padding: '12px 18px', borderRadius: '16px', boxShadow: '4px 4px 0px #000', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '900' }}
+          >
+            <Download size={20} /> <span style={{fontSize: '13px'}}>EXCEL</span>
           </motion.button>
-          <h1 style={{ margin: 0, fontSize: '32px', fontWeight: '950', color: '#000', letterSpacing: '-1.5px' }}>GESTIÓN PEDIDOS</h1>
         </motion.div>
 
         {/* BUSCADOR */}
@@ -252,14 +282,12 @@ export default function VerPedidos() {
                                 </span>
                               </div>
                             </div>
-                            {/* BOTONES DE CONTROL INDIVIDUAL */}
                             <div style={{ display: 'flex', gap: '6px' }}>
                               <button onClick={() => actualizarEntregaItem(det, -1)} style={{ background: '#ef4444', color: '#fff', border: '2px solid #000', borderRadius: '8px', width: '30px', height: '30px', fontWeight: '950', cursor: 'pointer' }}>-</button>
                               <button onClick={() => actualizarEntregaItem(det, 1)} style={{ background: '#4ade80', color: '#000', border: '2px solid #000', borderRadius: '8px', width: '30px', height: '30px', fontWeight: '950', cursor: 'pointer' }}>+</button>
                             </div>
                           </div>
                         ))}
-                        
                         {p.observaciones && (
                           <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '2px dashed #000' }}>
                             <p style={labelStyle}><MessageSquare size={12} inline/> Notas Especiales:</p>
