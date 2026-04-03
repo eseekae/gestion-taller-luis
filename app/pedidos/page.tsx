@@ -49,7 +49,7 @@ export default function VerPedidos() {
         return { ...d, p_nombre: prod?.nombre || 'Producto' }
       })
 
-      // LÓGICA DE ESTADOS CORREGIDA: INDEPENDIENTE DEL PAGO
+      // LÓGICA DE ESTADOS INDEPENDIENTE DEL PAGO
       const itemsEntregados = detalles?.length > 0 && detalles.every(d => d.estado === 'Entregado')
       const itemsListos = detalles?.length > 0 && detalles.every(d => d.estado === 'Listo para retiro' || d.estado === 'Notificado' || d.estado === 'Entregado')
       const pagoCompleto = totalPagado >= p.total_final
@@ -59,9 +59,9 @@ export default function VerPedidos() {
       let colorText = '#000'
 
       if (itemsEntregados && pagoCompleto) {
-        estadoMacro = 'FINALIZADO (OK)'; colorBg = '#4ade80' // Entregado y pagado
+        estadoMacro = 'FINALIZADO (OK)'; colorBg = '#4ade80'
       } else if (itemsEntregados && !pagoCompleto) {
-        estadoMacro = 'ENTREGADO (DEUDA)'; colorBg = '#fbbf24' // Se lo llevó pero debe
+        estadoMacro = 'ENTREGADO (DEUDA)'; colorBg = '#fbbf24'
       } else if (itemsListos) {
         estadoMacro = pagoCompleto ? 'LISTO (PAGADO)' : 'LISTO (PEND. PAGO)'; 
         colorBg = '#3b82f6'; colorText = '#fff'
@@ -167,10 +167,16 @@ export default function VerPedidos() {
                 
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', alignItems: 'flex-start' }}>
                   <div>
-                    <span style={{ fontWeight: '900', fontSize: '11px', color: '#000', display: 'flex', alignItems: 'center', gap: '4px', textTransform: 'uppercase' }}>
-                      <School size={12} /> {p.colegio || 'Particular'}
-                    </span>
-                    <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#000', color: '#fff', padding: '5px 10px', borderRadius: '8px', fontSize: '11px', fontWeight: '900' }}>
+                    {/* ID DEL PEDIDO AÑADIDO AQUÍ */}
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
+                      <span style={{ background: '#fbbf24', border: '2px solid #000', padding: '2px 8px', borderRadius: '6px', fontSize: '10px', fontWeight: '900', color: '#000' }}>
+                        ID #{p.id}
+                      </span>
+                      <span style={{ fontWeight: '900', fontSize: '11px', color: '#000', display: 'flex', alignItems: 'center', gap: '4px', textTransform: 'uppercase' }}>
+                        <School size={12} /> {p.colegio || 'Particular'}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#000', color: '#fff', padding: '5px 10px', borderRadius: '8px', fontSize: '11px', fontWeight: '900' }}>
                       <Calendar size={14} /> ENTREGA: {fechaEntrega}
                     </div>
                   </div>
@@ -229,7 +235,7 @@ export default function VerPedidos() {
           })}
         </div>
 
-        {/* MODAL DE PAGO (NEUBRUTALIST) - TEXTOS CORREGIDOS */}
+        {/* MODAL DE PAGO */}
         <AnimatePresence>
           {modalPago.open && (
             <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
