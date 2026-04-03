@@ -1,9 +1,8 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { motion } from 'framer-motion'
-// Añadimos Calendar a los iconos
-import { ShoppingBag, ClipboardList, Package, Scissors, LogOut, Calendar } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { ShoppingBag, ClipboardList, Package, Scissors, LogOut, Calendar, LayoutDashboard, UserCircle } from 'lucide-react'
 
 export default function Home() {
   const router = useRouter()
@@ -28,153 +27,209 @@ export default function Home() {
     hidden: { opacity: 0 },
     visible: { 
       opacity: 1, 
-      transition: { staggerChildren: 0.1 } 
+      transition: { staggerChildren: 0.08, delayChildren: 0.2 } 
     }
   }
 
   if (!user) return null
 
   return (
-    <main style={{ minHeight: '100vh', backgroundColor: '#ffffff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px', fontFamily: 'sans-serif' }}>
+    <main style={{ 
+      minHeight: '100vh', 
+      backgroundColor: '#f8fafc', 
+      backgroundImage: `radial-gradient(#cbd5e1 1.5px, transparent 1.5px)`,
+      backgroundSize: '32px 32px',
+      display: 'flex', 
+      flexDirection: 'column', 
+      alignItems: 'center', 
+      padding: '40px 20px', 
+      fontFamily: 'system-ui, -apple-system, sans-serif' 
+    }}>
       
       <motion.div 
         initial="hidden"
         animate="visible"
         variants={containerVariants}
-        style={{ maxWidth: '450px', width: '100%' }}
+        style={{ maxWidth: '480px', width: '100%' }}
       >
         
-        {/* CABECERA CORPORATIVA NEUBRUTALIST */}
-        <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+        {/* CABECERA PRO */}
+        <div style={{ textAlign: 'center', marginBottom: '48px', position: 'relative' }}>
           <motion.div 
-            variants={{ hidden: { scale: 0.8, opacity: 0 }, visible: { scale: 1, opacity: 1 } }}
-            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '70px', height: '70px', backgroundColor: '#000', color: '#fff', borderRadius: '20px', marginBottom: '20px', border: '3px solid #000', boxShadow: '6px 6px 0px #3b82f6' }}
+            variants={{ hidden: { scale: 0, rotate: -180 }, visible: { scale: 1, rotate: 0 } }}
+            transition={{ type: 'spring', stiffness: 200, damping: 15 }}
+            style={{ 
+              display: 'inline-flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              width: '85px', 
+              height: '85px', 
+              backgroundColor: '#000', 
+              color: '#fff', 
+              borderRadius: '28px', 
+              marginBottom: '24px', 
+              border: '4px solid #000', 
+              boxShadow: '8px 8px 0px #3b82f6' 
+            }}
           >
-            <Scissors size={35} />
+            <Scissors size={42} />
           </motion.div>
+
           <motion.h1 
-            variants={{ hidden: { y: 10, opacity: 0 }, visible: { y: 0, opacity: 1 } }}
-            style={{ margin: '0 0 8px 0', fontSize: '32px', fontWeight: '900', color: '#000', letterSpacing: '-1px' }}
+            variants={{ hidden: { y: 20, opacity: 0 }, visible: { y: 0, opacity: 1 } }}
+            style={{ margin: '0 0 12px 0', fontSize: '38px', fontWeight: '950', color: '#000', letterSpacing: '-1.5px', textTransform: 'uppercase' }}
           >
-            Gestión Don Luis
+            PANEL DE CONTROL
           </motion.h1>
           
           <motion.div 
-            variants={{ hidden: { y: 10, opacity: 0 }, visible: { y: 0, opacity: 1 } }}
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+            variants={{ hidden: { opacity: 0 }, visible: { opacity: 1 } }}
+            style={{ 
+              display: 'inline-flex', 
+              alignItems: 'center', 
+              gap: '8px', 
+              backgroundColor: '#000', 
+              padding: '6px 16px', 
+              borderRadius: '12px',
+              border: '2px solid #000',
+              boxShadow: '4px 4px 0px #4ade80'
+            }}
           >
-            <span style={{ fontSize: '14px', fontWeight: '900', color: '#000', textTransform: 'uppercase' }}>
-              Sesión Activa: {user.nombre}
+            <UserCircle size={16} color="#fff" />
+            <span style={{ fontSize: '12px', fontWeight: '900', color: '#fff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              OPERADOR: {user.nombre}
             </span>
           </motion.div>
         </div>
 
-        {/* BOTONERA PRINCIPAL */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+        {/* GRILLA DE ACCIONES (NEUBRUTALISM PREMIUM) */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           
           <MenuButton 
-            icon={<ShoppingBag size={24} />} 
-            title="Nueva Venta" 
-            subtitle="Registrar pedido de cliente"
+            icon={<ShoppingBag size={26} />} 
+            title="NUEVA VENTA" 
+            subtitle="Registrar pedido o entrega inmediata"
             color="#4ade80" 
             onClick={() => router.push('/nuevo-pedido')} 
           />
           
           <MenuButton 
-            icon={<ClipboardList size={24} />} 
-            title="Ver Pedidos" 
-            subtitle="Entregas, abonos y deudas"
+            icon={<ClipboardList size={26} />} 
+            title="GESTIÓN PEDIDOS" 
+            subtitle="Seguimiento de deudas y avisos"
             color="#fbbf24" 
             onClick={() => router.push('/pedidos')} 
           />
 
-          {/* NUEVO BOTÓN DE CALENDARIO / AGENDA */}
           <MenuButton 
-            icon={<Calendar size={24} />} 
-            title="Agenda de Entregas" 
-            subtitle="Próximos vencimientos"
-            color="#3b82f6" // Azul para diferenciarlo
+            icon={<Calendar size={26} />} 
+            title="AGENDA ENTREGAS" 
+            subtitle="Calendario de producción mensual"
+            color="#3b82f6" 
             onClick={() => router.push('/calendario')} 
           />
 
-          <MenuButton 
-            icon={<Scissors size={24} />} 
-            title="Pendientes" 
-            color="#f472b6" 
-            onClick={() => router.push('/pendientes')} 
-          />
-          
-          <MenuButton 
-            icon={<Package size={24} />} 
-            title="Inventario" 
-            subtitle="Stock y Variedades"
-            color="#a78bfa" 
-            onClick={() => router.push('/inventario')} 
-          />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+            <MenuButton 
+              icon={<Scissors size={24} />} 
+              title="TALLER" 
+              subtitle="Pendientes"
+              color="#f472b6" 
+              onClick={() => router.push('/pendientes')} 
+              compact
+            />
+            <MenuButton 
+              icon={<Package size={24} />} 
+              title="STOCK" 
+              subtitle="Inventario"
+              color="#a78bfa" 
+              onClick={() => router.push('/inventario')} 
+              compact
+            />
+          </div>
 
-          {/* BOTÓN SALIR */}
+          {/* BOTÓN SALIR CON ESTILO */}
           <motion.button 
             variants={{ hidden: { opacity: 0 }, visible: { opacity: 1 } }}
-            whileHover={{ scale: 1.02, backgroundColor: '#ef4444', color: '#fff' }}
-            whileTap={{ scale: 0.98 }}
+            whileHover={{ y: -4, backgroundColor: '#000', color: '#fff', boxShadow: '0px 8px 0px #ef4444' }}
+            whileTap={{ y: 2, boxShadow: 'none' }}
             onClick={logout} 
             style={{ 
-              marginTop: '20px', 
+              marginTop: '24px', 
               backgroundColor: '#fff', 
-              border: '3px solid #000', 
+              border: '4px solid #000', 
               color: '#000', 
               fontWeight: '900', 
-              padding: '16px', 
-              borderRadius: '16px', 
+              padding: '18px', 
+              borderRadius: '20px', 
               cursor: 'pointer', 
               display: 'flex', 
               alignItems: 'center', 
               justifyContent: 'center', 
-              gap: '10px',
-              fontSize: '15px',
+              gap: '12px',
+              fontSize: '16px',
               width: '100%',
-              boxShadow: '4px 4px 0px #000'
+              boxShadow: '6px 6px 0px #000',
+              transition: 'all 0.1s ease'
             }}
           >
-            <LogOut size={20} /> Cerrar Sesión
+            <LogOut size={22} /> CERRAR SESIÓN DEL TALLER
           </motion.button>
 
         </div>
+
+        <p style={{ marginTop: '40px', textAlign: 'center', fontSize: '11px', fontWeight: '900', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '2px' }}>
+          CREACIONES YOVI • EST. 1998 • V2.0
+        </p>
       </motion.div>
     </main>
   )
 }
 
-function MenuButton({ icon, title, subtitle, color, onClick }: any) {
+function MenuButton({ icon, title, subtitle, color, onClick, compact }: any) {
   return (
     <motion.button 
       variants={{
-        hidden: { opacity: 0, y: 15 },
-        visible: { opacity: 1, y: 0 }
+        hidden: { opacity: 0, scale: 0.9 },
+        visible: { opacity: 1, scale: 1 }
       }}
-      whileHover={{ scale: 1.03, boxShadow: '8px 8px 0px #000' }}
-      whileTap={{ scale: 0.97 }}
+      whileHover={{ y: -6, boxShadow: `10px 10px 0px #000` }}
+      whileTap={{ y: 2, boxShadow: '2px 2px 0px #000' }}
       onClick={onClick}
       style={{ 
         width: '100%', 
-        padding: '22px', 
+        padding: compact ? '20px' : '24px', 
         backgroundColor: '#fff', 
-        border: '3px solid #000', 
-        borderRadius: '20px', 
+        border: '4px solid #000', 
+        borderRadius: '24px', 
         cursor: 'pointer', 
         display: 'flex', 
-        alignItems: 'center', 
-        gap: '20px', 
-        boxShadow: '4px 4px 0px #000',
-        textAlign: 'left'
+        flexDirection: compact ? 'column' : 'row',
+        alignItems: compact ? 'flex-start' : 'center', 
+        gap: compact ? '12px' : '24px', 
+        boxShadow: '6px 6px 0px #000',
+        textAlign: 'left',
+        position: 'relative',
+        transition: 'all 0.1s ease'
       }}
     >
-      <div style={{ backgroundColor: color, color: '#000', padding: '14px', borderRadius: '14px', border: '2px solid #000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ 
+        backgroundColor: color, 
+        color: '#000', 
+        padding: '14px', 
+        borderRadius: '18px', 
+        border: '3px solid #000', 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        boxShadow: '3px 3px 0px #000'
+      }}>
         {icon}
       </div>
       <div>
-        <p style={{ margin: '0 0 2px 0', fontSize: '18px', fontWeight: '900', color: '#000' }}>{title}</p>
-        <p style={{ margin: 0, fontSize: '12px', fontWeight: '700', color: '#475569' }}>{subtitle}</p>
+        <p style={{ margin: '0 0 2px 0', fontSize: compact ? '16px' : '20px', fontWeight: '950', color: '#000', lineHeight: '1' }}>{title}</p>
+        {!compact && <p style={{ margin: 0, fontSize: '13px', fontWeight: '800', color: '#475569' }}>{subtitle}</p>}
+        {compact && <p style={{ margin: 0, fontSize: '11px', fontWeight: '800', color: '#475569', textTransform: 'uppercase' }}>{subtitle}</p>}
       </div>
     </motion.button>
   )
