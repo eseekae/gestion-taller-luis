@@ -138,7 +138,7 @@ export default function CalendarioLiteral() {
                   {pedidosAgrupados[diaSeleccionado]?.map((p: any) => (
                     <div key={p.id} style={{ backgroundColor: '#fff', border: '3px solid #000', borderRadius: '16px', padding: '15px', boxShadow: '4px 4px 0px #000' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-                        <span style={{ fontWeight: '900', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '5px' }}><User size={16} /> {p.clientes.nombre}</span>
+                        <span style={{ fontWeight: '900', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '5px', color: '#000' }}><User size={16} /> {p.clientes.nombre}</span>
                         <span style={{ background: '#fbbf24', border: '2px solid #000', padding: '2px 8px', borderRadius: '6px', fontSize: '10px', fontWeight: '900' }}>ID #{p.id}</span>
                       </div>
                       <p style={{ fontSize: '12px', fontWeight: '800', color: '#64748b', marginBottom: '10px' }}><School size={14} style={{ display: 'inline', marginRight: '4px' }} /> {p.colegio}</p>
@@ -147,8 +147,8 @@ export default function CalendarioLiteral() {
                       <div style={{ borderTop: '1px solid #ddd', paddingTop: '10px' }}>
                         {p.detalles_pedido?.map((det: any, idx: number) => (
                           <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '4px' }}>
-                            <span style={{ fontWeight: '700' }}>{det.cantidad}x {det.inventario?.nombre}</span>
-                            <span style={{ fontWeight: '900' }}>Talla {det.talla}</span>
+                            <span style={{ fontWeight: '700', color: '#000' }}>{det.cantidad}x {det.inventario?.nombre}</span>
+                            <span style={{ fontWeight: '900', color: '#000' }}>Talla {det.talla}</span>
                           </div>
                         ))}
                       </div>
