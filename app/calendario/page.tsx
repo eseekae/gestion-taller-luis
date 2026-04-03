@@ -68,7 +68,7 @@ export default function CalendarioLiteral() {
         
         {/* HEADER NAVEGACIÓN */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-          <button onClick={() => router.push('/')} style={{ background: '#fff', border: '3px solid #000', padding: '10px', borderRadius: '12px', boxShadow: '4px 4px 0px #000' }}>
+          <button onClick={() => router.push('/')} style={{ background: '#000000', border: '3px solid #000', padding: '10px', borderRadius: '12px', boxShadow: '4px 4px 0px #000' }}>
             <ArrowLeft size={20} />
           </button>
           <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
