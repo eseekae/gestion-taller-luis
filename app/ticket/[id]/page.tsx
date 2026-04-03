@@ -45,8 +45,8 @@ export default function TicketPedido() {
     if (navigator.share) {
       try {
         await navigator.share({
-          title: `Ticket Venta #${id} - Taller Yovi`,
-          text: `Hola ${pedido.clientes.nombre}, aquí tienes el comprobante de tu pedido en Taller Yovi.`,
+          title: `Ticket Venta #${id} - Creaciones Yovi`,
+          text: `Hola ${pedido.clientes.nombre}, aquí tienes el comprobante de tu pedido en Creaciones Yovi.`,
           url: window.location.href, // Comparte el link directo al ticket
         })
       } catch (err) {
@@ -89,9 +89,9 @@ export default function TicketPedido() {
         
         <div style={{ textAlign: 'center', borderBottom: '2px dashed #000', paddingBottom: '10px', marginBottom: '10px' }}>
           <ReceiptText size={35} color="#000" style={{ marginBottom: '5px' }} />
-          <h1 style={{ margin: 0, fontSize: '18px', fontWeight: '1000' }}>TALLER YOVI</h1>
-          <p style={{ margin: '2px 0', fontSize: '10px', fontWeight: '900' }}>CONFECCIÓN Y DISEÑO PROPIO</p>
-          <p style={{ margin: '2px 0', fontSize: '10px', fontWeight: '900' }}>WA: +569 8450 7104 | IG: @taller_yovi</p>
+          <h1 style={{ margin: 0, fontSize: '18px', fontWeight: '1000' }}>Creaciones YOVI</h1>
+          <p style={{ margin: '2px 0', fontSize: '10px', fontWeight: '900' }}>Dirección: </p>
+          <p style={{ margin: '2px 0', fontSize: '10px', fontWeight: '900' }}>WA: +569 | IG: @</p>
         </div>
 
         <div style={{ fontSize: '10px', fontWeight: '900', borderBottom: '1px solid #000', paddingBottom: '8px', marginBottom: '8px' }}>
