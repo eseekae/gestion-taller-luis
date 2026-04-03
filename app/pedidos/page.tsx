@@ -31,7 +31,6 @@ export default function VerPedidos() {
   })
 
   const cargar = useCallback(async () => {
-    // FIX: Cambiamos sessionStorage por localStorage para que persista al abrir pestañas
     if (!localStorage.getItem('user_role')) return router.push('/login')
     setLoading(true)
 
@@ -85,7 +84,6 @@ export default function VerPedidos() {
 
   useEffect(() => { cargar() }, [cargar])
 
-  // --- EXPORTACIÓN EXCEL ULTRA DETALLADA CON DISEÑO ---
   const exportarExcel = () => {
     const dataFilas: any[] = []
     const headers = [
@@ -130,31 +128,6 @@ export default function VerPedidos() {
     })
 
     const ws = XLSX.utils.json_to_sheet(dataFilas)
-    const range = XLSX.utils.decode_range(ws['!ref']!)
-    for (let R = range.s.r; R <= range.e.r; ++R) {
-      for (let C = range.s.c; C <= range.e.c; ++C) {
-        const cell_address = { c: C, r: R }
-        const cell_ref = XLSX.utils.encode_cell(cell_address)
-        if (!ws[cell_ref]) continue
-        ws[cell_ref].s = {
-          border: {
-            top: { style: "thin", color: { rgb: "000000" } },
-            bottom: { style: "thin", color: { rgb: "000000" } },
-            left: { style: "thin", color: { rgb: "000000" } },
-            right: { style: "thin", color: { rgb: "000000" } }
-          },
-          font: { name: "Arial", sz: 10 }
-        }
-        if (R === 0) {
-          ws[cell_ref].s.fill = { fgColor: { rgb: "000000" } }
-          ws[cell_ref].s.font = { color: { rgb: "FFFFFF" }, bold: true, sz: 11 }
-        }
-        if (ws[cell_ref].v === '---') {
-          ws[cell_ref].s.fill = { fgColor: { rgb: "E2E8F0" } }
-          ws[cell_ref].s.font = { color: { rgb: "E2E8F0" } }
-        }
-      }
-    }
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, "PEDIDOS YOVI")
     XLSX.writeFile(wb, `Reporte_Taller_Yovi_${new Date().toISOString().split('T')[0]}.xlsx`)
@@ -208,7 +181,6 @@ export default function VerPedidos() {
     const montoFinal = esCorreccion ? valorNum * -1 : valorNum
     
     try {
-      // FIX: Aseguramos que se guarde el pago y luego se recargue la vista
       const { error } = await supabase.from('pagos').insert([{ 
         pedido_id: pedidoId, 
         monto: montoFinal, 
@@ -222,7 +194,6 @@ export default function VerPedidos() {
       const tipoMsg = esCorreccion ? "CORRIGIÓ/DESCONTÓ" : "Registró"
       await registrarLog(`${tipoMsg} pago de $${valorNum} (${metodo})`, `Cliente: ${nombreCliente}`)
       
-      // Reset de modal y recarga de datos
       setModalPago({ ...modalPago, open: false, monto: '', esCorreccion: false, pedidoId: null })
       await cargar() 
 
@@ -285,7 +256,6 @@ export default function VerPedidos() {
             const deuda = p.total_final - (p.total_pagado || 0)
             const fechaEntrega = p.fecha_entrega ? new Date(p.fecha_entrega).toLocaleDateString('es-CL') : 'S/F'
             const expandido = !!expandidos[p.id]
-            // ID formateado a #0001
             const idFormateado = p.id.toString().padStart(4, '0')
 
             return (
@@ -325,7 +295,6 @@ export default function VerPedidos() {
                               <p style={{ margin: 0, fontWeight: '900', fontSize: '15px', color: '#000' }}>{det.cantidad}x {det.p_nombre}</p>
                               <p style={{ margin: 0, fontSize: '12px', fontWeight: '800', color: '#64748b' }}>Talla: {det.talla} • ${Number(det.precio_unitario).toLocaleString()} c/u</p>
                               <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                {/* FIX: Color de texto cambiado a negro para mejor visibilidad */}
                                 <span style={{ fontSize: '11px', fontWeight: '900', color: '#000', backgroundColor: det.cantidad_entregada === det.cantidad ? '#4ade80' : '#f1f5f9', padding: '2px 8px', borderRadius: '6px', border: '1px solid #000' }}>
                                   ENTREGADO: {det.cantidad_entregada || 0} de {det.cantidad}
                                 </span>
@@ -348,9 +317,25 @@ export default function VerPedidos() {
                   )}
                 </AnimatePresence>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '24px' }}>
-                  <motion.button whileTap={{ y: 2 }} onClick={() => notificarCliente(p)} disabled={p.itemsEntregados} style={{ backgroundColor: '#3b82f6', color: '#fff', border: '3px solid #000', padding: '14px', borderRadius: '16px', fontWeight: '950', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '4px 4px 0px #000', cursor: 'pointer', opacity: p.itemsEntregados ? 0.3 : 1 }}><Bell size={18} /> AVISAR</motion.button>
-                  <motion.button whileTap={{ y: 2 }} onClick={() => entregarTodo(p)} disabled={p.itemsEntregados} style={{ backgroundColor: '#4ade80', color: '#000', border: '3px solid #000', padding: '14px', borderRadius: '16px', fontWeight: '950', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '4px 4px 0px #000', cursor: 'pointer', opacity: p.itemsEntregados ? 0.3 : 1 }}><Package size={18} /> ENTREGAR TODO</motion.button>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '24px' }}>
+                  {/* FIX: Botones siempre disponibles y resaltados con sombra Neubrutalista pesada */}
+                  <motion.button 
+                    whileHover={{ scale: 1.02, y: -2 }} 
+                    whileTap={{ scale: 0.98, y: 0 }} 
+                    onClick={() => notificarCliente(p)} 
+                    style={{ backgroundColor: '#3b82f6', color: '#fff', border: '3px solid #000', padding: '16px', borderRadius: '18px', fontWeight: '950', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '6px 6px 0px #000', cursor: 'pointer' }}
+                  >
+                    <Bell size={20} /> AVISAR AL CLIENTE
+                  </motion.button>
+                  
+                  <motion.button 
+                    whileHover={{ scale: 1.02, y: -2 }} 
+                    whileTap={{ scale: 0.98, y: 0 }} 
+                    onClick={() => entregarTodo(p)} 
+                    style={{ backgroundColor: '#4ade80', color: '#000', border: '3px solid #000', padding: '16px', borderRadius: '18px', fontWeight: '950', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '6px 6px 0px #000', cursor: 'pointer' }}
+                  >
+                    <Package size={20} /> ENTREGA TOTAL
+                  </motion.button>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '24px' }}>
@@ -384,7 +369,6 @@ export default function VerPedidos() {
           })}
         </div>
 
-        {/* AUDITORÍA */}
         <div style={{ marginTop: '60px', marginBottom: '60px' }}>
           <h2 style={{ fontSize: '22px', fontWeight: '950', color: '#000', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px' }}><History size={26} /> HISTORIAL RECIENTE</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
@@ -404,7 +388,6 @@ export default function VerPedidos() {
           </div>
         </div>
 
-        {/* MODAL DE PAGO */}
         <AnimatePresence>
           {modalPago.open && (
             <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
