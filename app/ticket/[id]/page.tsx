@@ -16,12 +16,13 @@ export default function TicketPedido() {
 
   useEffect(() => {
     const cargarTicket = async () => {
+      // Ajuste de consulta para los nuevos IDs numéricos
       const { data } = await supabase
         .from('pedidos')
         .select(`
           *,
           clientes (*),
-          detalles_pedido (*, inventario (nombre)),
+          detalles_pedido (*),
           pagos (*)
         `)
         .eq('id', id)
@@ -33,170 +34,109 @@ export default function TicketPedido() {
     cargarTicket()
   }, [id])
 
-  if (loading) return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', backgroundColor: '#f8fafc' }}>
-      <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 2, ease: "linear" }}>
-        <Scissors size={40} color="#000" />
-      </motion.div>
-      <p style={{ fontWeight: '950', marginTop: '20px', color: '#000' }}>GENERANDO COMPROBANTE...</p>
-    </div>
-  )
-  
-  if (!pedido) return <p style={{ textAlign: 'center', marginTop: '50px', fontWeight: '900' }}>Pedido no encontrado.</p>
-
-  const totalBruto = pedido.detalles_pedido?.reduce((acc: number, det: any) => acc + (det.cantidad * det.precio_unitario), 0) || 0
-  const montoDescuento = totalBruto - pedido.total_final
-  const totalPagado = pedido.pagos?.reduce((acc: number, p: any) => acc + p.monto, 0) || 0
-  const saldoPendiente = pedido.total_final - totalPagado
-  
-  const fechaHoy = new Date().toLocaleDateString('es-CL')
-  const fechaEntrega = pedido.fecha_entrega ? new Date(pedido.fecha_entrega).toLocaleDateString('es-CL') : 'Por definir'
-
-  const compartirTicket = async () => {
+  const exportarImagen = async () => {
     if (!ticketRef.current) return
     setCompartiendo(true)
     try {
-      const opciones = {
+      const dataUrl = await htmlToImage.toPng(ticketRef.current, {
         backgroundColor: '#fff',
-        width: 320,
-        style: { margin: '0', padding: '20px' }
-      }
-      const dataUrl = await htmlToImage.toPng(ticketRef.current, opciones)
-      const blob = await (await fetch(dataUrl)).blob()
-      const file = new File([blob], `Ticket_Yovi_${pedido.id}.png`, { type: 'image/png' })
-
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: 'Comprobante Creaciones Yovi',
-          text: `Hola ${pedido.clientes.nombre}, adjunto el comprobante de tu pedido.`,
-        })
-      } else {
-        alert("Tu navegador no soporta compartir directamente. Prueba descargar la imagen.")
-      }
+        quality: 1,
+        pixelRatio: 2
+      })
+      const link = document.createElement('a')
+      link.download = `Ticket_${pedido.clientes.nombre}_${pedido.id}.png`
+      link.href = dataUrl
+      link.click()
     } catch (err) {
-      alert("Error al generar la imagen.")
+      console.error('Error al generar imagen', err)
     } finally {
       setCompartiendo(false)
     }
   }
 
+  if (loading) return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', backgroundColor: '#f8fafc' }}>
+      <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }}>
+        <Scissors size={40} color="#000" />
+      </motion.div>
+      <p style={{ fontWeight: '950', marginTop: '15px' }}>GENERANDO TICKET...</p>
+    </div>
+  )
+
+  if (!pedido) return <div style={{ padding: '50px', textAlign: 'center', fontWeight: '950' }}>PEDIDO NO ENCONTRADO</div>
+
+  const totalPagado = pedido.pagos?.reduce((acc: number, p: any) => acc + Number(p.monto), 0) || 0
+  const saldoPendiente = pedido.total_final - totalPagado
+  const fechaHoy = new Date(pedido.created_at).toLocaleDateString('es-CL', { 
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit'
+  })
+  const fechaEntrega = pedido.fecha_entrega ? new Date(pedido.fecha_entrega).toLocaleDateString('es-CL') : 'A CONVENIR'
+
   return (
-    <main style={{ 
-      minHeight: '100vh', 
-      backgroundColor: '#f8fafc', 
-      backgroundImage: `radial-gradient(#cbd5e1 1.5px, transparent 1.5px)`,
-      backgroundSize: '32px 32px',
-      padding: '40px 20px', 
-      fontFamily: 'system-ui, -apple-system, sans-serif' 
-    }}>
+    <main style={{ minHeight: '100vh', backgroundColor: '#e2e8f0', padding: '40px 20px', fontFamily: 'monospace' }}>
       
-      {/* BOTONES DE ACCIÓN NEUBRUTALISTAS */}
-      <div className="no-print" style={{ maxWidth: '400px', margin: '0 auto 40px auto', display: 'flex', gap: '12px', justifyContent: 'center' }}>
-        <motion.button 
-          whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
-          onClick={() => router.back()} 
-          style={{ backgroundColor: '#fff', border: '3px solid #000', padding: '12px', borderRadius: '16px', boxShadow: '4px 4px 0px #000', cursor: 'pointer' }}
-        >
-          <ArrowLeft size={22} color="#000" />
-        </motion.button>
-
-        <motion.button 
-          whileHover={{ y: -4 }} whileTap={{ y: 2, boxShadow: 'none' }}
-          onClick={() => window.print()} 
-          style={{ flex: 1, backgroundColor: '#000', color: '#fff', border: '3px solid #000', padding: '12px', borderRadius: '16px', fontWeight: '950', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '4px 4px 0px #3b82f6', cursor: 'pointer' }}
-        >
+      <div className="no-print" style={{ maxWidth: '400px', margin: '0 auto 20px auto', display: 'flex', gap: '10px' }}>
+        <button onClick={() => router.back()} style={{ flex: 1, padding: '12px', background: '#fff', border: '3px solid #000', borderRadius: '12px', fontWeight: '950', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', boxShadow: '4px 4px 0px #000' }}>
+          <ArrowLeft size={18} /> VOLVER
+        </button>
+        <button onClick={() => window.print()} style={{ flex: 1, padding: '12px', background: '#fff', border: '3px solid #000', borderRadius: '12px', fontWeight: '950', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', boxShadow: '4px 4px 0px #000' }}>
           <Printer size={18} /> IMPRIMIR
-        </motion.button>
-
-        <motion.button 
-          whileHover={{ y: -4 }} whileTap={{ y: 2, boxShadow: 'none' }}
-          onClick={compartirTicket} 
-          disabled={compartiendo} 
-          style={{ flex: 1, backgroundColor: '#22c55e', color: '#fff', border: '3px solid #000', padding: '12px', borderRadius: '16px', fontWeight: '950', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '4px 4px 0px #000', cursor: 'pointer' }}
-        >
-          <Smartphone size={18} /> {compartiendo ? '...' : 'ENVIAR'}
-        </motion.button>
+        </button>
+        <button onClick={exportarImagen} disabled={compartiendo} style={{ flex: 1, padding: '12px', background: '#fbbf24', border: '3px solid #000', borderRadius: '12px', fontWeight: '950', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', boxShadow: '4px 4px 0px #000' }}>
+          <Share2 size={18} /> {compartiendo ? '...' : 'PNG'}
+        </button>
       </div>
 
-      {/* ÁREA DEL TICKET (75mm) */}
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }} 
-        animate={{ opacity: 1, y: 0 }}
-        style={{ 
-          maxWidth: '85mm', 
-          margin: '0 auto', 
-          backgroundColor: '#fff', 
-          border: '4px solid #000', 
-          borderRadius: '4px', // Esquinas rectas como papel
-          boxShadow: '15px 15px 0px #000',
-          position: 'relative'
-        }}
-      >
-        <div ref={ticketRef} style={{ 
-          padding: '12mm 6mm', 
-          fontFamily: 'monospace', 
-          color: '#000', 
-          fontSize: '13px', 
-          boxSizing: 'border-box'
-        }} className="ticket-container">
-          
-          <div style={{ textAlign: 'center', marginBottom: '25px' }}>
-            <h1 style={{ fontSize: '24px', fontWeight: '950', margin: '0 0 5px 0', letterSpacing: '-1px' }}>CREACIONES YOVI</h1>
-            <div style={{ background: '#000', color: '#fff', display: 'inline-block', padding: '2px 10px', fontSize: '11px', fontWeight: '900', marginBottom: '10px' }}>
-              CONFECCIÓN DE UNIFORMES
-            </div>
-            <p style={{ margin: '2px 0', fontSize: '11px', fontWeight: '800' }}>VECINAL 5989, SAN JOAQUIN</p>
-            <p style={{ margin: '2px 0', fontSize: '11px', fontWeight: '800' }}>IG: @creaciones_yovi</p>
+      <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} ref={ticketRef} style={{ maxWidth: '400px', margin: '0 auto', backgroundColor: '#fff', border: '4px solid #000', padding: '30px', boxShadow: '12px 12px 0px #000', position: 'relative' }}>
+        
+        <div style={{ position: 'absolute', top: '-15px', left: '50%', transform: 'translateX(-50%)', backgroundColor: '#000', color: '#fff', padding: '5px 20px', borderRadius: '10px', fontSize: '10px', fontWeight: '950' }}>
+          COPIA CLIENTE
+        </div>
+
+        <div style={{ textAlign: 'center', borderBottom: '2px dashed #000', paddingBottom: '20px', marginBottom: '20px' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '10px' }}>
+            <ReceiptText size={40} color="#000" />
           </div>
+          <h1 style={{ margin: 0, fontSize: '24px', fontWeight: '1000', letterSpacing: '-1px' }}>TALLER YOVI</h1>
+          <p style={{ margin: '5px 0 0 0', fontSize: '11px', fontWeight: '800' }}>CONFECCIONES Y BORDADOS</p>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', marginTop: '5px', fontSize: '10px', fontWeight: '900' }}>
+             <Smartphone size={12} /> +569 8450 7104
+          </div>
+        </div>
 
-          <div style={{ borderTop: '2px dashed #000', margin: '15px 0' }}></div>
-
+        <div style={{ fontSize: '12px', fontWeight: '800' }}>
           <div style={{ marginBottom: '15px', lineHeight: '1.4' }}>
-            <p style={{ margin: '2px 0' }}><b>TICKET DE VENTA N° :</b> {pedido.id}</p>
+            {/* AJUSTE: Formateamos el ID para que se vea como #0001 */}
+            <p style={{ margin: '2px 0' }}>
+              <b>TICKET DE VENTA N° :</b> #{pedido.id.toString().padStart(4, '0')}
+            </p>
             <p style={{ margin: '2px 0' }}><b>FECHA    :</b> {fechaHoy}</p>
             <p style={{ margin: '2px 0' }}><b>CLIENTE  :</b> {pedido.clientes.nombre.toUpperCase()}</p>
             <p style={{ margin: '2px 0' }}><b>COLEGIO  :</b> {pedido.colegio.toUpperCase()}</p>
           </div>
 
-          <div style={{ borderTop: '2px dashed #000', margin: '15px 0' }}></div>
-
-          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '15px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '20px', fontSize: '11px' }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid #000' }}>
-                <th style={{ textAlign: 'left', paddingBottom: '5px' }}>ITE</th>
-                <th style={{ textAlign: 'left', paddingBottom: '5px' }}>PRENDA</th>
-                <th style={{ textAlign: 'right', paddingBottom: '5px' }}>TOT</th>
+              <tr style={{ borderBottom: '2px solid #000' }}>
+                <th style={{ textAlign: 'left', padding: '8px 0' }}>DESCRIPCIÓN</th>
+                <th style={{ textAlign: 'right', padding: '8px 0' }}>TALLA</th>
+                <th style={{ textAlign: 'right', padding: '8px 0' }}>TOTAL</th>
               </tr>
             </thead>
             <tbody>
-              {pedido.detalles_pedido?.map((det: any, idx: number) => (
-                <tr key={idx}>
-                  <td style={{ padding: '8px 0', verticalAlign: 'top' }}>{det.cantidad}</td>
-                  <td style={{ padding: '8px 0' }}>
-                    {det.inventario?.nombre} <br/>
-                    <small>TALLA: {det.talla}</small>
-                  </td>
-                  <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 'bold' }}>
-                    ${(det.cantidad * det.precio_unitario).toLocaleString('es-CL')}
-                  </td>
+              {pedido.detalles_pedido.map((det: any, i: number) => (
+                <tr key={i}>
+                  <td style={{ padding: '8px 0' }}>{det.cantidad}x PRENDA</td>
+                  <td style={{ textAlign: 'right', padding: '8px 0' }}>{det.talla}</td>
+                  <td style={{ textAlign: 'right', padding: '8px 0', fontWeight: '950' }}>${(det.cantidad * det.precio_unitario).toLocaleString('es-CL')}</td>
                 </tr>
               ))}
             </tbody>
           </table>
 
-          <div style={{ borderTop: '2px dashed #000', margin: '15px 0' }}></div>
-
-          <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            {montoDescuento !== 0 && (
-              <>
-                <p style={{ margin: 0 }}>SUBTOTAL: ${totalBruto.toLocaleString('es-CL')}</p>
-                <p style={{ margin: 0 }}>{montoDescuento > 0 ? 'DESCUENTO' : 'AJUSTE'}: ${Math.abs(montoDescuento).toLocaleString('es-CL')}</p>
-              </>
-            )}
-            <p style={{ margin: '5px 0', fontWeight: '950', fontSize: '18px', borderTop: '1px solid #000', paddingTop: '5px' }}>
-              TOTAL: ${pedido.total_final.toLocaleString('es-CL')}
-            </p>
+          <div style={{ textAlign: 'right', borderTop: '2px solid #000', paddingTop: '15px' }}>
+            <p style={{ margin: 0, fontSize: '14px', fontWeight: '1000' }}>TOTAL VENTA: ${pedido.total_final.toLocaleString('es-CL')}</p>
             <div style={{ backgroundColor: '#f1f5f9', padding: '8px', border: '1px solid #000', marginTop: '5px' }}>
               <p style={{ margin: 0 }}>PAGADO: ${totalPagado.toLocaleString('es-CL')}</p>
               <p style={{ margin: 0, fontWeight: '950', color: saldoPendiente > 0 ? '#ef4444' : '#166534' }}>
@@ -220,9 +160,8 @@ export default function TicketPedido() {
       <style jsx global>{`
         @media print {
           .no-print { display: none !important; }
-          body { background: #fff !important; padding: 0 !important; }
-          main { background: none !important; padding: 0 !important; }
-          .ticket-container { box-shadow: none !important; margin: 0 !important; width: 100% !important; border: none !important; }
+          body { background-color: #fff !important; padding: 0 !important; }
+          main { background-color: #fff !important; padding: 0 !important; }
         }
       `}</style>
     </main>
