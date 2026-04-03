@@ -231,7 +231,10 @@ export default function RegistroPedido() {
             </div>
             <div style={{ marginBottom: '20px' }}>
               <select style={inputStyle} value={tallaSeleccionada} onChange={e => setTallaSeleccionada(e.target.value)}>
-                {tallasDeInventario.map(t => <option key={t.id} value={t.talla}>{t.talla} (${Number(t.precio_base).toLocaleString()})</option>)}
+                {tallasDeInventario.map(t => {
+  const disponible = t.stock - (t.stock_reservado || 0);
+  return (
+    <option key={t.id} value={t.talla} style={{ color: '#000', fontWeight: 'bold' }}>{t.talla} (${Number(t.precio_base).toLocaleString()}) — STOCK: {disponible}</option>);})}
                 <option value="ESPECIAL">✨ TALLA ESPECIAL</option>
               </select>
               {tallaSeleccionada === 'ESPECIAL' && (
