@@ -44,7 +44,6 @@ export default function Inventario() {
 
   useEffect(() => { cargar() }, [cargar])
 
-  // GESTIÓN DE COLEGIOS
   const agregarColegioMaestro = async () => {
     if (!nuevoNombreColegio) return
     const nombreUpper = nuevoNombreColegio.toUpperCase().trim()
@@ -77,7 +76,6 @@ export default function Inventario() {
     }, {})
   }, [itemsFiltrados])
 
-  // EXPORTACIÓN EXCEL
   const exportarExcel = () => {
     const reporte = itemsFiltrados.map(i => ({
       'Prenda': i.nombre,
@@ -102,7 +100,6 @@ export default function Inventario() {
     setColegiosAbiertos(prev => prev.includes(idUnico) ? prev.filter(n => n !== idUnico) : [...prev, idUnico])
   }
 
-  // AGREGAR VARIANTE
   const agregarVariante = async (e: any) => {
     e.preventDefault()
     setLoading(true)
@@ -120,7 +117,6 @@ export default function Inventario() {
     setLoading(false)
   }
 
-  // AJUSTES RÁPIDOS
   const ajustarStock = (id: string, delta: number) => {
     const itemActual = items.find(i => i.id === id);
     if (!itemActual) return;
@@ -148,14 +144,24 @@ export default function Inventario() {
   // ESTILOS
   const containerStyle = { minHeight: '100vh', backgroundColor: '#f8fafc', backgroundImage: `radial-gradient(#cbd5e1 1.5px, transparent 1.5px)`, backgroundSize: '32px 32px', padding: '40px 20px', fontFamily: 'system-ui, -apple-system, sans-serif' }
   const cardStyle = { backgroundColor: '#fff', padding: '28px', borderRadius: '32px', border: '4px solid #000', boxShadow: '8px 8px 0px #000', marginBottom: '32px' }
-  const inputStyle = { width: '100%', padding: '14px 16px', border: '3px solid #000', borderRadius: '16px', fontSize: '15px', fontWeight: '800', color: '#000', outline: 'none', backgroundColor: '#fff' }
+  const inputStyle = { width: '100%', padding: '14px 16px', border: '3px solid #000', borderRadius: '16px', fontSize: '15px', fontWeight: '950', color: '#000000', outline: 'none', backgroundColor: '#ffffff' }
   const labelStyle = { fontSize: '11px', fontWeight: '950', color: '#000', marginBottom: '8px', display: 'block', textTransform: 'uppercase' as const, letterSpacing: '0.5px' }
 
   return (
     <main style={containerStyle}>
+      {/* 💣 ELIMINADOR DE GRISES: FORZA EL NEGRO EN TODOS LOS TEXTOS */}
+      <style jsx global>{`
+        :root { color-scheme: light !important; }
+        span, p, h1, h2, h3, input, select, option {
+          color: #000000 !important;
+          -webkit-text-fill-color: #000000 !important;
+          opacity: 1 !important;
+        }
+      `}</style>
+
       <div style={{ maxWidth: '650px', margin: '0 auto' }}>
         
-        {/* CABECERA PRO */}
+        {/* CABECERA */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '35px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
             <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => router.push('/')} style={{ backgroundColor: '#fff', border: '3px solid #000', padding: '12px', borderRadius: '16px', boxShadow: '4px 4px 0px #000', cursor: 'pointer' }}>
@@ -179,17 +185,17 @@ export default function Inventario() {
             <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
               <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} style={{ ...cardStyle, width: '100%', maxWidth: '420px', margin: 0, boxShadow: '12px 12px 0px #3b82f6' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '25px' }}>
-                  <h2 style={{ fontSize: '22px', fontWeight: '950', margin: 0, color: '#000', letterSpacing: '-1px' }}>LISTA COLEGIOS</h2>
+                  <h2 style={{ fontSize: '22px', fontWeight: '950', margin: 0, color: '#000' }}>LISTA COLEGIOS</h2>
                   <button onClick={() => setMostrarGestionColegios(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={28}/></button>
                 </div>
                 <div style={{ display: 'flex', gap: '12px', marginBottom: '25px' }}>
                   <input placeholder="Nombre..." style={inputStyle} value={nuevoNombreColegio} onChange={e => setNuevoNombreColegio(e.target.value)} />
                   <motion.button whileTap={{ scale: 0.9 }} onClick={agregarColegioMaestro} style={{ background: '#000', color: '#fff', padding: '12px', borderRadius: '16px', border: 'none', cursor: 'pointer' }}><Plus /></motion.button>
                 </div>
-                <div style={{ maxHeight: '300px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', paddingRight: '5px' }}>
+                <div style={{ maxHeight: '300px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   {listaColegios.map(c => (
                     <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px', border: '3px solid #000', borderRadius: '16px', backgroundColor: '#f1f5f9' }}>
-                      <span style={{ fontWeight: '900', fontSize: '15px', color: '#000' }}>{c.nombre}</span>
+                      <span style={{ fontWeight: '1000', fontSize: '15px', color: '#000' }}>{c.nombre}</span>
                       <button onClick={() => borrarColegioMaestro(c.id)} style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer' }}><Trash2 size={18} /></button>
                     </div>
                   ))}
@@ -199,25 +205,22 @@ export default function Inventario() {
           )}
         </AnimatePresence>
 
-        {/* BUSCADOR PRO */}
+        {/* BUSCADOR */}
         <div style={{ position: 'relative', marginBottom: '35px' }}>
           <Search style={{ position: 'absolute', left: '16px', top: '16px' }} size={22} color="#000" />
           <input placeholder="Buscar prenda o institución..." style={{ ...inputStyle, paddingLeft: '50px', boxShadow: '6px 6px 0px #000', fontSize: '16px' }} value={busqueda} onChange={e => setBusqueda(e.target.value)} />
         </div>
 
-        {/* FORMULARIO NUEVA VARIEDAD */}
+        {/* FORMULARIO */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} style={cardStyle}>
           <h2 style={{ margin: '0 0 25px 0', fontSize: '20px', fontWeight: '950', color: '#000', display: 'flex', alignItems: 'center', gap: '10px' }}>
             <PackagePlus size={24} color="#3b82f6" /> NUEVA VARIEDAD
           </h2>
           <form onSubmit={agregarVariante} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+              <div><label style={labelStyle}>Prenda / Artículo</label><input required style={inputStyle} value={nombre} onChange={e => setNombre(e.target.value)} /></div>
               <div>
-                <label style={labelStyle}>Prenda / Artículo</label>
-                <input required placeholder="Ej: POLERA" style={inputStyle} value={nombre} onChange={e => setNombre(e.target.value)} />
-              </div>
-              <div>
-                <label style={labelStyle}>Asignar a Colegio</label>
+                <label style={labelStyle}>Colegio</label>
                 <select style={inputStyle} value={colegioSeleccionado} onChange={e => setColegioSeleccionado(e.target.value)}>
                   {listaColegios.map(c => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
                 </select>
@@ -226,26 +229,22 @@ export default function Inventario() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
               <div><label style={labelStyle}>Talla</label><select style={inputStyle} value={talla} onChange={e => setTalla(e.target.value)}>{Object.keys(ordenTallas).map(t => <option key={t} value={t}>{t}</option>)}</select></div>
               <div><label style={labelStyle}>Precio $</label><input required type="number" style={inputStyle} value={precio} onChange={e => setPrecio(e.target.value)} /></div>
-              <div><label style={labelStyle}>Stock Inicial</label><input required type="number" style={inputStyle} value={stock} onChange={e => setStock(e.target.value)} /></div>
+              <div><label style={labelStyle}>Stock</label><input required type="number" style={inputStyle} value={stock} onChange={e => setStock(e.target.value)} /></div>
             </div>
-            <motion.button 
-              whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-              disabled={loading} type="submit" 
-              style={{ width: '100%', backgroundColor: '#4ade80', color: '#000', border: '4px solid #000', padding: '18px', borderRadius: '20px', fontWeight: '950', fontSize: '16px', boxShadow: '6px 6px 0px #000', cursor: 'pointer', marginTop: '10px' }}
-            >
-              {loading ? 'PROCESANDO...' : 'REGISTRAR EN INVENTARIO'}
+            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} disabled={loading} type="submit" style={{ width: '100%', backgroundColor: '#4ade80', color: '#000', border: '4px solid #000', padding: '18px', borderRadius: '20px', fontWeight: '950', boxShadow: '6px 6px 0px #000', cursor: 'pointer' }}>
+              {loading ? '...' : 'REGISTRAR'}
             </motion.button>
           </form>
         </motion.div>
 
-        {/* LISTADO JERÁRQUICO */}
+        {/* LISTADO */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '25px' }}>
           {Object.keys(productosAgrupados).map(nombrePrenda => {
             const estaAbierto = abiertos.includes(nombrePrenda)
             return (
               <div key={nombrePrenda} style={{ backgroundColor: '#fff', borderRadius: '32px', border: '4px solid #000', overflow: 'hidden', boxShadow: '8px 8px 0px #000' }}>
                 <div onClick={() => toggleGrupo(nombrePrenda)} style={{ padding: '24px', backgroundColor: '#000', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}><PackageOpen size={28} color="#fbbf24" /><h3 style={{ margin: 0, fontWeight: '950', fontSize: '20px', textTransform: 'uppercase', letterSpacing: '1px' }}>{nombrePrenda}</h3></div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}><PackageOpen size={28} color="#fbbf24" /><h3 style={{ margin: 0, fontWeight: '950', fontSize: '20px' }}>{nombrePrenda}</h3></div>
                   {estaAbierto ? <ChevronUp size={28} /> : <ChevronDown size={28} />}
                 </div>
                 
@@ -258,12 +257,9 @@ export default function Inventario() {
                         const colAbierto = colegiosAbiertos.includes(idUnicoColegio)
                         return (
                           <div key={nombreCol} style={{ borderBottom: '3px solid #000' }}>
-                            <div onClick={() => toggleColegio(idUnicoColegio)} style={{ padding: '18px 25px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', backgroundColor: colAbierto ? '#e2e8f0' : 'transparent' }}>
-                              <span style={{ fontWeight: '950', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '10px', color: '#000' }}><School size={18} /> {nombreCol}</span>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                <span style={{ fontSize: '11px', fontWeight: '950', background: '#000', color: '#fff', padding: '4px 10px', borderRadius: '10px' }}>{variantes.length} TALLAS</span>
-                                {colAbierto ? <Minus size={20} color="#000" /> : <Plus size={20} color="#000" />}
-                              </div>
+                            <div onClick={() => toggleColegio(idUnicoColegio)} style={{ padding: '18px 25px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
+                              <span style={{ fontWeight: '950', color: '#000' }}><School size={18} /> {nombreCol}</span>
+                              {colAbierto ? <Minus size={20} color="#000" /> : <Plus size={20} color="#000" />}
                             </div>
                             
                             {colAbierto && (
@@ -271,49 +267,39 @@ export default function Inventario() {
                                 {variantes.map((i: any) => {
                                   const disponible = i.stock - (i.stock_reservado || 0)
                                   return (
-                                    <motion.div key={i.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} style={{ border: '3px solid #000', padding: '20px', borderRadius: '24px', backgroundColor: disponible <= 0 ? '#fff1f2' : '#fff', boxShadow: '4px 4px 0px #000' }}>
-                                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px', alignItems: 'center' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                          <span style={{ fontWeight: '950', fontSize: '20px', color: '#000' }}>Talla {i.talla}</span>
-                                          <span style={{ fontWeight: '950', color: '#166534', backgroundColor: '#f0fdf4', padding: '4px 10px', borderRadius: '10px', border: '2px solid #166534', fontSize: '14px' }}>${Number(i.precio_base).toLocaleString()}</span>
+                                    <motion.div key={i.id} style={{ border: '3px solid #000', padding: '20px', borderRadius: '24px', backgroundColor: disponible <= 0 ? '#fff1f2' : '#fff', boxShadow: '4px 4px 0px #000' }}>
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
+                                        <div style={{ display: 'flex', gap: '12px' }}>
+                                          <span style={{ fontWeight: '1000', fontSize: '20px', color: '#000' }}>Talla {i.talla}</span>
+                                          <span style={{ fontWeight: '950', color: '#166534', backgroundColor: '#f0fdf4', padding: '4px 10px', borderRadius: '10px', border: '2px solid #000' }}>${Number(i.precio_base).toLocaleString()}</span>
                                         </div>
-                                        <button onClick={() => eliminarVariante(i.id)} style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer' }}><Trash2 size={20} /></button>
+                                        <button onClick={() => eliminarVariante(i.id)} style={{ color: '#ef4444', background: 'none', border: 'none' }}><Trash2 size={20} /></button>
                                       </div>
                                       
                                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                                        {/* STOCK FÍSICO FORZADO */}
                                         <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '16px', border: '3px solid #000', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                          <span style={{ fontSize: '10px', fontWeight: '950', color: '#000' }}>STOCK FÍSICO</span>
+                                          <span style={{ fontSize: '10px', fontWeight: '1000', color: '#000' }}>FÍSICO</span>
                                           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                            <button onClick={() => ajustarStock(i.id, -1)} style={{ background: '#ef4444', color: '#fff', width: '28px', height: '28px', borderRadius: '8px', border: '2px solid #000', fontWeight: '950', cursor: 'pointer' }}>-</button>
-                                            <span style={{ fontWeight: '950', width: '20px', textAlign: 'center' }}>{i.stock}</span>
-                                            <button onClick={() => ajustarStock(i.id, 1)} style={{ background: '#4ade80', color: '#000', width: '28px', height: '28px', borderRadius: '8px', border: '2px solid #000', fontWeight: '950', cursor: 'pointer' }}>+</button>
+                                            <button onClick={() => ajustarStock(i.id, -1)} style={{ background: '#ef4444', color: '#fff', width: '28px', height: '28px', borderRadius: '8px', border: '2px solid #000', fontWeight: '1000' }}>-</button>
+                                            <span style={{ fontWeight: '1000', fontSize: '18px', color: '#000', minWidth: '25px', textAlign: 'center' }}>{i.stock}</span>
+                                            <button onClick={() => ajustarStock(i.id, 1)} style={{ background: '#4ade80', color: '#000', width: '28px', height: '28px', borderRadius: '8px', border: '2px solid #000', fontWeight: '1000' }}>+</button>
                                           </div>
                                         </div>
+                                        {/* RESERVADO FORZADO */}
                                         <div style={{ background: '#fffbeb', padding: '12px', borderRadius: '16px', border: '3px solid #000', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                          <span style={{ fontSize: '10px', fontWeight: '950', color: '#000' }}>RESERVADO</span>
+                                          <span style={{ fontSize: '10px', fontWeight: '1000', color: '#000' }}>RESERV.</span>
                                           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                            <button onClick={() => ajustarReserva(i.id, -1)} style={{ background: '#fbbf24', color: '#000', width: '28px', height: '28px', borderRadius: '8px', border: '2px solid #000', fontWeight: '950', cursor: 'pointer' }}>-</button>
-                                            <span style={{ fontWeight: '950', width: '20px', textAlign: 'center' }}>{i.stock_reservado || 0}</span>
-                                            <button onClick={() => ajustarReserva(i.id, 1)} style={{ background: '#fbbf24', color: '#000', width: '28px', height: '28px', borderRadius: '8px', border: '2px solid #000', fontWeight: '950', cursor: 'pointer' }}>+</button>
+                                            <button onClick={() => ajustarReserva(i.id, -1)} style={{ background: '#fbbf24', color: '#000', width: '28px', height: '28px', borderRadius: '8px', border: '2px solid #000', fontWeight: '1000' }}>-</button>
+                                            <span style={{ fontWeight: '1000', fontSize: '18px', color: '#000', minWidth: '25px', textAlign: 'center' }}>{i.stock_reservado || 0}</span>
+                                            <button onClick={() => ajustarReserva(i.id, 1)} style={{ background: '#fbbf24', color: '#000', width: '28px', height: '28px', borderRadius: '8px', border: '2px solid #000', fontWeight: '1000' }}>+</button>
                                           </div>
                                         </div>
                                       </div>
                                       
                                       <div style={{ textAlign: 'right', marginTop: '15px' }}>
-                                        <span style={{ 
-                                          backgroundColor: disponible <= 0 ? '#000' : '#4ade80', 
-                                          color: disponible <= 0 ? '#fff' : '#000', 
-                                          padding: '6px 14px', 
-                                          borderRadius: '12px', 
-                                          fontSize: '12px', 
-                                          fontWeight: '950', 
-                                          border: '3px solid #000',
-                                          display: 'inline-flex',
-                                          alignItems: 'center',
-                                          gap: '6px'
-                                        }}>
-                                          {disponible <= 0 && <AlertCircle size={14} />}
-                                          DISPONIBLE: {disponible}
+                                        <span style={{ backgroundColor: disponible <= 0 ? '#000' : '#4ade80', color: disponible <= 0 ? '#fff' : '#000', padding: '8px 16px', borderRadius: '12px', fontSize: '13px', fontWeight: '1000', border: '3px solid #000', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                          {disponible <= 0 && <AlertCircle size={14} />} DISPONIBLE: {disponible}
                                         </span>
                                       </div>
                                     </motion.div>
