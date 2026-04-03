@@ -177,7 +177,7 @@ export default function VerPedidos() {
                   </div>
                 )}
 
-                <button onClick={() => setExpandidos(prev => ({ ...prev, [p.id]: !prev[p.id] }))} style={{ width: '100%', marginBottom: '16px', border: '3px solid #000', borderRadius: '10px', padding: '10px', fontWeight: '900', background: '#f1f5f9' }}>{expandido ? 'Ocultar Detalle' : 'Ver Detalle'}</button>
+                <button onClick={() => setExpandidos(prev => ({ ...prev, [p.id]: !prev[p.id] }))} style={{ width: '100%', marginBottom: '16px', border: '3px solid #000', borderRadius: '10px', padding: '10px', fontWeight: '900', background: '#000000' }}>{expandido ? 'Ocultar Detalle' : 'Ver Detalle'}</button>
 
                 {expandido && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '20px' }}>
@@ -185,7 +185,7 @@ export default function VerPedidos() {
                       <div key={idx} style={{ padding: '12px', border: '2px solid #000', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', background: '#f8fafc' }}>
                         <div>
                           <p style={{ fontWeight: '800' }}>{det.p_nombre}</p>
-                          <p style={{ fontSize: '12px' }}>Talla: {det.talla} | {det.cantidad_entregada || 0} de {det.cantidad}</p>
+                          <p style={{ fontSize: '12px', color: '#000' }}>Talla: {det.talla} | {det.cantidad_entregada || 0} de {det.cantidad}</p>
                         </div>
                         <div style={{ display: 'flex', gap: '5px' }}>
                           <button onClick={() => actualizarEntrega(det, -1)} style={{ border: '2px solid #000', borderRadius: '8px', padding: '5px', background: '#ef4444', color: '#fff' }}>-</button>
@@ -198,12 +198,12 @@ export default function VerPedidos() {
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>
                   <div style={{ background: '#f0fdf4', padding: '16px', borderRadius: '16px', border: '3px solid #000' }}>
-                    <p style={{ fontSize: '10px', fontWeight: '800' }}>PAGADO</p>
+                    <p style={{ fontSize: '10px', fontWeight: '800', color: '#000' }}>PAGADO</p>
                     <p style={{ fontSize: '20px', fontWeight: '900', color: '#166534' }}>${Number(p.total_pagado || 0).toLocaleString('es-CL')}</p>
                     <button onClick={() => agregarPago(p)} style={{ background: '#000', color: '#fff', padding: '4px 8px', borderRadius: '6px', fontSize: '10px', fontWeight: '900', marginTop: '8px' }}>+ Pago</button>
                   </div>
                   <div style={{ background: deuda > 0 ? '#fef2f2' : '#f0fdf4', padding: '16px', borderRadius: '16px', border: '3px solid #000' }}>
-                    <p style={{ fontSize: '10px', fontWeight: '800' }}>DEUDA</p>
+                    <p style={{ fontSize: '10px', fontWeight: '800', color: '#000' }}>DEUDA</p>
                     <p style={{ fontSize: '20px', fontWeight: '900', color: deuda > 0 ? '#991b1b' : '#166534' }}>${deuda.toLocaleString('es-CL')}</p>
                   </div>
                 </div>
