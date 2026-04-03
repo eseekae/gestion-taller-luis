@@ -19,7 +19,7 @@ export default function RegistroPedido() {
   
   const [tipoEntrega, setTipoEntrega] = useState<'agendada' | 'inmediata'>('agendada')
 
-  // ESTADOS DEL FORMULARIO
+  // ESTADOS DEL FORMULARIO (RECUPERADOS)
   const [nombreSeleccionado, setNombreSeleccionado] = useState('')
   const [tallaSeleccionada, setTallaSeleccionada] = useState('')
   const [precioManualEspecial, setPrecioManualEspecial] = useState('')
@@ -32,7 +32,7 @@ export default function RegistroPedido() {
   const [fechaEntrega, setFechaEntrega] = useState('')
   const [observaciones, setObservaciones] = useState('') 
   
-  // DESCUENTOS Y AJUSTES
+  // DESCUENTOS Y AJUSTES (RECUPERADOS)
   const [mostrarDescuento, setMostrarDescuento] = useState(false)
   const [tipoDescuento, setTipoDescuento] = useState<'monto' | 'porcentaje'>('monto')
   const [valorDescuento, setValorDescuento] = useState(0)
@@ -67,7 +67,7 @@ export default function RegistroPedido() {
   const productosUnicos = useMemo(() => Array.from(new Set(inventario.map(i => i.nombre))), [inventario])
   const tallasDeInventario = useMemo(() => inventario.filter(i => i.nombre === nombreSeleccionado), [nombreSeleccionado, inventario])
 
-  // CÁLCULO DE STOCK PARA EL CUADRO DE REFUERZO
+  // LÓGICA DE STOCK PARA EL CUADRO DE REFUERZO
   const infoTallaActual = useMemo(() => {
     return tallasDeInventario.find(t => t.talla === tallaSeleccionada)
   }, [tallaSeleccionada, tallasDeInventario])
@@ -99,9 +99,8 @@ export default function RegistroPedido() {
 
   const guardar = async (e: any) => {
     e.preventDefault()
-    if (carrito.length === 0) return alert("Añade productos al pedido")
+    if (carrito.length === 0) return alert("Añade productos")
     if (telefono.length !== 8) return alert("El teléfono debe tener 8 números.")
-    if (tipoEntrega === 'agendada' && !fechaEntrega) return alert("Selecciona fecha")
     
     setLoading(true)
     try {
@@ -109,9 +108,12 @@ export default function RegistroPedido() {
       const { data: cli } = await supabase.from('clientes').insert([{ nombre: nombreCliente, telefono: telefonoCompleto, rut }]).select().single()
       
       const { data: ped } = await supabase.from('pedidos').insert([{
-        cliente_id: cli.id, total_final: totalConDescuento, estado: tipoEntrega === 'inmediata' ? 'Completado' : 'Pendiente',
-        colegio: colegio || 'Particular', fecha_entrega: tipoEntrega === 'inmediata' ? new Date().toISOString() : fechaEntrega,
-        observaciones, creado_por: usuarioActivo
+        cliente_id: cli.id, total_final: totalConDescuento, 
+        estado: tipoEntrega === 'inmediata' ? 'Completado' : 'Pendiente',
+        colegio: colegio || 'Particular', 
+        fecha_entrega: tipoEntrega === 'inmediata' ? new Date().toISOString() : fechaEntrega,
+        observaciones: observaciones + (descuentoFinal > 0 ? ` [Dscto: $${descuentoFinal.toLocaleString()}]` : '') + (valorAjuste !== 0 ? ` [Ajuste: $${valorAjuste.toLocaleString()}]` : ''),
+        creado_por: usuarioActivo
       }]).select().single()
       
       const detalles = carrito.map(item => ({
@@ -122,7 +124,10 @@ export default function RegistroPedido() {
       await supabase.from('detalles_pedido').insert(detalles)
       
       if (Number(montoPagado) > 0) {
-        await supabase.from('pagos').insert([{ pedido_id: ped.id, monto: Number(montoPagado), metodo_pago: metodoPago, creado_por: usuarioActivo }])
+        await supabase.from('pagos').insert([{
+          pedido_id: ped.id, monto: Number(montoPagado), fecha_pago: new Date().toISOString(), 
+          metodo_pago: metodoPago, creado_por: usuarioActivo
+        }])
       }
       
       for (const item of carrito) {
@@ -132,20 +137,20 @@ export default function RegistroPedido() {
         }
       }
       
-      await registrarLog(`${usuarioActivo} creó pedido #${ped.id}`, `Cliente: ${nombreCliente}`)
+      await registrarLog(`${usuarioActivo} creó pedido de $${totalConDescuento}`, `Pedido ${ped.id}`)
       alert("✅ Venta registrada correctamente."); router.push('/pedidos')
     } catch (err) { alert("Error al guardar") }
     finally { setLoading(false) }
   }
 
+  // ESTILOS
   const cardStyle = { backgroundColor: '#fff', padding: '20px', borderRadius: '28px', border: '4px solid #000', boxShadow: '8px 8px 0px #000', marginBottom: '24px' }
-  const inputStyle = { width: '100%', padding: '16px', border: '3px solid #000', borderRadius: '16px', fontSize: '16px', fontWeight: '950', color: '#000000', backgroundColor: '#ffffff', boxSizing: 'border-box' as const, outline: 'none' }
+  const inputStyle = { width: '100%', padding: '16px', border: '3px solid #000', borderRadius: '16px', fontSize: '16px', fontWeight: '950', color: '#000', backgroundColor: '#fff', boxSizing: 'border-box' as const, outline: 'none' }
   const labelStyle = { fontSize: '11px', fontWeight: '950', color: '#000', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase' as const }
 
   return (
     <main style={{ minHeight: '100vh', backgroundColor: '#f8fafc', padding: '30px 15px', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
       
-      {/* CSS GLOBAL PARA FORZAR EL NEGRO */}
       <style jsx global>{`
         :root { color-scheme: light !important; }
         input, select, option, textarea {
@@ -159,7 +164,9 @@ export default function RegistroPedido() {
       <div style={{ maxWidth: '600px', margin: '0 auto' }}>
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '25px' }}>
-          <button onClick={() => router.push('/')} style={{ backgroundColor: '#fff', border: '3px solid #000', padding: '10px', borderRadius: '12px', boxShadow: '4px 4px 0px #000' }}><ArrowLeft size={20} color="#000" /></button>
+          <button onClick={() => router.push('/')} style={{ backgroundColor: '#fff', border: '3px solid #000', padding: '10px', borderRadius: '12px', boxShadow: '4px 4px 0px #000', cursor: 'pointer' }}>
+            <ArrowLeft size={20} color="#000" />
+          </button>
           <h1 style={{ margin: 0, fontSize: '28px', fontWeight: '950', color: '#000' }}>NUEVA VENTA</h1>
         </div>
 
@@ -173,7 +180,10 @@ export default function RegistroPedido() {
               <button type="button" onClick={() => setTipoEntrega('inmediata')} style={{ padding: '14px', borderRadius: '18px', border: '4px solid #000', fontWeight: '900', backgroundColor: tipoEntrega === 'inmediata' ? '#4ade80' : '#fff' }}>INMEDIATA</button>
             </div>
             {tipoEntrega === 'agendada' && (
-              <div style={{ marginTop: '15px' }}><label style={labelStyle}><Calendar size={16} /> FECHA</label><input type="date" style={inputStyle} value={fechaEntrega} onChange={e => setFechaEntrega(e.target.value)} /></div>
+              <div style={{ marginTop: '15px' }}>
+                <label style={labelStyle}><Calendar size={16} /> Fecha Entrega</label>
+                <input type="date" style={inputStyle} value={fechaEntrega} onChange={e => setFechaEntrega(e.target.value)} />
+              </div>
             )}
           </div>
 
@@ -193,7 +203,7 @@ export default function RegistroPedido() {
             </div>
           </div>
 
-          {/* PRENDAS Y REFUERZO DE STOCK */}
+          {/* PRENDAS - SOLUCIÓN DE STOCK FUERA DEL SELECT */}
           <div style={cardStyle}>
             <h2 style={{ fontSize: '18px', fontWeight: '950', marginBottom: '20px' }}>PRENDAS</h2>
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '12px', marginBottom: '15px' }}>
@@ -210,41 +220,42 @@ export default function RegistroPedido() {
               <option value="ESPECIAL">✨ TALLA ESPECIAL</option>
             </select>
 
-            {/* 🔥 EL REFUERZO VISUAL: ESTO NO FALLA NUNCA 🔥 */}
-            <div style={{ marginTop: '15px', padding: '15px', backgroundColor: '#000', borderRadius: '16px', border: '3px solid #000', display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <Boxes size={24} color="#4ade80" />
+            {/* 🔥 CUADRO DE STOCK REFORZADO (NEGRO SOBRE VERDE) 🔥 */}
+            <div style={{ marginTop: '15px', padding: '18px', backgroundColor: '#4ade80', borderRadius: '20px', border: '4px solid #000', display: 'flex', alignItems: 'center', gap: '15px', boxShadow: '4px 4px 0px #000' }}>
+              <Boxes size={28} color="#000" />
               <div>
-                <p style={{ margin: 0, fontSize: '10px', fontWeight: '900', color: '#94a3b8' }}>STOCK DISPONIBLE</p>
-                <p style={{ margin: 0, fontSize: '24px', fontWeight: '950', color: '#4ade80' }}>
+                <p style={{ margin: 0, fontSize: '11px', fontWeight: '950', color: '#000', opacity: 0.7 }}>STOCK DISPONIBLE ACTUAL</p>
+                <p style={{ margin: 0, fontSize: '26px', fontWeight: '1000', color: '#000', lineHeight: 1 }}>
                   {infoTallaActual ? infoTallaActual.stock - (infoTallaActual.stock_reservado || 0) : '0'} UNIDADES
                 </p>
               </div>
             </div>
 
-            {tallaSeleccionada === 'ESPECIAL' && <input type="number" style={{...inputStyle, marginTop:'10px', borderColor:'#f472b6'}} placeholder="PRECIO ACORDADO" value={precioManualEspecial} onChange={e => setPrecioManualEspecial(e.target.value)} />}
-            <button type="button" onClick={agregarAlCarrito} style={{ width: '100%', backgroundColor: '#000', color: '#fff', padding: '16px', borderRadius: '18px', fontWeight: '950', marginTop: '15px' }}>AÑADIR AL CARRITO</button>
+            {tallaSeleccionada === 'ESPECIAL' && <input type="number" style={{...inputStyle, marginTop:'10px', borderColor:'#f472b6'}} placeholder="PRECIO ACORDADO $" value={precioManualEspecial} onChange={e => setPrecioManualEspecial(e.target.value)} />}
+            <button type="button" onClick={agregarAlCarrito} style={{ width: '100%', backgroundColor: '#000', color: '#fff', padding: '18px', borderRadius: '18px', fontWeight: '950', marginTop: '15px', cursor: 'pointer' }}>AÑADIR AL CARRITO</button>
           </div>
 
           {/* CARRITO Y SUBTOTAL */}
           {carrito.length > 0 && (
             <div style={{ ...cardStyle, borderStyle: 'dashed' }}>
+              <p style={labelStyle}>RESUMEN DE PRENDAS</p>
               {carrito.map((item) => (
-                <div key={item.tempId} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '2px solid #f1f5f9' }}>
+                <div key={item.tempId} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '2px solid #f1f5f9' }}>
                   <div><p style={{ margin: 0, fontWeight: '900' }}>{item.nombre}</p><p style={{ margin: 0, fontSize: '12px' }}>{item.cantidad}x Talla {item.talla}</p></div>
-                  <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}><span style={{ fontWeight: '950' }}>${(item.precio * item.cantidad).toLocaleString()}</span><button type="button" onClick={() => quitarDelCarrito(item.tempId)} style={{ color: '#ef4444', border: 'none', background: 'none' }}><X size={20}/></button></div>
+                  <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}><span style={{ fontWeight: '950' }}>${(item.precio * item.cantidad).toLocaleString()}</span><button type="button" onClick={() => quitarDelCarrito(item.tempId)} style={{ color: '#ef4444', border: 'none', background: 'none', cursor: 'pointer' }}><X size={20}/></button></div>
                 </div>
               ))}
               <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '4px solid #000', textAlign: 'right' }}>
                 <p style={{ margin: 0, fontSize: '12px', fontWeight: '950', color: '#64748b' }}>SUBTOTAL PRENDAS</p>
-                <p style={{ margin: 0, fontSize: '24px', fontWeight: '950' }}>${totalOriginal.toLocaleString('es-CL')}</p>
+                <p style={{ margin: 0, fontSize: '26px', fontWeight: '950' }}>${totalOriginal.toLocaleString('es-CL')}</p>
               </div>
             </div>
           )}
 
           {/* PANEL FINAL */}
-          <div style={{ backgroundColor: '#000', padding: '25px', borderRadius: '32px', border: '4px solid #000', color: '#fff' }}>
+          <div style={{ backgroundColor: '#000', padding: '25px', borderRadius: '32px', border: '4px solid #000', color: '#fff', boxShadow: '8px 8px 0px #3b82f6' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '20px' }}>
-              <button type="button" onClick={() => setMostrarDescuento(!mostrarDescuento)} style={{ backgroundColor: '#3b82f6', color: '#fff', border: '2px solid #fff', padding: '12px', borderRadius: '14px', fontWeight: '900' }}>DESCUENTO</button>
+              <button type="button" onClick={() => setMostrarDescuento(!mostrarDescuento)} style={{ backgroundColor: '#3b82f6', color: '#fff', border: '2px solid #fff', padding: '12px', borderRadius: '14px', fontWeight: '900' }}>DESC.</button>
               <button type="button" onClick={() => setMostrarAjuste(!mostrarAjuste)} style={{ backgroundColor: '#a78bfa', color: '#fff', border: '2px solid #fff', padding: '12px', borderRadius: '14px', fontWeight: '900' }}>AJUSTE</button>
             </div>
 
@@ -252,37 +263,37 @@ export default function RegistroPedido() {
               {mostrarDescuento && (
                 <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} style={{ overflow: 'hidden', marginBottom: '15px' }}>
                   <div style={{ display: 'flex', gap: '5px', marginBottom: '10px' }}>
-                    <button type="button" onClick={() => setTipoDescuento('monto')} style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '2px solid #fff', background: tipoDescuento === 'monto' ? '#fff' : 'transparent', color: tipoDescuento === 'monto' ? '#000' : '#fff', fontWeight: '900' }}>$</button>
-                    <button type="button" onClick={() => setTipoDescuento('porcentaje')} style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '2px solid #fff', background: tipoDescuento === 'porcentaje' ? '#fff' : 'transparent', color: tipoDescuento === 'porcentaje' ? '#000' : '#fff', fontWeight: '900' }}>%</button>
+                    <button type="button" onClick={() => setTipoDescuento('monto')} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: '2px solid #fff', background: tipoDescuento === 'monto' ? '#fff' : 'transparent', color: tipoDescuento === 'monto' ? '#000' : '#fff', fontWeight: '950' }}>$ PESOS</button>
+                    <button type="button" onClick={() => setTipoDescuento('porcentaje')} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: '2px solid #fff', background: tipoDescuento === 'porcentaje' ? '#fff' : 'transparent', color: tipoDescuento === 'porcentaje' ? '#000' : '#fff', fontWeight: '950' }}>% PORC.</button>
                   </div>
-                  <input type="number" style={inputStyle} value={valorDescuento} onChange={e => setValorDescuento(Number(e.target.value))} />
+                  <input type="number" style={{...inputStyle, textAlign: 'center'}} value={valorDescuento} onChange={e => setValorDescuento(Number(e.target.value))} />
                 </motion.div>
               )}
               {mostrarAjuste && (
                 <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} style={{ overflow: 'hidden', marginBottom: '15px' }}>
-                  <input type="number" placeholder="SUMAR/RESTAR $" style={{...inputStyle, color: '#a78bfa'}} value={valorAjuste} onChange={e => setValorAjuste(Number(e.target.value))} />
+                  <input type="number" placeholder="SUMAR/RESTAR $" style={{...inputStyle, textAlign: 'center', color: '#a78bfa'}} value={valorAjuste} onChange={e => setValorAjuste(Number(e.target.value))} />
                 </motion.div>
               )}
             </AnimatePresence>
 
             <div style={{ textAlign: 'right', marginBottom: '25px' }}>
-              <p style={{ margin: 0, fontSize: '12px', color: '#4ade80', fontWeight: '950' }}>TOTAL A COBRAR</p>
+              <p style={{ margin: 0, fontSize: '13px', color: '#4ade80', fontWeight: '950' }}>TOTAL A COBRAR</p>
               <p style={{ margin: 0, fontSize: '42px', fontWeight: '950', color: '#4ade80' }}>${totalConDescuento.toLocaleString('es-CL')}</p>
             </div>
 
             <div style={{ display: 'grid', gap: '20px' }}>
-              <input type="number" placeholder="PAGA CON $" style={inputStyle} value={montoPagado} onChange={e => setMontoPagado(e.target.value)} />
+              <input type="number" placeholder="ABONO $" style={{...inputStyle, textAlign: 'center'}} value={montoPagado} onChange={e => setMontoPagado(e.target.value)} />
               <select style={inputStyle} value={metodoPago} onChange={e => setMetodoPago(e.target.value)}>
                 <option value="Transferencia">Transferencia</option>
                 <option value="Efectivo">Efectivo</option>
                 <option value="Débito">Débito</option>
                 <option value="Crédito">Crédito</option>
               </select>
-              <button type="submit" disabled={loading} style={{ backgroundColor: '#4ade80', color: '#000', padding: '20px', borderRadius: '20px', fontWeight: '950', fontSize: '20px', border: 'none', cursor: 'pointer' }}>{loading ? '...' : 'FINALIZAR VENTA'}</button>
+              <button type="submit" disabled={loading || carrito.length === 0} style={{ backgroundColor: '#4ade80', color: '#000', padding: '20px', borderRadius: '20px', fontWeight: '950', fontSize: '20px', border: '4px solid #000', cursor: 'pointer' }}>{loading ? '...' : 'FINALIZAR REGISTRO'}</button>
             </div>
           </div>
 
-          <textarea style={{ ...inputStyle, marginTop: '25px', height: '100px' }} placeholder="NOTAS" value={observaciones} onChange={e => setObservaciones(e.target.value)} />
+          <textarea style={{ ...inputStyle, marginTop: '25px', height: '100px', resize: 'none' }} placeholder="NOTAS / OBSERVACIONES" value={observaciones} onChange={e => setObservaciones(e.target.value)} />
         </form>
       </div>
     </main>
