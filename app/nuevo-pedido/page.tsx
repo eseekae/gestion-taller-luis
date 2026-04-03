@@ -69,7 +69,7 @@ export default function RegistroPedido() {
 
   const agregarAlCarrito = () => {
     if (cantidad === '' || Number(cantidad) <= 0) {
-      return alert("Hrmn, tienes que ingresar una cantidad válida antes de añadir al pedido.")
+      return alert("Tienes que ingresar una cantidad válida antes de añadir al pedido.")
     }
 
     let item; let precio;

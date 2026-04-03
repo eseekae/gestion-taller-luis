@@ -2,7 +2,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '../../../lib/supabase'
-import { Printer, Share2, ArrowLeft, Scissors, ReceiptText, Smartphone } from 'lucide-react'
+import { Printer, Share2, ArrowLeft, Scissors, ReceiptText, Smartphone, MessageCircle } from 'lucide-react'
 import { motion } from 'framer-motion'
 import * as htmlToImage from 'html-to-image'
 
@@ -16,13 +16,12 @@ export default function TicketPedido() {
 
   useEffect(() => {
     const cargarDatos = async () => {
-      // 1. Validar sesión
       if (!localStorage.getItem('user_role')) return router.push('/login')
       if (!id) return
 
       try {
         setLoading(true)
-        // 2. Traer los datos por separado (INFALIBLE)
+        // Traer datos por separado para evitar fallos de relación
         const [pRes, dRes, pgRes, iRes] = await Promise.all([
           supabase.from('pedidos').select('*').eq('id', Number(id)).single(),
           supabase.from('detalles_pedido').select('*').eq('pedido_id', Number(id)),
@@ -31,144 +30,118 @@ export default function TicketPedido() {
         ])
 
         if (pRes.data) {
-          // 3. Traer el cliente específico
-          const { data: cliente } = await supabase
-            .from('clientes')
-            .select('*')
-            .eq('id', pRes.data.cliente_id)
-            .single()
-
-          // 4. Cruzar los datos a mano para evitar errores de relación de Supabase
+          const { data: cliente } = await supabase.from('clientes').select('*').eq('id', pRes.data.cliente_id).single()
           const detallesConNombre = dRes.data?.map(d => {
             const prod = iRes.data?.find(inv => inv.id === d.producto_id)
             return { ...d, p_nombre: prod?.nombre || 'Prenda' }
           })
 
-          setPedido({
-            ...pRes.data,
-            clientes: cliente,
-            detalles_pedido: detallesConNombre,
-            pagos: pgRes.data || []
-          })
+          setPedido({ ...pRes.data, clientes: cliente, detalles_pedido: detallesConNombre, pagos: pgRes.data || [] })
         }
-      } catch (err) {
-        console.error("Error cargando ticket:", err)
-      } finally {
-        setLoading(false)
-      }
+      } catch (err) { console.error(err) } finally { setLoading(false) }
     }
     cargarDatos()
   }, [id, router])
 
-  const exportarImagen = async () => {
+  // FIX: Función PNG mejorada para forzar el renderizado
+  const generarImagen = async () => {
     if (!ticketRef.current || !pedido) return
     setCompartiendo(true)
     try {
-      // Ajuste de pixelRatio para que se vea nítido
-      const dataUrl = await htmlToImage.toPng(ticketRef.current, { backgroundColor: '#fff', pixelRatio: 2 })
+      const dataUrl = await htmlToImage.toPng(ticketRef.current, { 
+        backgroundColor: '#ffffff', 
+        pixelRatio: 2,
+        cacheBust: true 
+      })
       const link = document.createElement('a')
       link.download = `Ticket_${pedido.clientes?.nombre || 'Venta'}_${id}.png`
       link.href = dataUrl
       link.click()
-    } catch (err) { console.error(err) } finally { setCompartiendo(false) }
+    } catch (err) { alert("Error al generar imagen PNG") } finally { setCompartiendo(false) }
   }
 
-  if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', fontWeight: '950' }}>
-      GENERANDO TICKET...
-    </div>
-  )
+  // BOTÓN WHATSAPP: Comparte el link directo al ticket
+  const compartirWhatsApp = () => {
+    const msg = `Hola ${pedido.clientes.nombre}, te adjunto el link de tu ticket de compra en Taller Yovi: ${window.location.href}`
+    const url = `https://wa.me/${pedido.clientes.telefono.replace('+', '')}?text=${encodeURIComponent(msg)}`
+    window.open(url, '_blank')
+  }
 
-  if (!pedido) return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: '20px', padding: '20px' }}>
-      <div style={{ padding: '40px', textAlign: 'center', border: '4px solid #000', backgroundColor: '#fff', boxShadow: '8px 8px 0px #000' }}>
-        <h2 style={{ fontWeight: '950', margin: 0 }}>PEDIDO NO ENCONTRADO</h2>
-        <p style={{ fontWeight: '800', color: '#ef4444' }}>ID Buscado: {id}</p>
-        <p style={{ fontSize: '12px', marginTop: '10px' }}>Revisa que el pedido exista en Supabase.</p>
-      </div>
-      <button onClick={() => router.push('/pedidos')} style={{ padding: '12px 24px', background: '#fff', border: '3px solid #000', borderRadius: '12px', fontWeight: '950', cursor: 'pointer', boxShadow: '4px 4px 0px #000' }}>VOLVER ATRÁS</button>
-    </div>
-  )
+  if (loading) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', fontWeight: '950', color: '#000' }}>GENERANDO TICKET...</div>
+  if (!pedido) return <div style={{ padding: '50px', textAlign: 'center', fontWeight: '950', color: '#000' }}>PEDIDO NO ENCONTRADO</div>
 
-  // CÁLCULOS DE TOTALES Y DESCUENTOS
   const subtotalProductos = pedido.detalles_pedido?.reduce((acc: number, d: any) => acc + (d.cantidad * d.precio_unitario), 0) || 0
   const descuentoManual = subtotalProductos - pedido.total_final
   const totalPagado = pedido.pagos?.reduce((acc: number, p: any) => acc + Number(p.monto), 0) || 0
   const saldoPendiente = pedido.total_final - totalPagado
   const fechaHoy = new Date(pedido.created_at).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-  const fechaEntrega = pedido.fecha_entrega ? new Date(pedido.fecha_entrega).toLocaleDateString('es-CL') : 'POR DEFINIR'
-
-  // ESTILOS MONOCHROME THERMAL-FRIENDLY (TEXTO NEGRO)
-  const containerStyle = { minHeight: '100vh', backgroundColor: '#e2e8f0', padding: '40px 20px', fontFamily: 'monospace', color: '#000' } // <- TEXTO NEGRO AQUÍ
-  const ticketStyle = { maxWidth: '280px', margin: '0 auto', backgroundColor: '#fff', border: '2px solid #000', padding: '15px', color: '#000', position: 'relative' } // <- 75mm approx (280px)
 
   return (
-    <main style={containerStyle}>
-      <div className="no-print" style={{ maxWidth: '400px', margin: '0 auto 20px auto', display: 'flex', gap: '10px' }}>
-        <button onClick={() => router.push('/pedidos')} style={{ flex: 1, padding: '12px', background: '#fff', border: '3px solid #000', borderRadius: '12px', fontWeight: '950', cursor: 'pointer', boxShadow: '4px 4px 0px #000' }}>VOLVER</button>
-        <button onClick={() => window.print()} style={{ flex: 1, padding: '12px', background: '#fff', border: '3px solid #000', borderRadius: '12px', fontWeight: '950', cursor: 'pointer', boxShadow: '4px 4px 0px #000' }}>LISTO</button>
-        <button onClick={exportarImagen} style={{ flex: 1, padding: '12px', background: '#fbbf24', border: '3px solid #000', borderRadius: '12px', fontWeight: '950', cursor: 'pointer', boxShadow: '4px 4px 0px #000' }}>{compartiendo ? '...' : 'PNG'}</button>
+    <main style={{ minHeight: '100vh', backgroundColor: '#e2e8f0', padding: '20px', fontFamily: 'monospace', color: '#000' }}>
+      
+      {/* BARRA DE ACCIONES */}
+      <div className="no-print" style={{ maxWidth: '400px', margin: '0 auto 20px auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+        <button onClick={() => router.push('/pedidos')} style={{ padding: '12px', background: '#fff', border: '3px solid #000', borderRadius: '12px', fontWeight: '950', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', boxShadow: '4px 4px 0px #000' }}>
+          <ArrowLeft size={18} /> VOLVER
+        </button>
+        <button onClick={() => window.print()} style={{ padding: '12px', background: '#fff', border: '3px solid #000', borderRadius: '12px', fontWeight: '950', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', boxShadow: '4px 4px 0px #000' }}>
+          <Printer size={18} /> IMPRIMIR
+        </button>
+        <button onClick={compartirWhatsApp} style={{ padding: '12px', background: '#22c55e', color: '#fff', border: '3px solid #000', borderRadius: '12px', fontWeight: '950', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', boxShadow: '4px 4px 0px #000' }}>
+          <MessageCircle size={18} /> WHATSAPP
+        </button>
+        <button onClick={generarImagen} style={{ padding: '12px', background: '#fbbf24', color: '#000', border: '3px solid #000', borderRadius: '12px', fontWeight: '950', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', boxShadow: '4px 4px 0px #000' }}>
+          <Share2 size={18} /> {compartiendo ? '...' : 'IMAGEN PNG'}
+        </button>
       </div>
 
-      <div ref={ticketRef} style={ticketStyle}>
-        {/* ENCABEZADO PRO DON LUIS */}
-        <div style={{ textAlign: 'center', borderBottom: '2px dashed #000', paddingBottom: '15px', marginBottom: '15px' }}>
-          <ReceiptText size={40} color="#000" style={{ marginBottom: '10px' }} />
-          <h1 style={{ margin: 0, fontSize: '20px', fontWeight: '1000', letterSpacing: '-1px' }}>TALLER YOVI</h1>
-          <p style={{ margin: '3px 0', fontSize: '10px', fontWeight: '800' }}>Calle Falsa 123, San Joaquín, Santiago</p>
-          <div style={{ fontSize: '10px', fontWeight: '900', display: 'flex', justifyContent: 'center', gap: '5px' }}><Smartphone size={11} /> +569 8450 7104</div>
-          <div style={{ fontSize: '10px', fontWeight: '900' }}>Instagram: @taller_yovi</div>
+      {/* TICKET 75mm */}
+      <div ref={ticketRef} style={{ maxWidth: '280px', margin: '0 auto', backgroundColor: '#ffffff', border: '2px solid #000', padding: '15px', color: '#000' }}>
+        
+        <div style={{ textAlign: 'center', borderBottom: '2px dashed #000', paddingBottom: '10px', marginBottom: '10px' }}>
+          <ReceiptText size={35} color="#000" style={{ marginBottom: '5px' }} />
+          <h1 style={{ margin: 0, fontSize: '18px', fontWeight: '1000' }}>TALLER YOVI</h1>
+          <p style={{ margin: '2px 0', fontSize: '10px', fontWeight: '900' }}>Calle Falsa 123, San Joaquín</p>
+          <p style={{ margin: '2px 0', fontSize: '10px', fontWeight: '900' }}>WA: +569 8450 7104 | IG: @taller_yovi</p>
         </div>
 
-        {/* DATOS DE LA VENTA */}
-        <div style={{ fontSize: '11px', fontWeight: '800', borderBottom: '2px solid #000', paddingBottom: '10px', marginBottom: '10px', lineHeight: '1.3' }}>
-          {/* ID formateado a #0001 */}
+        <div style={{ fontSize: '10px', fontWeight: '900', borderBottom: '1px solid #000', paddingBottom: '8px', marginBottom: '8px', color: '#000' }}>
           <p style={{ margin: 0 }}><b>VENTA N° :</b> #{pedido.id.toString().padStart(4, '0')}</p>
           <p style={{ margin: 0 }}><b>FECHA    :</b> {fechaHoy}</p>
-          <p style={{ margin: 0 }}><b>CLIENTE  :</b> {pedido.clientes?.nombre?.toUpperCase() || 'S/N'}</p>
-          <p style={{ margin: 0 }}><b>COLEGIO  :</b> {pedido.colegio?.toUpperCase() || 'PARTICULAR'}</p>
+          <p style={{ margin: 0 }}><b>CLIENTE  :</b> {pedido.clientes?.nombre?.toUpperCase()}</p>
+          <p style={{ margin: 0 }}><b>COLEGIO  :</b> {pedido.colegio?.toUpperCase()}</p>
         </div>
 
-        {/* DETALLE DE ARTÍCULOS (TABLA MONOCHROME) */}
-        <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '15px', fontSize: '10px' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '10px', fontSize: '10px', color: '#000' }}>
           <thead>
-            <tr style={{ borderBottom: '2px solid #000' }}>
-              <th style={{ textAlign: 'left', padding: '5px 0' }}>PRENDA/TALLA</th>
-              <th style={{ textAlign: 'right', padding: '5px 0' }}>TOTAL</th>
+            <tr style={{ borderBottom: '1px solid #000' }}>
+              <th style={{ textAlign: 'left', padding: '4px 0' }}>PRENDA</th>
+              <th style={{ textAlign: 'right', padding: '4px 0' }}>TOTAL</th>
             </tr>
           </thead>
           <tbody>
             {pedido.detalles_pedido?.map((det: any, i: number) => (
               <tr key={i}>
-                <td style={{ padding: '5px 0' }}>{det.cantidad}x {det.p_nombre} (T{det.talla})</td>
-                <td style={{ textAlign: 'right', padding: '5px 0', fontWeight: '950' }}>${(det.cantidad * det.precio_unitario).toLocaleString('es-CL')}</td>
+                <td style={{ padding: '4px 0' }}>{det.cantidad}x {det.p_nombre} (T{det.talla})</td>
+                <td style={{ textAlign: 'right', padding: '4px 0', fontWeight: '950' }}>${(det.cantidad * det.precio_unitario).toLocaleString('es-CL')}</td>
               </tr>
             ))}
           </tbody>
         </table>
 
-        {/* TOTALES Y DESCUENTOS ( thermal ready) */}
-        <div style={{ textAlign: 'right', fontSize: '11px', fontWeight: '800', lineHeight: '1.4' }}>
-          <p style={{ margin: 0 }}>SUBTOTAL VENTA: ${subtotalProductos.toLocaleString('es-CL')}</p>
-          {descuentoManual > 0 && (
-            <p style={{ margin: 0, color: '#ef4444' }}>DESCUENTO: -${descuentoManual.toLocaleString('es-CL')}</p> // <- DESCUENTO AQUÍ
-          )}
-          <div style={{ backgroundColor: '#f1f5f9', padding: '6px', border: '1px solid #000', marginTop: '5px' }}>
-            <p style={{ margin: 0, fontSize: '13px', fontWeight: '1000' }}>TOTAL A PAGAR: ${pedido.total_final.toLocaleString('es-CL')}</p>
-            <p style={{ margin: 0 }}>ABONADO: ${totalPagado.toLocaleString('es-CL')}</p>
-            <p style={{ margin: 0, fontWeight: '1000', color: saldoPendiente > 0 ? '#ef4444' : '#166534' }}>SALDO: ${saldoPendiente.toLocaleString('es-CL')}</p>
+        <div style={{ textAlign: 'right', fontSize: '10px', fontWeight: '950', color: '#000' }}>
+          <p style={{ margin: 0 }}>SUBTOTAL: ${subtotalProductos.toLocaleString('es-CL')}</p>
+          {descuentoManual > 0 && <p style={{ margin: 0 }}>DESCUENTO: -${descuentoManual.toLocaleString('es-CL')}</p>}
+          <div style={{ border: '1px solid #000', padding: '5px', marginTop: '5px', background: '#f8fafc' }}>
+            <p style={{ margin: 0, fontSize: '12px' }}>TOTAL: ${pedido.total_final.toLocaleString('es-CL')}</p>
+            <p style={{ margin: 0 }}>PAGADO: ${totalPagado.toLocaleString('es-CL')}</p>
+            <p style={{ margin: 0, color: saldoPendiente > 0 ? '#ef4444' : '#166534' }}>SALDO: ${saldoPendiente.toLocaleString('es-CL')}</p>
           </div>
         </div>
 
-        <div style={{ borderTop: '2px dashed #000', margin: '15px 0' }}></div>
-
-        {/* PIE DE PÁGINA */}
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ backgroundColor: '#000', color: '#fff', padding: '8px', fontWeight: '1000', marginBottom: '12px', fontSize: '13px', letterSpacing: '1px' }}>
-            ENTREGA: {fechaEntrega}
-          </div>
-          <p style={{ fontSize: '10px', fontWeight: '950', margin: 0 }}>*** GRACIAS POR SU COMPRA ***</p>
-          <p style={{ fontSize: '9px', marginTop: '5px' }}>COMPROBANTE DE VENTA INTERNA</p>
+        <div style={{ textAlign: 'center', marginTop: '15px', borderTop: '2px dashed #000', paddingTop: '10px' }}>
+          <p style={{ fontSize: '9px', fontWeight: '950', margin: 0 }}>ENTREGA: {pedido.fecha_entrega ? new Date(pedido.fecha_entrega).toLocaleDateString('es-CL') : 'A CONVENIR'}</p>
+          <p style={{ fontSize: '9px', fontWeight: '950', marginTop: '5px' }}>*** GRACIAS POR PREFERIRNOS ***</p>
         </div>
       </div>
 
