@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 import { registrarLog } from '../../lib/auditoria'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, User, Phone, IdCard, School, Calendar, ShoppingBag, Plus, X, CheckCircle, MessageSquare, Rocket, Clock, Banknote } from 'lucide-react'
+import { ArrowLeft, User, Phone, IdCard, School, Calendar, ShoppingBag, Plus, X, CheckCircle, MessageSquare, Rocket, Clock, AlertCircle } from 'lucide-react'
 
 export default function RegistroPedido() {
   const router = useRouter()
@@ -22,7 +22,7 @@ export default function RegistroPedido() {
 
   const [nombreCliente, setNombreCliente] = useState('')
   const [rut, setRut] = useState('')
-  const [telefono, setTelefono] = useState('')
+  const [telefono, setTelefono] = useState('') // Guardaremos solo los 8 dígitos
   const [colegio, setColegio] = useState('')
   const [fechaEntrega, setFechaEntrega] = useState('')
   const [observaciones, setObservaciones] = useState('') 
@@ -74,9 +74,19 @@ export default function RegistroPedido() {
   const guardar = async (e: any) => {
     e.preventDefault()
     if (carrito.length === 0) return alert("Añade productos al pedido")
+    if (telefono.length !== 8) return alert("El teléfono debe tener exactamente 8 números.")
+    
     setLoading(true)
     try {
-      const { data: cli, error: cliError } = await supabase.from('clientes').insert([{ nombre: nombreCliente, telefono, rut }]).select().single()
+      // Guardamos el teléfono con el prefijo completo para que el link de WhatsApp funcione
+      const telefonoCompleto = `+569${telefono}`
+      
+      const { data: cli, error: cliError } = await supabase.from('clientes').insert([{ 
+        nombre: nombreCliente, 
+        telefono: telefonoCompleto, 
+        rut 
+      }]).select().single()
+      
       if (cliError || !cli) throw new Error(`Error cliente: ${cliError?.message}`)
       
       const estadoPedido = tipoEntrega === 'inmediata' ? 'Completado' : 'Pendiente'
@@ -105,7 +115,6 @@ export default function RegistroPedido() {
       }))
       await supabase.from('detalles_pedido').insert(detalles)
 
-      // LOGICA DE PAGO AUTOMÁTICO
       const montoAPagar = tipoEntrega === 'inmediata' ? totalCalculado : Number(abono)
       
       if (montoAPagar > 0) {
@@ -131,7 +140,6 @@ export default function RegistroPedido() {
     finally { setLoading(false) }
   }
 
-  // ESTILOS MEJORADOS (ALTO CONTRASTE)
   const cardStyle = { backgroundColor: '#fff', padding: '24px', borderRadius: '24px', border: '3px solid #000', boxShadow: '8px 8px 0px #000', marginBottom: '20px' }
   const inputStyle = { width: '100%', padding: '14px', border: '3px solid #000', borderRadius: '12px', fontSize: '16px', fontWeight: '800', color: '#000', backgroundColor: '#fff', boxSizing: 'border-box' as const }
   const labelStyle = { fontSize: '13px', fontWeight: '900', color: '#000', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px', textTransform: 'uppercase' as const }
@@ -151,34 +159,13 @@ export default function RegistroPedido() {
           <div style={cardStyle}>
             <label style={labelStyle}><Rocket size={16} /> Tipo de Operación</label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '10px' }}>
-              <button 
-                type="button"
-                onClick={() => setTipoEntrega('agendada')}
-                style={{ 
-                  padding: '14px', borderRadius: '14px', border: '3px solid #000', fontWeight: '900', fontSize: '14px',
-                  backgroundColor: tipoEntrega === 'agendada' ? '#fbbf24' : '#fff',
-                  color: '#000',
-                  boxShadow: tipoEntrega === 'agendada' ? 'inset 4px 4px 0px rgba(0,0,0,0.2)' : '4px 4px 0px #000',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
-                }}
-              >
+              <button type="button" onClick={() => setTipoEntrega('agendada')} style={{ padding: '14px', borderRadius: '14px', border: '3px solid #000', fontWeight: '900', fontSize: '14px', backgroundColor: tipoEntrega === 'agendada' ? '#fbbf24' : '#fff', color: '#000', boxShadow: tipoEntrega === 'agendada' ? 'inset 4px 4px 0px rgba(0,0,0,0.2)' : '4px 4px 0px #000', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                 <Clock size={18} /> PEDIDO (Agenda)
               </button>
-              <button 
-                type="button"
-                onClick={() => setTipoEntrega('inmediata')}
-                style={{ 
-                  padding: '14px', borderRadius: '14px', border: '3px solid #000', fontWeight: '900', fontSize: '14px',
-                  backgroundColor: tipoEntrega === 'inmediata' ? '#4ade80' : '#fff',
-                  color: '#000',
-                  boxShadow: tipoEntrega === 'inmediata' ? 'inset 4px 4px 0px rgba(0,0,0,0.2)' : '4px 4px 0px #000',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
-                }}
-              >
+              <button type="button" onClick={() => setTipoEntrega('inmediata')} style={{ padding: '14px', borderRadius: '14px', border: '3px solid #000', fontWeight: '900', fontSize: '14px', backgroundColor: tipoEntrega === 'inmediata' ? '#4ade80' : '#fff', color: '#000', boxShadow: tipoEntrega === 'inmediata' ? 'inset 4px 4px 0px rgba(0,0,0,0.2)' : '4px 4px 0px #000', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                 <CheckCircle size={18} /> VENTA (Ahora)
               </button>
             </div>
-            
             {tipoEntrega === 'agendada' && (
               <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} style={{ marginTop: '20px' }}>
                 <label style={labelStyle}><Calendar size={16} /> Fecha de Entrega</label>
@@ -194,7 +181,31 @@ export default function RegistroPedido() {
               <div><label style={labelStyle}>Nombre Completo</label><input required style={inputStyle} value={nombreCliente} onChange={e => setNombreCliente(e.target.value)} /></div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div><label style={labelStyle}><IdCard size={14} /> RUT (Opcional)</label><input style={inputStyle} value={rut} onChange={e => setRut(e.target.value)} /></div>
-                <div><label style={labelStyle}><Phone size={14} /> Teléfono</label><input required style={inputStyle} value={telefono} onChange={e => setTelefono(e.target.value)} /></div>
+                
+                {/* TELÉFONO CON PREFIJO AUTOMÁTICO */}
+                <div>
+                  <label style={labelStyle}><Phone size={14} /> Teléfono</label>
+                  <div style={{ display: 'flex', gap: '5px' }}>
+                    <div style={{ padding: '14px 10px', border: '3px solid #000', borderRadius: '12px', fontSize: '16px', fontWeight: '900', backgroundColor: '#e2e8f0', color: '#000' }}>+56 9</div>
+                    <input 
+                      required 
+                      type="tel"
+                      placeholder="12345678"
+                      maxLength={8}
+                      style={inputStyle} 
+                      value={telefono} 
+                      onChange={e => {
+                        const val = e.target.value.replace(/\D/g, '').slice(0, 8); // Solo números, máx 8
+                        setTelefono(val);
+                      }} 
+                    />
+                  </div>
+                  {telefono.length > 0 && telefono.length < 8 && (
+                    <p style={{ color: '#ef4444', fontSize: '11px', fontWeight: '900', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <AlertCircle size={12} /> Faltan {8 - telefono.length} números
+                    </p>
+                  )}
+                </div>
               </div>
               <div>
                 <label style={labelStyle}><School size={14} /> Colegio</label>
@@ -222,16 +233,16 @@ export default function RegistroPedido() {
             <button onClick={agregarAlCarrito} type="button" style={{ width: '100%', backgroundColor: '#000', color: '#fff', border: 'none', padding: '16px', borderRadius: '14px', fontWeight: '900', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}><Plus size={20} /> AÑADIR AL CARRITO</button>
           </div>
 
-          {/* CARRITO VISUAL */}
+          {/* CARRITO Y CIERRE DE VENTA */}
           <AnimatePresence>
             {carrito.length > 0 && (
               <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} style={{ ...cardStyle, background: '#f8fafc', borderStyle: 'dashed' }}>
                 <p style={labelStyle}>Resumen de Venta:</p>
                 {carrito.map((item) => (
                   <div key={item.tempId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '2px solid #e2e8f0' }}>
-                    <span style={{ fontWeight: '800', color: '#000' }}>{item.cantidad}x {item.nombre} <br/><small style={{color: '#64748b'}}>Talla {item.talla}</small></span>
+                    <span style={{ fontWeight: '800', color: '#000' }}>{item.cantidad}x {item.nombre} <br/><small style={{color: '#000', opacity: 0.7}}>Talla {item.talla}</small></span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                      <span style={{ fontWeight: '900' }}>${(item.precio * item.cantidad).toLocaleString()}</span>
+                      <span style={{ fontWeight: '900', color: '#000' }}>${(item.precio * item.cantidad).toLocaleString()}</span>
                       <button onClick={() => quitarDelCarrito(item.tempId)} style={{ color: '#ef4444', border: 'none', background: 'none', padding: '5px' }}><X size={20} /></button>
                     </div>
                   </div>
@@ -240,25 +251,21 @@ export default function RegistroPedido() {
             )}
           </AnimatePresence>
 
-          {/* TOTAL Y PAGO */}
           <div style={{ backgroundColor: '#000', color: '#fff', padding: '30px', borderRadius: '28px', border: '4px solid #000', boxShadow: '10px 10px 0px #3b82f6' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '25px' }}>
               <div>
                 <p style={{ margin: 0, fontSize: '14px', fontWeight: '900', color: '#4ade80' }}>TOTAL A PAGAR</p>
                 <p style={{ margin: 0, fontSize: '42px', fontWeight: '900' }}>${totalCalculado.toLocaleString('es-CL')}</p>
               </div>
-              <ShoppingBag size={40} opacity={0.3} />
             </div>
 
             <div style={{ display: 'grid', gap: '20px' }}>
-              {/* EL ABONO SOLO SE MUESTRA SI ES AGENDADA */}
               {tipoEntrega === 'agendada' && (
                 <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}>
                   <label style={{ color: '#fff', fontSize: '13px', fontWeight: '900' }}>ABONO INICIAL ($)</label>
                   <input type="number" placeholder="Ej: 5000" style={{ ...inputStyle, background: '#fff', marginTop: '8px' }} value={abono} onChange={e => setAbono(e.target.value)} />
                 </motion.div>
               )}
-
               <div>
                 <label style={{ color: '#fff', fontSize: '13px', fontWeight: '900' }}>MÉTODO DE PAGO</label>
                 <select style={{ ...inputStyle, background: '#fff', marginTop: '8px' }} value={metodoPago} onChange={e => setMetodoPago(e.target.value)}>
@@ -269,18 +276,32 @@ export default function RegistroPedido() {
                 </select>
               </div>
 
-              <button type="submit" disabled={loading || carrito.length === 0} style={{ width: '100%', backgroundColor: '#4ade80', color: '#000', border: '3px solid #000', padding: '18px', borderRadius: '16px', fontWeight: '900', fontSize: '20px', boxShadow: '4px 4px 0px #fff', cursor: 'pointer', marginTop: '10px' }}>
+              <button 
+                type="submit" 
+                disabled={loading || carrito.length === 0 || telefono.length !== 8} 
+                style={{ 
+                  width: '100%', 
+                  backgroundColor: (telefono.length === 8 && carrito.length > 0) ? '#4ade80' : '#64748b', 
+                  color: '#000', 
+                  border: '3px solid #000', 
+                  padding: '18px', 
+                  borderRadius: '16px', 
+                  fontWeight: '900', 
+                  fontSize: '20px', 
+                  boxShadow: '4px 4px 0px #fff', 
+                  cursor: (telefono.length === 8) ? 'pointer' : 'not-allowed', 
+                  marginTop: '10px' 
+                }}
+              >
                 {loading ? 'PROCESANDO...' : (tipoEntrega === 'inmediata' ? 'FINALIZAR VENTA' : 'CONFIRMAR PEDIDO')}
               </button>
             </div>
           </div>
 
-          {/* NOTAS FINALES */}
           <div style={{ marginTop: '20px' }}>
             <label style={labelStyle}><MessageSquare size={16} /> Notas Internas</label>
             <textarea placeholder="Ej: Entregar en bolsa grande..." style={{ ...inputStyle, height: '80px', resize: 'none' }} value={observaciones} onChange={e => setObservaciones(e.target.value)} />
           </div>
-
         </form>
       </div>
     </main>
