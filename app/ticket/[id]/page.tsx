@@ -171,7 +171,6 @@ export default function TicketPedido() {
             <p style={{ fontSize: '10px', fontStyle: 'italic', marginBottom: '10px' }}>Nota: {pedido.observaciones}</p>
           )}
           <p style={{ fontSize: '9px', fontWeight: 'bold' }}>¡GRACIAS POR SU PREFERENCIA!</p>
-          <p style={{ fontSize: '8px', marginTop: '15px', color: '#666' }}>Desarrollado por Sebastian Ramirez</p>
         </div>
 
       </div>
