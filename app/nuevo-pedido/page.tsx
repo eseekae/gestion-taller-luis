@@ -23,7 +23,7 @@ export default function RegistroPedido() {
   const [tallaSeleccionada, setTallaSeleccionada] = useState('')
   const [precioManualEspecial, setPrecioManualEspecial] = useState('')
   
-  // FIX: Ahora el estado inicial es vacío para obligar al ingreso manual
+  // FIX PREVIO: Estado inicial vacío para obligar al ingreso manual
   const [cantidad, setCantidad] = useState<number | string>('')
 
   const [nombreCliente, setNombreCliente] = useState('')
@@ -68,7 +68,6 @@ export default function RegistroPedido() {
   const tallasDeInventario = useMemo(() => inventario.filter(i => i.nombre === nombreSeleccionado), [nombreSeleccionado, inventario])
 
   const agregarAlCarrito = () => {
-    // VALIDACIÓN: Si el campo está vacío o es 0, no permite agregar
     if (cantidad === '' || Number(cantidad) <= 0) {
       return alert("Hrmn, tienes que ingresar una cantidad válida antes de añadir al pedido.")
     }
@@ -85,7 +84,6 @@ export default function RegistroPedido() {
     }
     setCarrito([...carrito, { ...item, tempId: Date.now() }])
     setPrecioManualEspecial('')
-    // Limpiamos el campo después de agregar
     setCantidad('')
   }
 
@@ -102,6 +100,7 @@ export default function RegistroPedido() {
   const guardar = async (e: any) => {
     e.preventDefault()
     if (carrito.length === 0) return alert("Añade productos al pedido")
+    // VALIDACIÓN: Asegura exactamente 8 números antes de guardar
     if (telefono.length !== 8) return alert("El teléfono debe tener exactamente 8 números.")
     if (tipoEntrega === 'agendada' && !fechaEntrega) return alert("Selecciona una fecha de entrega")
     
@@ -213,8 +212,24 @@ export default function RegistroPedido() {
                 <label style={labelStyle}><Phone size={14} /> Teléfono Móvil</label>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <div style={{ padding: '16px 10px', border: '3px solid #000', borderRadius: '16px', fontSize: '14px', fontWeight: '950', backgroundColor: '#e2e8f0', color: '#000', display: 'flex', alignItems: 'center' }}>+569</div>
-                  <input required type="tel" maxLength={8} style={inputStyle} value={telefono} onChange={e => setTelefono(e.target.value.replace(/\D/g, '').slice(0, 8))} />
+                  
+                  {/* AJUSTE: Limitamos a 8 números y mantenemos el prefijo predeterminado */}
+                  <input 
+                    required 
+                    type="tel" 
+                    maxLength={8} 
+                    style={inputStyle} 
+                    value={telefono} 
+                    onChange={e => setTelefono(e.target.value.replace(/\D/g, '').slice(0, 8))} 
+                    placeholder="87654321"
+                  />
                 </div>
+                {/* ADVERTENCIA VISUAL: Avisa en tiempo real si faltan números */}
+                {telefono.length > 0 && telefono.length < 8 && (
+                  <p style={{ color: '#ef4444', fontSize: '11px', fontWeight: '900', marginTop: '5px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <AlertCircle size={12} /> FALTAN {8 - telefono.length} NÚMEROS
+                  </p>
+                )}
               </div>
               <div>
                 <label style={labelStyle}><School size={16} /> Institución / Colegio</label>
@@ -233,8 +248,6 @@ export default function RegistroPedido() {
               <select style={inputStyle} value={nombreSeleccionado} onChange={e => setNombreSeleccionado(e.target.value)}>
                 {productosUnicos.map(n => <option key={n} value={n}>{n}</option>)}
               </select>
-              
-              {/* FIX: Input ahora maneja el estado vacío correctamente */}
               <input 
                 type="number" 
                 placeholder="CANT." 
@@ -329,7 +342,6 @@ export default function RegistroPedido() {
 
           <div style={{ marginTop: '25px', marginBottom: '40px' }}>
             <label style={labelStyle}><MessageSquare size={16} /> Notas</label>
-            {/* FIX: Se corrigió el nombre de la función setter */}
             <textarea placeholder="Ej: Bordado especial..." style={{ ...inputStyle, height: '80px', resize: 'none' }} value={observaciones} onChange={e => setObservaciones(e.target.value)} />
           </div>
         </form>
