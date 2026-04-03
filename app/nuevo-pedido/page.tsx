@@ -105,6 +105,7 @@ export default function RegistroPedido() {
       const estadoPedido = tipoEntrega === 'inmediata' ? 'Completado' : 'Pendiente'
       const fechaFinalEntrega = tipoEntrega === 'inmediata' ? new Date().toISOString().split('T')[0] : (fechaEntrega || null)
       
+      // FIX: Insertamos sin enviar ID, Supabase genera el número (1, 2, 3...)
       const { data: ped, error: pedError } = await supabase.from('pedidos').insert([{
         cliente_id: cli.id, total_final: totalConDescuento, estado: estadoPedido,
         colegio: colegio || 'Particular', fecha_entrega: fechaFinalEntrega,
@@ -114,6 +115,7 @@ export default function RegistroPedido() {
       
       if (pedError || !ped) throw new Error(`Error pedido: ${pedError?.message}`)
       
+      // El ped.id que recibimos ahora es un número
       const detalles = carrito.map(item => ({
         pedido_id: ped.id, producto_id: item.id_inv, cantidad: item.cantidad, 
         cantidad_entregada: tipoEntrega === 'inmediata' ? item.cantidad : 0, 
@@ -136,8 +138,10 @@ export default function RegistroPedido() {
         }
       }
       
-      await registrarLog(`${usuarioActivo} creó venta de $${totalConDescuento}`, `Pedido ${ped.id}`)
-      alert("✅ Venta registrada correctamente."); router.push('/pedidos')
+      // Log con el nuevo ID numérico
+      await registrarLog(`${usuarioActivo} creó venta de $${totalConDescuento}`, `Pedido #${ped.id}`)
+      alert(`✅ Venta registrada correctamente como Pedido #${ped.id}`); 
+      router.push('/pedidos')
     } catch (err: any) { alert(err.message) }
     finally { setLoading(false) }
   }
@@ -167,7 +171,6 @@ export default function RegistroPedido() {
 
         <form onSubmit={guardar}>
           
-          {/* PRIORIDAD */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} style={cardStyle}>
             <label style={labelStyle}><Rocket size={16} /> Prioridad de Pedido</label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '10px', marginBottom: tipoEntrega === 'agendada' ? '15px' : '0' }}>
@@ -188,7 +191,6 @@ export default function RegistroPedido() {
             </AnimatePresence>
           </motion.div>
 
-          {/* FICHA CLIENTE - FIX MÓVIL */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} style={cardStyle}>
             <h2 style={{ margin: '0 0 20px 0', fontSize: '18px', fontWeight: '950', color: '#000', display: 'flex', alignItems: 'center', gap: '10px' }}>
               <User size={20} color="#3b82f6" /> FICHA CLIENTE
@@ -218,7 +220,6 @@ export default function RegistroPedido() {
             </div>
           </motion.div>
 
-          {/* PRENDAS */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} style={cardStyle}>
             <h2 style={{ margin: '0 0 20px 0', fontSize: '18px', fontWeight: '950', color: '#000', display: 'flex', alignItems: 'center', gap: '10px' }}>
               <ShoppingBag size={20} color="#f472b6" /> PRENDAS
@@ -246,7 +247,6 @@ export default function RegistroPedido() {
             </motion.button>
           </motion.div>
 
-          {/* CARRITO CON SUBTOTAL */}
           <AnimatePresence>
             {carrito.length > 0 && (
               <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} style={{ ...cardStyle, background: '#fff', borderStyle: 'dashed' }}>
@@ -258,7 +258,6 @@ export default function RegistroPedido() {
                   </div>
                 ))}
                 
-                {/* FIX: SUBTOTAL DEBAJO DEL CARRITO */}
                 <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '4px solid #000', textAlign: 'right' }}>
                   <p style={{ margin: 0, fontSize: '12px', fontWeight: '900', color: '#64748b' }}>SUBTOTAL PRENDAS</p>
                   <p style={{ margin: 0, fontSize: '24px', fontWeight: '950', color: '#000' }}>${totalOriginal.toLocaleString('es-CL')}</p>
@@ -267,7 +266,6 @@ export default function RegistroPedido() {
             )}
           </AnimatePresence>
 
-          {/* BLOQUE FINAL */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} style={{ backgroundColor: '#000', color: '#fff', padding: '24px', borderRadius: '32px', border: '4px solid #000', boxShadow: '8px 8px 0px #3b82f6' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '20px' }}>
               <motion.button type="button" onClick={() => setMostrarDescuento(!mostrarDescuento)} style={{ width: '100%', backgroundColor: '#3b82f6', color: '#fff', border: '2px solid #fff', padding: '12px', borderRadius: '14px', fontWeight: '950', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer', fontSize: '12px' }}>
@@ -318,7 +316,7 @@ export default function RegistroPedido() {
 
           <div style={{ marginTop: '25px', marginBottom: '40px' }}>
             <label style={labelStyle}><MessageSquare size={16} /> Notas</label>
-            <textarea placeholder="Ej: Bordado especial..." style={{ ...inputStyle, height: '80px', resize: 'none' }} value={observaciones} onChange={e => setObservaciones(e.target.value)} />
+            <textarea placeholder="Ej: Bordado especial..." style={{ ...inputStyle, height: '80px', resize: 'none' }} value={observaciones} onChange={e => setObservations(e.target.value)} />
           </div>
         </form>
       </div>
