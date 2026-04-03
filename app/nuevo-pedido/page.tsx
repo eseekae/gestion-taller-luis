@@ -144,7 +144,7 @@ export default function RegistroPedido() {
 
   // ESTILOS
   const cardStyle = { backgroundColor: '#fff', padding: '20px', borderRadius: '28px', border: '4px solid #000', boxShadow: '8px 8px 0px #000', marginBottom: '24px' }
-  const inputStyle = { width: '100%', padding: '16px', border: '3px solid #000', borderRadius: '16px', fontSize: '16px', fontWeight: '800', color: '#000', backgroundColor: '#fff', boxSizing: 'border-box' as const, outline: 'none' }
+  const inputStyle = { width: '100%', padding: '16px', border: '3px solid #000', borderRadius: '16px', fontSize: '16px', fontWeight: '900', color: '#000', backgroundColor: '#fff', boxSizing: 'border-box' as const, outline: 'none' }
   const labelStyle = { fontSize: '11px', fontWeight: '950', color: '#000', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase' as const, letterSpacing: '0.5px' }
 
   return (
@@ -156,6 +156,17 @@ export default function RegistroPedido() {
       padding: '30px 15px', 
       fontFamily: 'system-ui, -apple-system, sans-serif' 
     }}>
+      {/* MÉTODO NUCLEAR PARA COLOR NEGRO */}
+      <style jsx>{`
+        select, option {
+          color: #000 !important;
+          opacity: 1 !important;
+          -webkit-text-fill-color: #000 !important;
+          -webkit-opacity: 1 !important;
+          font-weight: 900 !important;
+        }
+      `}</style>
+
       <div style={{ maxWidth: '600px', margin: '0 auto' }}>
         
         <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '25px' }}>
@@ -167,7 +178,6 @@ export default function RegistroPedido() {
 
         <form onSubmit={guardar}>
           
-          {/* PRIORIDAD */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} style={cardStyle}>
             <label style={labelStyle}><Rocket size={16} /> Prioridad de Pedido</label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '10px', marginBottom: tipoEntrega === 'agendada' ? '15px' : '0' }}>
@@ -188,7 +198,6 @@ export default function RegistroPedido() {
             </AnimatePresence>
           </motion.div>
 
-          {/* FICHA CLIENTE - FIX MÓVIL */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} style={cardStyle}>
             <h2 style={{ margin: '0 0 20px 0', fontSize: '18px', fontWeight: '950', color: '#000', display: 'flex', alignItems: 'center', gap: '10px' }}>
               <User size={20} color="#3b82f6" /> FICHA CLIENTE
@@ -218,7 +227,6 @@ export default function RegistroPedido() {
             </div>
           </motion.div>
 
-          {/* PRENDAS */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} style={cardStyle}>
             <h2 style={{ margin: '0 0 20px 0', fontSize: '18px', fontWeight: '950', color: '#000', display: 'flex', alignItems: 'center', gap: '10px' }}>
               <ShoppingBag size={20} color="#f472b6" /> PRENDAS
@@ -230,11 +238,16 @@ export default function RegistroPedido() {
               <input type="number" min="1" style={inputStyle} value={cantidad} onChange={e => setCantidad(Number(e.target.value))} />
             </div>
             <div style={{ marginBottom: '20px' }}>
+              {/* STOCK AL PRINCIPIO Y FORZADO A NEGRO */}
               <select style={inputStyle} value={tallaSeleccionada} onChange={e => setTallaSeleccionada(e.target.value)}>
                 {tallasDeInventario.map(t => {
-  const disponible = t.stock - (t.stock_reservado || 0);
-  return (
-    <option key={t.id} value={t.talla} style={{ color: '#000', fontWeight: 'bold' }}>{t.talla} (${Number(t.precio_base).toLocaleString()}) — STOCK: {disponible}</option>);})}
+                  const disponible = t.stock - (t.stock_reservado || 0);
+                  return (
+                    <option key={t.id} value={t.talla} style={{ color: '#000', fontWeight: '950', backgroundColor: '#fff' }}>
+                      STOCK: {disponible} —— Talla {t.talla} (${Number(t.precio_base).toLocaleString()})
+                    </option>
+                  )
+                })}
                 <option value="ESPECIAL">✨ TALLA ESPECIAL</option>
               </select>
               {tallaSeleccionada === 'ESPECIAL' && (
@@ -249,7 +262,6 @@ export default function RegistroPedido() {
             </motion.button>
           </motion.div>
 
-          {/* CARRITO CON SUBTOTAL */}
           <AnimatePresence>
             {carrito.length > 0 && (
               <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} style={{ ...cardStyle, background: '#fff', borderStyle: 'dashed' }}>
@@ -261,7 +273,7 @@ export default function RegistroPedido() {
                   </div>
                 ))}
                 
-                {/* FIX: SUBTOTAL DEBAJO DEL CARRITO */}
+                {/* SUBTOTAL DEL CARRITO */}
                 <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '4px solid #000', textAlign: 'right' }}>
                   <p style={{ margin: 0, fontSize: '12px', fontWeight: '900', color: '#64748b' }}>SUBTOTAL PRENDAS</p>
                   <p style={{ margin: 0, fontSize: '24px', fontWeight: '950', color: '#000' }}>${totalOriginal.toLocaleString('es-CL')}</p>
@@ -270,7 +282,6 @@ export default function RegistroPedido() {
             )}
           </AnimatePresence>
 
-          {/* BLOQUE FINAL */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} style={{ backgroundColor: '#000', color: '#fff', padding: '24px', borderRadius: '32px', border: '4px solid #000', boxShadow: '8px 8px 0px #3b82f6' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '20px' }}>
               <motion.button type="button" onClick={() => setMostrarDescuento(!mostrarDescuento)} style={{ width: '100%', backgroundColor: '#3b82f6', color: '#fff', border: '2px solid #fff', padding: '12px', borderRadius: '14px', fontWeight: '950', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer', fontSize: '12px' }}>
@@ -309,8 +320,10 @@ export default function RegistroPedido() {
               <div>
                 <label style={{ color: '#fff', fontSize: '11px', fontWeight: '950', marginBottom: '5px', display: 'block' }}>MÉTODO</label>
                 <select style={inputStyle} value={metodoPago} onChange={e => setMetodoPago(e.target.value)}>
-                  <option value="Transferencia">Transferencia</option><option value="Efectivo">Efectivo</option>
-                  <option value="Débito">Débito</option><option value="Crédito">Crédito</option>
+                  <option value="Transferencia">Transferencia</option>
+                  <option value="Efectivo">Efectivo</option>
+                  <option value="Débito">Débito</option>
+                  <option value="Crédito">Crédito</option>
                 </select>
               </div>
               <motion.button type="submit" disabled={loading || carrito.length === 0} style={{ width: '100%', backgroundColor: '#4ade80', color: '#000', border: '3px solid #000', padding: '20px', borderRadius: '20px', fontWeight: '950', fontSize: '20px', cursor: 'pointer' }}>
