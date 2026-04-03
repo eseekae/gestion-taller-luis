@@ -22,7 +22,7 @@ export default function VerPedidos() {
 
   const [modalPago, setModalPago] = useState({
     open: false,
-    pedidoId: null as number | null, // AJUSTE: Ahora es number para los nuevos IDs
+    pedidoId: null as number | null, 
     nombreCliente: '',
     monto: '',
     fecha: new Date().toISOString().split('T')[0],
@@ -31,7 +31,8 @@ export default function VerPedidos() {
   })
 
   const cargar = useCallback(async () => {
-    if (!sessionStorage.getItem('user_role')) return router.push('/login')
+    // FIX: Cambiamos sessionStorage por localStorage para que persista al abrir pestañas
+    if (!localStorage.getItem('user_role')) return router.push('/login')
     setLoading(true)
 
     const [pRes, cRes, iRes, dRes, pagosRes, aRes] = await Promise.all([
@@ -160,7 +161,6 @@ export default function VerPedidos() {
     registrarLog("Exportó Excel de pedidos", "Reporte detallado con pagos y horas")
   }
 
-  // --- ACCIONES DE ENTREGA PARCIAL / TOTAL ---
   const actualizarEntregaItem = async (det: any, cambio: number) => {
     const actual = det.cantidad_entregada || 0
     const nuevaCantidad = actual + cambio
@@ -206,7 +206,8 @@ export default function VerPedidos() {
     if (!monto || valorNum <= 0) return alert("Ingresa un monto válido")
     const montoFinal = esCorreccion ? valorNum * -1 : valorNum
     try {
-      await supabase.from('pagos').insert([{ pedido_id: pedidoId, monto: montoFinal, fecha_pago: fecha, metodo_pago: metodo, creado_por: sessionStorage.getItem('user_name') || 'Don Luis' }])
+      // FIX: Usamos localStorage para el nombre del usuario
+      await supabase.from('pagos').insert([{ pedido_id: pedidoId, monto: montoFinal, fecha_pago: fecha, metodo_pago: metodo, creado_por: localStorage.getItem('user_name') || 'Don Luis' }])
       const tipoMsg = esCorreccion ? "CORRIGIÓ/DESCONTÓ" : "Registró"
       await registrarLog(`${tipoMsg} pago de $${valorNum} (${metodo})`, `Cliente: ${nombreCliente}`)
       setModalPago({ ...modalPago, open: false, monto: '', esCorreccion: false, pedidoId: null })
@@ -214,7 +215,7 @@ export default function VerPedidos() {
     } catch (err) { alert("Error al guardar pago") }
   }
 
-  const borrarPedido = async (id: number, nombre: string) => { // AJUSTE: id es number
+  const borrarPedido = async (id: number, nombre: string) => {
     if(!confirm('⚠️ ¿Borrar pedido?')) return
     try {
       await supabase.from('pagos').delete().eq('pedido_id', id)
@@ -268,7 +269,7 @@ export default function VerPedidos() {
             const deuda = p.total_final - (p.total_pagado || 0)
             const fechaEntrega = p.fecha_entrega ? new Date(p.fecha_entrega).toLocaleDateString('es-CL') : 'S/F'
             const expandido = !!expandidos[p.id]
-            // AJUSTE: Formatear ID a #0001
+            // ID formateado a #0001
             const idFormateado = p.id.toString().padStart(4, '0')
 
             return (

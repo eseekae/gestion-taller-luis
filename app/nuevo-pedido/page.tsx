@@ -43,7 +43,8 @@ export default function RegistroPedido() {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    setUsuarioActivo(sessionStorage.getItem('user_name') || '')
+    // FIX: Ahora usamos localStorage para mantener la sesión abierta
+    setUsuarioActivo(localStorage.getItem('user_name') || '')
     const fetch = async () => {
       const { data: inv } = await supabase.from('inventario').select('*').order('nombre')
       if (inv) {

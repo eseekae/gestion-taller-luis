@@ -21,8 +21,11 @@ export default function Login() {
       const claveEsperada = usuario === 'Admin' ? '1212' : '1122'
       if (clave === claveEsperada) {
         const perfilSesion = { nombre: usuario, permiso_ver_lucas: true }
-        sessionStorage.setItem('user_role', JSON.stringify(perfilSesion))
-        sessionStorage.setItem('user_name', usuario)
+        
+        // FIX: Cambiamos sessionStorage por localStorage para que el Ticket no se caiga
+        localStorage.setItem('user_role', JSON.stringify(perfilSesion))
+        localStorage.setItem('user_name', usuario)
+        
         router.push('/')
       } else {
         setError('❌ Clave incorrecta, intenta de nuevo')
@@ -40,7 +43,7 @@ export default function Login() {
       minHeight: '100vh', 
       backgroundColor: '#f1f5f9', 
       backgroundImage: `radial-gradient(#cbd5e1 1px, transparent 1px)`,
-      backgroundSize: '30px 30px', // Efecto mesa de corte
+      backgroundSize: '30px 30px', 
       display: 'flex', 
       alignItems: 'center', 
       justifyContent: 'center', 
@@ -64,10 +67,8 @@ export default function Login() {
           overflow: 'hidden'
         }}
       >
-        {/* DECORACIÓN SUPERIOR */}
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '12px', background: 'linear-gradient(90deg, #fbbf24, #3b82f6, #4ade80)' }} />
 
-        {/* LOGO ANIMADO */}
         <motion.div 
           whileHover={{ rotate: 15 }}
           style={{ 
@@ -87,7 +88,6 @@ export default function Login() {
         <h1 style={{ margin: '0 0 8px 0', fontSize: '32px', fontWeight: '950', color: '#000', letterSpacing: '-1px' }}>CREACIONES YOVI</h1>
         <p style={{ margin: '0 0 32px 0', fontSize: '15px', color: '#475569', fontWeight: '700' }}>SISTEMA DE GESTIÓN TALLER</p>
 
-        {/* SELECTOR DE USUARIO PRO */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '24px' }}>
           {(['Luis', 'Luisa', 'Admin'] as const).map((u) => (
             <motion.button

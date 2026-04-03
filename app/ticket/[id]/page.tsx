@@ -16,7 +16,15 @@ export default function TicketPedido() {
 
   useEffect(() => {
     const cargarTicket = async () => {
-      // FIX: Forzamos que el ID sea un número para que coincida con el BIGINT de la DB
+      // VALIDACIÓN: Si no hay sesión en localStorage, mandamos al login
+      if (!localStorage.getItem('user_role')) {
+        router.push('/login')
+        return
+      }
+
+      if (!id) return;
+
+      // CONSULTA: Forzamos el ID a número para que calce con el BIGINT
       const { data, error } = await supabase
         .from('pedidos')
         .select(`
@@ -25,21 +33,21 @@ export default function TicketPedido() {
           detalles_pedido (*),
           pagos (*)
         `)
-        .eq('id', Number(id)) // <-- Cambio clave aquí
+        .eq('id', Number(id)) 
         .single()
 
       if (data) {
         setPedido(data)
       } else {
-        console.error("Error al cargar ticket:", error)
+        console.error("Error Supabase:", error?.message)
       }
       setLoading(false)
     }
-    if (id) cargarTicket()
-  }, [id])
+    cargarTicket()
+  }, [id, router])
 
   const exportarImagen = async () => {
-    if (!ticketRef.current) return
+    if (!ticketRef.current || !pedido) return
     setCompartiendo(true)
     try {
       const dataUrl = await htmlToImage.toPng(ticketRef.current, {
@@ -48,7 +56,7 @@ export default function TicketPedido() {
         pixelRatio: 2
       })
       const link = document.createElement('a')
-      link.download = `Ticket_${pedido?.clientes?.nombre || 'Pedido'}_${pedido?.id || id}.png`
+      link.download = `Ticket_${pedido.clientes?.nombre || 'Pedido'}_${pedido.id}.png`
       link.href = dataUrl
       link.click()
     } catch (err) {
@@ -67,13 +75,15 @@ export default function TicketPedido() {
     </div>
   )
 
+  // SI NO ENCUENTRA EL PEDIDO (Posible sesión muerta o ID malo)
   if (!pedido) return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: '20px' }}>
-      <div style={{ padding: '50px', textAlign: 'center', fontWeight: '950', border: '4px solid #000', backgroundColor: '#fff', boxShadow: '8px 8px 0px #000' }}>
-        PEDIDO NO ENCONTRADO
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: '20px', backgroundColor: '#f8fafc' }}>
+      <div style={{ padding: '50px', textAlign: 'center', border: '4px solid #000', backgroundColor: '#fff', boxShadow: '8px 8px 0px #000' }}>
+        <h2 style={{ fontWeight: '950', margin: 0 }}>PEDIDO NO ENCONTRADO</h2>
+        <p style={{ fontSize: '14px', fontWeight: '800', color: '#64748b' }}>ID Buscado: {id}</p>
       </div>
-      <button onClick={() => router.back()} style={{ padding: '12px 24px', background: '#fff', border: '3px solid #000', borderRadius: '12px', fontWeight: '950', cursor: 'pointer', boxShadow: '4px 4px 0px #000' }}>
-        VOLVER ATRÁS
+      <button onClick={() => router.push('/pedidos')} style={{ padding: '12px 24px', background: '#fff', border: '3px solid #000', borderRadius: '12px', fontWeight: '950', cursor: 'pointer', boxShadow: '4px 4px 0px #000' }}>
+        VOLVER AL LISTADO
       </button>
     </div>
   )
@@ -90,7 +100,7 @@ export default function TicketPedido() {
     <main style={{ minHeight: '100vh', backgroundColor: '#e2e8f0', padding: '40px 20px', fontFamily: 'monospace' }}>
       
       <div className="no-print" style={{ maxWidth: '400px', margin: '0 auto 20px auto', display: 'flex', gap: '10px' }}>
-        <button onClick={() => router.back()} style={{ flex: 1, padding: '12px', background: '#fff', border: '3px solid #000', borderRadius: '12px', fontWeight: '950', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', boxShadow: '4px 4px 0px #000' }}>
+        <button onClick={() => router.push('/pedidos')} style={{ flex: 1, padding: '12px', background: '#fff', border: '3px solid #000', borderRadius: '12px', fontWeight: '950', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', boxShadow: '4px 4px 0px #000' }}>
           <ArrowLeft size={18} /> VOLVER
         </button>
         <button onClick={() => window.print()} style={{ flex: 1, padding: '12px', background: '#fff', border: '3px solid #000', borderRadius: '12px', fontWeight: '950', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', boxShadow: '4px 4px 0px #000' }}>
@@ -120,13 +130,12 @@ export default function TicketPedido() {
 
         <div style={{ fontSize: '12px', fontWeight: '800' }}>
           <div style={{ marginBottom: '15px', lineHeight: '1.4' }}>
-            {/* ID formateado para Luis */}
             <p style={{ margin: '2px 0' }}>
               <b>TICKET DE VENTA N° :</b> #{pedido.id.toString().padStart(4, '0')}
             </p>
             <p style={{ margin: '2px 0' }}><b>FECHA    :</b> {fechaHoy}</p>
-            <p style={{ margin: '2px 0' }}><b>CLIENTE  :</b> {pedido.clientes.nombre.toUpperCase()}</p>
-            <p style={{ margin: '2px 0' }}><b>COLEGIO  :</b> {pedido.colegio.toUpperCase()}</p>
+            <p style={{ margin: '2px 0' }}><b>CLIENTE  :</b> {pedido.clientes?.nombre?.toUpperCase() || 'S/N'}</p>
+            <p style={{ margin: '2px 0' }}><b>COLEGIO  :</b> {pedido.colegio?.toUpperCase() || 'PARTICULAR'}</p>
           </div>
 
           <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '20px', fontSize: '11px' }}>
@@ -138,7 +147,7 @@ export default function TicketPedido() {
               </tr>
             </thead>
             <tbody>
-              {pedido.detalles_pedido.map((det: any, i: number) => (
+              {pedido.detalles_pedido?.map((det: any, i: number) => (
                 <tr key={i}>
                   <td style={{ padding: '8px 0' }}>{det.cantidad}x PRENDA</td>
                   <td style={{ textAlign: 'right', padding: '8px 0' }}>{det.talla}</td>
@@ -165,7 +174,6 @@ export default function TicketPedido() {
               ENTREGA: {fechaEntrega}
             </div>
             <p style={{ fontSize: '10px', fontWeight: '950', margin: 0 }}>*** GRACIAS POR SU COMPRA ***</p>
-            <p style={{ fontSize: '9px', marginTop: '5px' }}>COMPROBANTE DE VENTA INTERNA</p>
           </div>
         </div>
       </motion.div>
@@ -173,8 +181,7 @@ export default function TicketPedido() {
       <style jsx global>{`
         @media print {
           .no-print { display: none !important; }
-          body { background-color: #fff !important; padding: 0 !important; }
-          main { background-color: #fff !important; padding: 0 !important; }
+          body, main { background-color: #fff !important; padding: 0 !important; }
         }
       `}</style>
     </main>
