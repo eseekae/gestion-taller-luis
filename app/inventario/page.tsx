@@ -27,8 +27,8 @@ export default function Inventario() {
   const [colegiosAbiertos, setColegiosAbiertos] = useState<string[]>([])
 
   const ordenTallas: { [key: string]: number } = {
-    "4": 1, "6": 2, "8": 3, "10": 4, 
-    "12": 5, "14": 6, "16": 7, "S": 8, "M": 9, "L": 10, "XL": 11, "Estd": 12, "ESPECIAL": 13
+    "4": 1, "5":2, "6": 3, "8": 4, "10": 5, 
+    "12": 6, "14": 7, "16": 8, "S": 9, "M": 10, "L": 11, "XL": 12, "Estd": 13, "ESPECIAL": 14
   }
 
   const cargar = useCallback(async () => {
