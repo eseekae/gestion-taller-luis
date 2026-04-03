@@ -35,8 +35,12 @@ export default function TicketPedido() {
   if (loading) return <p style={{ textAlign: 'center', marginTop: '50px' }}>Generando ticket...</p>
   if (!pedido) return <p style={{ textAlign: 'center', marginTop: '50px' }}>Pedido no encontrado.</p>
 
+  // CÁLCULOS PARA EL TICKET
+  const totalBruto = pedido.detalles_pedido?.reduce((acc: number, det: any) => acc + (det.cantidad * det.precio_unitario), 0) || 0
+  const montoDescuento = totalBruto - pedido.total_final
   const totalPagado = pedido.pagos?.reduce((acc: number, p: any) => acc + p.monto, 0) || 0
   const saldoPendiente = pedido.total_final - totalPagado
+  
   const fechaHoy = new Date().toLocaleDateString('es-CL')
   const fechaEntrega = pedido.fecha_entrega ? new Date(pedido.fecha_entrega).toLocaleDateString('es-CL') : 'Por definir'
 
@@ -47,12 +51,8 @@ export default function TicketPedido() {
       const opciones = {
         backgroundColor: '#fff',
         width: 320,
-        style: {
-          margin: '0',
-          padding: '20px',
-        }
+        style: { margin: '0', padding: '20px' }
       }
-
       const dataUrl = await htmlToImage.toPng(ticketRef.current, opciones)
       const blob = await (await fetch(dataUrl)).blob()
       const file = new File([blob], `Ticket_Yovi_${pedido.id}.png`, { type: 'image/png' })
@@ -64,10 +64,9 @@ export default function TicketPedido() {
           text: `Pedido de ${pedido.clientes.nombre}`,
         })
       } else {
-        alert("Tu navegador no soporta compartir archivos. Prueba desde Chrome o Safari en tu celular.")
+        alert("Tu navegador no soporta compartir archivos. Prueba desde el celular.")
       }
     } catch (err) {
-      console.error("Error:", err)
       alert("Hubo un drama al generar la imagen.")
     } finally {
       setCompartiendo(false)
@@ -82,34 +81,20 @@ export default function TicketPedido() {
         <button onClick={() => router.back()} style={{ background: '#fff', border: '3px solid #000', padding: '10px', borderRadius: '12px', boxShadow: '4px 4px 0px #000' }}>
           <ArrowLeft size={20} color="#000" />
         </button>
-        
         <button onClick={() => window.print()} style={{ background: '#000', color: '#fff', padding: '10px 20px', borderRadius: '12px', fontWeight: '900', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '4px 4px 0px #3b82f6' }}>
           <Printer size={18} /> IMPRIMIR
         </button>
-        
-        <button 
-          onClick={compartirTicket} 
-          disabled={compartiendo}
-          style={{ background: '#25D366', color: '#fff', border: '3px solid #000', padding: '10px 20px', borderRadius: '12px', fontWeight: '900', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '4px 4px 0px #000' }}
-        >
+        <button onClick={compartirTicket} disabled={compartiendo} style={{ background: '#25D366', color: '#fff', border: '3px solid #000', padding: '10px 20px', borderRadius: '12px', fontWeight: '900', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '4px 4px 0px #000' }}>
           <Share2 size={18} /> {compartiendo ? 'ESPERA...' : 'WHATSAPP'}
         </button>
       </div>
 
-      {/* ÁREA DEL TICKET */}
+      {/* ÁREA DEL TICKET (75mm) */}
       <div ref={ticketRef} style={{ 
-        width: '75mm', 
-        minWidth: '75mm',
-        backgroundColor: '#fff', 
-        margin: '0 auto', 
-        padding: '10mm 5mm', 
-        fontFamily: 'monospace', 
-        color: '#000', 
-        fontSize: '12px',
-        boxSizing: 'border-box'
+        width: '75mm', minWidth: '75mm', backgroundColor: '#fff', margin: '0 auto', padding: '10mm 5mm', 
+        fontFamily: 'monospace', color: '#000', fontSize: '12px', boxSizing: 'border-box'
       }} className="ticket-container">
         
-        {/* ENCABEZADO */}
         <div style={{ textAlign: 'center', marginBottom: '15px' }}>
           <h1 style={{ fontSize: '20px', fontWeight: 'bold', margin: '0 0 5px 0' }}>CREACIONES YOVI</h1>
           <p style={{ margin: '0', fontSize: '10px', fontWeight: 'bold' }}>CONFECCIÓN DE UNIFORMES</p>
@@ -119,18 +104,16 @@ export default function TicketPedido() {
 
         <div style={{ borderTop: '1px dashed #000', margin: '10px 0' }}></div>
 
-        {/* INFO CLIENTE ACTUALIZADA */}
         <div style={{ marginBottom: '10px' }}>
           <p style={{ margin: '2px 0' }}><b>TICKET N°:</b> {pedido.id}</p>
           <p style={{ margin: '2px 0' }}><b>EMISIÓN:</b> {fechaHoy}</p>
-          <p style={{ margin: '2px 0' }}><b>ENTREGA:</b> {fechaEntrega}</p> {/* FECHA DE ENTREGA AÑADIDA AQUÍ */}
+          <p style={{ margin: '2px 0' }}><b>ENTREGA:</b> {fechaEntrega}</p>
           <p style={{ margin: '2px 0' }}><b>CLIENTE:</b> {pedido.clientes.nombre}</p>
           <p style={{ margin: '2px 0' }}><b>COLEGIO:</b> {pedido.colegio}</p>
         </div>
 
         <div style={{ borderTop: '1px dashed #000', margin: '10px 0' }}></div>
 
-        {/* TABLA DE ITEMS */}
         <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '10px' }}>
           <thead>
             <tr>
@@ -152,26 +135,27 @@ export default function TicketPedido() {
 
         <div style={{ borderTop: '1px dashed #000', margin: '10px 0' }}></div>
 
-        {/* TOTALES */}
+        {/* SECCIÓN DE TOTALES ACTUALIZADA */}
         <div style={{ textAlign: 'right', fontSize: '14px' }}>
-          <p style={{ margin: '3px 0' }}>TOTAL: ${pedido.total_final.toLocaleString('es-CL')}</p>
+          {montoDescuento > 0 && (
+            <>
+              <p style={{ margin: '3px 0', fontSize: '12px' }}>SUBTOTAL: ${totalBruto.toLocaleString('es-CL')}</p>
+              <p style={{ margin: '3px 0', fontSize: '12px', color: '#000' }}>DESCUENTO: -${montoDescuento.toLocaleString('es-CL')}</p>
+            </>
+          )}
+          <p style={{ margin: '3px 0', fontWeight: 'bold', fontSize: '16px' }}>TOTAL: ${pedido.total_final.toLocaleString('es-CL')}</p>
           <p style={{ margin: '3px 0' }}>ABONADO: ${totalPagado.toLocaleString('es-CL')}</p>
-          <p style={{ margin: '3px 0', fontWeight: 'bold', fontSize: '16px' }}>SALDO: ${saldoPendiente.toLocaleString('es-CL')}</p>
+          <p style={{ margin: '3px 0', fontWeight: 'bold' }}>SALDO: ${saldoPendiente.toLocaleString('es-CL')}</p>
         </div>
 
         <div style={{ borderTop: '1px dashed #000', margin: '10px 0' }}></div>
 
-        {/* PIE DE PÁGINA */}
         <div style={{ textAlign: 'center', marginTop: '10px' }}>
           <div style={{ background: '#000', color: '#fff', padding: '6px', fontWeight: 'bold', marginBottom: '10px', fontSize: '12px' }}>
             ENTREGA: {fechaEntrega}
           </div>
-          {pedido.observaciones && (
-            <p style={{ fontSize: '10px', fontStyle: 'italic', marginBottom: '10px' }}>Nota: {pedido.observaciones}</p>
-          )}
           <p style={{ fontSize: '9px', fontWeight: 'bold' }}>¡GRACIAS POR SU PREFERENCIA!</p>
         </div>
-
       </div>
 
       <style jsx global>{`
