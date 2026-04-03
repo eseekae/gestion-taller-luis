@@ -237,19 +237,19 @@ export default function VerPedidos() {
             <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
               <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} style={{ backgroundColor: '#fff', border: '4px solid #000', borderRadius: '24px', padding: '30px', width: '100%', maxWidth: '400px', boxShadow: '12px 12px 0px #3b82f6' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
-                  <h3 style={{ fontWeight: '900', fontSize: '20px' }}>Nuevo Pago</h3>
+                  <h3 style={{ fontWeight: '900', fontSize: '20px', color: '#000' }}>Nuevo Pago</h3>
                   <button onClick={() => setModalPago({...modalPago, open: false})} style={{ background: 'none', border: 'none' }}><X /></button>
                 </div>
-                <p style={{ fontSize: '14px', fontWeight: '800', marginBottom: '15px' }}>Cliente: {modalPago.nombreCliente}</p>
+                <p style={{ fontSize: '14px', fontWeight: '800', marginBottom: '15px', color: '#0000' }}>Cliente: {modalPago.nombreCliente}</p>
                 
-                <label style={{ fontSize: '11px', fontWeight: '900', display: 'block', marginBottom: '5px' }}>MONTO $</label>
-                <input type="number" style={{ width: '100%', padding: '12px', border: '3px solid #000', borderRadius: '12px', fontWeight: '900', marginBottom: '15px' }} value={modalPago.monto} onChange={e => setModalPago({...modalPago, monto: e.target.value})} />
+                <label style={{ fontSize: '11px', fontWeight: '900', display: 'block', marginBottom: '5px', color: '#0000' }}>MONTO $</label>
+                <input type="number" style={{ width: '100%', padding: '12px', border: '3px solid #000', borderRadius: '12px', fontWeight: '900', marginBottom: '15px', color: '#0000' }} value={modalPago.monto} onChange={e => setModalPago({...modalPago, monto: e.target.value})} />
                 
-                <label style={{ fontSize: '11px', fontWeight: '900', display: 'block', marginBottom: '5px' }}>FECHA</label>
-                <input type="date" style={{ width: '100%', padding: '12px', border: '3px solid #000', borderRadius: '12px', fontWeight: '900', marginBottom: '15px' }} value={modalPago.fecha} onChange={e => setModalPago({...modalPago, fecha: e.target.value})} />
+                <label style={{ fontSize: '11px', fontWeight: '900', display: 'block', marginBottom: '5px', color: '#0000' }}>FECHA</label>
+                <input type="date" style={{ width: '100%', padding: '12px', border: '3px solid #000', borderRadius: '12px', fontWeight: '900', marginBottom: '15px', color: '#0000' }} value={modalPago.fecha} onChange={e => setModalPago({...modalPago, fecha: e.target.value})} />
                 
-                <label style={{ fontSize: '11px', fontWeight: '900', display: 'block', marginBottom: '5px' }}>MÉTODO</label>
-                <select style={{ width: '100%', padding: '12px', border: '3px solid #000', borderRadius: '12px', fontWeight: '900', marginBottom: '25px' }} value={modalPago.metodo} onChange={e => setModalPago({...modalPago, metodo: e.target.value})}>
+                <label style={{ fontSize: '11px', fontWeight: '900', display: 'block', marginBottom: '5px', color: '#0000' }}>MÉTODO</label>
+                <select style={{ width: '100%', padding: '12px', border: '3px solid #000', borderRadius: '12px', fontWeight: '900', marginBottom: '25px', color: '#0000' }} value={modalPago.metodo} onChange={e => setModalPago({...modalPago, metodo: e.target.value})}>
                   <option value="Transferencia">Transferencia</option>
                   <option value="Efectivo">Efectivo</option>
                   <option value="Débito">Débito</option>
