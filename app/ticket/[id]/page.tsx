@@ -4,6 +4,9 @@ import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '../../../lib/supabase'
 import { Printer, ArrowLeft, ReceiptText, Smartphone, Share2 } from 'lucide-react'
 import { motion } from 'framer-motion'
+// Importamos jsPDF para generar el documento real
+import { jsPDF } from 'jspdf'
+import * as htmlToImage from 'html-to-image'
 
 export default function TicketPedido() {
   const { id } = useParams()
@@ -11,6 +14,7 @@ export default function TicketPedido() {
   const ticketRef = useRef<HTMLDivElement>(null)
   const [pedido, setPedido] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [generando, setGenerando] = useState(false)
 
   useEffect(() => {
     const cargarDatos = async () => {
@@ -19,6 +23,7 @@ export default function TicketPedido() {
 
       try {
         setLoading(true)
+        // Mantenemos la consulta forzada a número para evitar el error de UUID
         const [pRes, dRes, pgRes, iRes] = await Promise.all([
           supabase.from('pedidos').select('*').eq('id', Number(id)).single(),
           supabase.from('detalles_pedido').select('*').eq('pedido_id', Number(id)),
@@ -40,20 +45,46 @@ export default function TicketPedido() {
     cargarDatos()
   }, [id, router])
 
-  // FUNCIÓN MAESTRA PARA COMPARTIR (Abre el menú nativo del celu)
-  const compartirTicket = async () => {
-    if (navigator.share) {
-      try {
+  // FUNCIÓN MAESTRA: Genera PDF y lo comparte como archivo
+  const compartirTicketPDF = async () => {
+    if (!ticketRef.current || !pedido) return
+    setGenerando(true)
+    
+    try {
+      // 1. Capturamos el ticket como imagen de alta calidad
+      const dataUrl = await htmlToImage.toPng(ticketRef.current, { 
+        backgroundColor: '#ffffff',
+        pixelRatio: 3 
+      })
+
+      // 2. Creamos un PDF de tamaño boleta (75mm de ancho)
+      const pdf = new jsPDF({
+        unit: 'mm',
+        format: [75, 180] // Formato boleta 75mm x 180mm aprox
+      })
+
+      pdf.addImage(dataUrl, 'PNG', 0, 0, 75, 150) // Ajustamos la imagen al ancho del PDF
+      
+      // 3. Convertimos el PDF a un Blob y luego a un File real
+      const pdfBlob = pdf.output('blob')
+      const file = new File([pdfBlob], `Ticket_CreacionesYovi_#${pedido.id}.pdf`, { type: 'application/pdf' })
+
+      // 4. Usamos el menú nativo para compartir el ARCHIVO, no el link
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({
-          title: `Ticket Venta #${id} - Creaciones Yovi`,
-          text: `Hola ${pedido.clientes.nombre}, aquí tienes el comprobante de tu pedido en Creaciones Yovi.`,
-          url: window.location.href, // Comparte el link directo al ticket
+          files: [file],
+          title: `Ticket #${pedido.id}`,
+          text: `Hola ${pedido.clientes.nombre}, adjunto tu comprobante de compra.`
         })
-      } catch (err) {
-        console.log('Error al compartir o el usuario canceló');
+      } else {
+        // Fallback: Descarga directa si el navegador no deja compartir archivos
+        pdf.save(`Ticket_#${pedido.id}.pdf`)
       }
-    } else {
-      alert("Tu navegador no soporta la función de compartir nativa. Copia el link manualmente.")
+    } catch (err) {
+      console.error('Error al compartir PDF:', err)
+      alert("No se pudo generar el archivo para compartir.")
+    } finally {
+      setGenerando(false)
     }
   }
 
@@ -78,9 +109,13 @@ export default function TicketPedido() {
           <Printer size={18} /> IMPRIMIR
         </button>
         
-        {/* BOTÓN COMPARTIR UNIFICADO */}
-        <button onClick={compartirTicket} style={{ gridColumn: 'span 2', padding: '15px', background: '#3b82f6', color: '#fff', border: '3px solid #000', borderRadius: '12px', fontWeight: '950', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', boxShadow: '4px 4px 0px #000' }}>
-          <Share2 size={20} /> COMPARTIR CON APLICACIONES
+        {/* BOTÓN COMPARTIR PDF */}
+        <button 
+          onClick={compartirTicketPDF} 
+          disabled={generando}
+          style={{ gridColumn: 'span 2', padding: '15px', background: '#3b82f6', color: '#fff', border: '3px solid #000', borderRadius: '12px', fontWeight: '950', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', boxShadow: '4px 4px 0px #000' }}
+        >
+          <Share2 size={20} /> {generando ? 'GENERANDO PDF...' : 'COMPARTIR TICKET (PDF)'}
         </button>
       </div>
 
@@ -90,8 +125,8 @@ export default function TicketPedido() {
         <div style={{ textAlign: 'center', borderBottom: '2px dashed #000', paddingBottom: '10px', marginBottom: '10px' }}>
           <ReceiptText size={35} color="#000" style={{ marginBottom: '5px' }} />
           <h1 style={{ margin: 0, fontSize: '18px', fontWeight: '1000' }}>Creaciones YOVI</h1>
-          <p style={{ margin: '2px 0', fontSize: '10px', fontWeight: '900' }}>Dirección: </p>
-          <p style={{ margin: '2px 0', fontSize: '10px', fontWeight: '900' }}>WA: +569 | IG: @</p>
+          <p style={{ margin: '2px 0', fontSize: '10px', fontWeight: '900' }}>Dirección: San Joaquín, Santiago</p>
+          <p style={{ margin: '2px 0', fontSize: '10px', fontWeight: '900' }}>WA: +569 8450 7104 | IG: @creaciones_yovi</p>
         </div>
 
         <div style={{ fontSize: '10px', fontWeight: '900', borderBottom: '1px solid #000', paddingBottom: '8px', marginBottom: '8px' }}>
@@ -124,7 +159,7 @@ export default function TicketPedido() {
           <div style={{ border: '1px solid #000', padding: '5px', marginTop: '5px', background: '#f8fafc' }}>
             <p style={{ margin: 0, fontSize: '12px' }}>TOTAL: ${pedido.total_final.toLocaleString('es-CL')}</p>
             <p style={{ margin: 0 }}>PAGADO: ${totalPagado.toLocaleString('es-CL')}</p>
-            <p style={{ margin: 0, fontWeight: '1000', color: saldoPendiente > 0 ? '#000' : '#000' }}>
+            <p style={{ margin: 0, fontWeight: '1000' }}>
                SALDO PENDIENTE: ${saldoPendiente.toLocaleString('es-CL')}
             </p>
           </div>
