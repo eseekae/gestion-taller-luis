@@ -3,7 +3,12 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 import { registrarLog } from '../../lib/auditoria'
-import { ArrowLeft, School, CheckCircle, User, Loader2, PackageCheck } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { 
+  ArrowLeft, School, CheckCircle, User, Loader2, 
+  PackageCheck, Scissors, ChevronDown, ChevronUp, Boxes, 
+  AlertTriangle, RefreshCw 
+} from 'lucide-react'
 
 export default function PaginaProduccion() {
   const router = useRouter()
@@ -64,114 +69,183 @@ export default function PaginaProduccion() {
     setLoading(false)
   }
 
-  // FUNCIÓN ACTUALIZADA: MUEVE A STOCK RESERVADO
   const enviarAStockCliente = async (detalleId: number, clienteNombre: string, producto: string) => {
-    if (!confirm(`¿Confirmar que la prenda de ${clienteNombre} está terminada y en stock?`)) return
-
+    if (!confirm(`¿Confirmar que la prenda de ${clienteNombre} está terminada y lista?`)) return
     try {
       const { error } = await supabase
         .from('detalles_pedido')
-        .update({ estado: 'Listo para retiro' }) // Este estado indica que está en stock pero es de un cliente
+        .update({ estado: 'Listo para retiro' })
         .eq('id', detalleId)
-
       if (error) throw error
-
       await registrarLog(
         `${sessionStorage.getItem('user_name') || 'Don Luis'} movió a STOCK CLIENTE: ${producto}`,
         `Reservado para: ${clienteNombre} (ID: ${detalleId})`
       )
-
-      alert(`✅ ¡Listo! La prenda quedó en stock para ${clienteNombre}.`)
       cargarPendientes() 
-    } catch (err) {
-      alert("❌ Error al mover a stock.")
-    }
+    } catch (err) { alert("❌ Error al mover a stock.") }
   }
 
   useEffect(() => { cargarPendientes() }, [])
 
   const colegiosDisponibles = ['Todos', ...Array.from(new Set(pendientes.map(p => p.nombre)))]
 
+  // ESTILOS UNIFICADOS
+  const containerStyle = { minHeight: '100vh', backgroundColor: '#f8fafc', backgroundImage: `radial-gradient(#cbd5e1 1.5px, transparent 1.5px)`, backgroundSize: '32px 32px', padding: '40px 20px', fontFamily: 'system-ui, -apple-system, sans-serif' }
+  const schoolCardStyle = { border: '4px solid #000', borderRadius: '28px', overflow: 'hidden', boxShadow: '8px 8px 0px #000', backgroundColor: '#fff', marginBottom: '25px' }
+
   return (
-    <main style={{ minHeight: '100vh', backgroundColor: '#ffffff', padding: '20px', fontFamily: 'sans-serif' }}>
-      <div style={{ maxWidth: '600px', margin: '0 auto' }}>
+    <main style={containerStyle}>
+      <div style={{ maxWidth: '650px', margin: '0 auto' }}>
         
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '30px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-            <button onClick={() => router.push('/')} style={{ backgroundColor: '#fff', border: '3px solid #000', padding: '10px', borderRadius: '12px', boxShadow: '4px 4px 0px #000' }}>
-              <ArrowLeft size={20} color="#000" />
-            </button>
-            <h1 style={{ fontSize: '26px', fontWeight: '900', color: '#000' }}>Producción Taller</h1>
+        {/* HEADER PRO */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '35px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+            <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => router.push('/')} style={{ backgroundColor: '#fff', border: '3px solid #000', padding: '12px', borderRadius: '16px', boxShadow: '4px 4px 0px #000', cursor: 'pointer' }}>
+              <ArrowLeft size={24} color="#000" />
+            </motion.button>
+            <h1 style={{ fontSize: '32px', fontWeight: '950', color: '#000', margin: 0, letterSpacing: '-1.5px' }}>PRODUCCIÓN</h1>
           </div>
-          <button onClick={cargarPendientes} style={{ background: '#000', color: '#fff', padding: '10px', borderRadius: '12px', border: 'none' }}>
-            <Loader2 size={20} className={loading ? 'animate-spin' : ''} />
-          </button>
+          <motion.button 
+            whileTap={{ rotate: 180 }}
+            onClick={cargarPendientes} 
+            style={{ backgroundColor: '#000', color: '#fff', padding: '12px', borderRadius: '16px', border: 'none', cursor: 'pointer', boxShadow: '4px 4px 0px #4ade80' }}
+          >
+            <RefreshCw size={24} className={loading ? 'animate-spin' : ''} />
+          </motion.button>
         </div>
 
-        <div style={{ marginBottom: '20px', display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '10px' }}>
+        {/* FILTRO DE COLEGIOS NEUBRUTALISTA */}
+        <div style={{ marginBottom: '30px', display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '15px' }}>
           {colegiosDisponibles.map(c => (
-            <button key={c} onClick={() => setFiltroColegio(c)} style={{ backgroundColor: filtroColegio === c ? '#000' : '#fff', color: filtroColegio === c ? '#fff' : '#000', border: '3px solid #000', borderRadius: '10px', padding: '10px 18px', fontWeight: '900', whiteSpace: 'nowrap' }}>{c}</button>
+            <motion.button 
+              key={c} 
+              whileTap={{ y: 2 }}
+              onClick={() => setFiltroColegio(c)} 
+              style={{ 
+                backgroundColor: filtroColegio === c ? '#000' : '#fff', 
+                color: filtroColegio === c ? '#fff' : '#000', 
+                border: '3px solid #000', 
+                borderRadius: '14px', 
+                padding: '12px 20px', 
+                fontWeight: '900', 
+                whiteSpace: 'nowrap',
+                boxShadow: filtroColegio === c ? 'none' : '4px 4px 0px #000',
+                cursor: 'pointer',
+                fontSize: '13px'
+              }}
+            >
+              {c.toUpperCase()}
+            </motion.button>
           ))}
         </div>
 
-        {loading ? <p style={{ fontWeight: '900', textAlign: 'center', marginTop: '50px' }}>BUSCANDO TELAS...</p> : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        {loading ? (
+          <div style={{ textAlign: 'center', marginTop: '100px' }}>
+            <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 2, ease: "linear" }}>
+              <Scissors size={60} color="#000" />
+            </motion.div>
+            <p style={{ fontWeight: '950', fontSize: '18px', color: '#000', marginTop: '20px', letterSpacing: '1px' }}>BUSCANDO TELAS...</p>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
             {pendientes
               .filter(col => filtroColegio === 'Todos' || col.nombre === filtroColegio)
-              .map(col => (
-              <div key={col.nombre} style={{ border: '4px solid #000', borderRadius: '24px', overflow: 'hidden', boxShadow: '8px 8px 0px #000' }}>
+              .map((col, idx) => (
+              <motion.div 
+                key={col.nombre} 
+                initial={{ opacity: 0, y: 20 }} 
+                animate={{ opacity: 1, y: 0 }} 
+                transition={{ delay: idx * 0.1 }}
+                style={schoolCardStyle}
+              >
+                {/* CABECERA COLEGIO */}
                 <div 
                   onClick={() => setExpandirColegio(expandirColegio === col.nombre ? null : col.nombre)}
-                  style={{ backgroundColor: '#000', color: '#fff', padding: '18px 24px', display: 'flex', justifyContent: 'space-between', cursor: 'pointer' }}
+                  style={{ backgroundColor: '#000', color: '#fff', padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
                 >
-                  <span style={{ fontWeight: '900', fontSize: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <School size={22} /> {col.nombre}
+                  <span style={{ fontWeight: '950', fontSize: '22px', display: 'flex', alignItems: 'center', gap: '12px', letterSpacing: '-0.5px' }}>
+                    <School size={24} color="#fbbf24" /> {col.nombre.toUpperCase()}
                   </span>
-                  <span style={{ background: '#fff', color: '#000', padding: '4px 12px', borderRadius: '10px', fontSize: '13px', fontWeight: '900' }}>
-                    {col.productos.length} MODELOS
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <span style={{ background: '#fff', color: '#000', padding: '6px 14px', borderRadius: '12px', fontSize: '11px', fontWeight: '950', border: '2px solid #fff' }}>
+                      {col.productos.length} MODELOS
+                    </span>
+                    {expandirColegio === col.nombre ? <ChevronUp size={24} /> : <ChevronDown size={24} />}
+                  </div>
                 </div>
 
-                {expandirColegio === col.nombre && (
-                  <div style={{ padding: '20px', backgroundColor: '#f8fafc', display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                    {col.productos.map((prod: any, idx: number) => (
-                      <div key={idx} style={{ backgroundColor: '#fff', border: '3px solid #000', padding: '18px', borderRadius: '20px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px', borderBottom: '3px solid #000', paddingBottom: '10px' }}>
-                          <div>
-                            <p style={{ fontWeight: '900', fontSize: '20px', color: '#000', margin: 0 }}>{prod.nombre}</p>
-                            <p style={{ fontSize: '15px', fontWeight: '900', color: '#000', margin: 0 }}>TALLA: {prod.talla}</p>
-                          </div>
-                          <div style={{ textAlign: 'right' }}>
-                            <p style={{ fontSize: '11px', fontWeight: '900', color: '#000' }}>PENDIENTES</p>
-                            <p style={{ fontSize: '28px', fontWeight: '900', color: '#e11d48', lineHeight: 1 }}>{prod.total}</p>
-                          </div>
-                        </div>
-                        
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                          {prod.clientes.map((cli: any, cIdx: number) => (
-                            <div key={cIdx} style={{ backgroundColor: '#fff', border: '2px solid #000', padding: '14px', borderRadius: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                {/* LISTADO DE PRODUCTOS */}
+                <AnimatePresence>
+                  {expandirColegio === col.nombre && (
+                    <motion.div 
+                      initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }}
+                      style={{ overflow: 'hidden', backgroundColor: '#f1f5f9' }}
+                    >
+                      <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                        {col.productos.map((prod: any, pIdx: number) => (
+                          <div key={pIdx} style={{ backgroundColor: '#fff', border: '3px solid #000', padding: '20px', borderRadius: '24px', boxShadow: '5px 5px 0px #000' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', borderBottom: '3px solid #f1f5f9', paddingBottom: '15px' }}>
                               <div>
-                                <p style={{ fontSize: '15px', fontWeight: '900', color: '#000', margin: 0 }}>{cli.nombre}</p>
-                                <p style={{ fontSize: '13px', fontWeight: '800', color: '#000', margin: 0 }}>CANTIDAD: {cli.cantidad}</p>
+                                <p style={{ fontWeight: '950', fontSize: '22px', color: '#000', margin: 0, letterSpacing: '-0.5px' }}>{prod.nombre}</p>
+                                <p style={{ fontSize: '14px', fontWeight: '900', color: '#3b82f6', margin: '4px 0 0 0' }}>TALLA: {prod.talla}</p>
                               </div>
-                              {/* BOTÓN ACTUALIZADO A "EN STOCK" */}
-                              <button 
-                                onClick={() => enviarAStockCliente(cli.id, cli.nombre, prod.nombre)}
-                                style={{ backgroundColor: '#4ade80', color: '#000', border: '2px solid #000', padding: '10px 14px', borderRadius: '12px', fontWeight: '900', fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', boxShadow: '3px 3px 0px #000' }}
-                              >
-                                <PackageCheck size={16} /> EN STOCK (LISTO)
-                              </button>
+                              <div style={{ textAlign: 'right', backgroundColor: '#fff1f2', padding: '8px 15px', borderRadius: '16px', border: '2px solid #e11d48' }}>
+                                <p style={{ fontSize: '10px', fontWeight: '950', color: '#e11d48', margin: 0 }}>PENDIENTES</p>
+                                <p style={{ fontSize: '28px', fontWeight: '950', color: '#e11d48', lineHeight: 1, margin: 0 }}>{prod.total}</p>
+                              </div>
                             </div>
-                          ))}
-                        </div>
+                            
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                              {prod.clientes.map((cli: any, cIdx: number) => (
+                                <div key={cIdx} style={{ backgroundColor: '#f8fafc', border: '2.5px solid #000', padding: '16px', borderRadius: '18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <div>
+                                    <p style={{ fontSize: '15px', fontWeight: '900', color: '#000', margin: 0 }}>{cli.nombre}</p>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
+                                      <Boxes size={14} color="#64748b" />
+                                      <p style={{ fontSize: '13px', fontWeight: '800', color: '#64748b', margin: 0 }}>PEDIDO: {cli.cantidad} UNID.</p>
+                                    </div>
+                                  </div>
+                                  <motion.button 
+                                    whileHover={{ y: -3, boxShadow: '5px 5px 0px #000' }}
+                                    whileTap={{ y: 1, boxShadow: 'none' }}
+                                    onClick={() => enviarAStockCliente(cli.id, cli.nombre, prod.nombre)}
+                                    style={{ 
+                                      backgroundColor: '#4ade80', 
+                                      color: '#000', 
+                                      border: '3px solid #000', 
+                                      padding: '12px 18px', 
+                                      borderRadius: '14px', 
+                                      fontWeight: '950', 
+                                      fontSize: '12px', 
+                                      cursor: 'pointer', 
+                                      display: 'flex', 
+                                      alignItems: 'center', 
+                                      gap: '8px', 
+                                      boxShadow: '3px 3px 0px #000' 
+                                    }}
+                                  >
+                                    <PackageCheck size={18} /> LISTO
+                                  </motion.button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.div>
             ))}
           </div>
         )}
+
+        <div style={{ marginTop: '50px', textAlign: 'center', opacity: 0.5 }}>
+          <p style={{ fontSize: '11px', fontWeight: '900', color: '#64748b', textTransform: 'uppercase', letterSpacing: '2px' }}>
+            Creaciones Yovi • Gestión de Taller v2.0
+          </p>
+        </div>
+
       </div>
     </main>
   )
