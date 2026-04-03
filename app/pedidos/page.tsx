@@ -3,9 +3,9 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 import { registrarLog } from '../../lib/auditoria'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import * as XLSX from 'xlsx-js-style'
-import { ArrowLeft, Search, School, Phone, Calendar, Printer, Trash2, MessageCircle, Download, MessageSquare } from 'lucide-react'
+import { ArrowLeft, Search, School, Phone, Calendar, Printer, Trash2, MessageCircle, Download, MessageSquare, Bell, Package, CheckCircle } from 'lucide-react'
 
 export default function VerPedidos() {
   const router = useRouter()
@@ -39,21 +39,23 @@ export default function VerPedidos() {
         return { ...d, p_nombre: prod?.nombre || 'Producto' }
       })
 
-      const itemsCompletos = detalles?.length > 0 && detalles.every(d => (d.cantidad_entregada || 0) === d.cantidad)
+      // LÓGICA DE ESTADOS MEJORADA
+      const itemsEntregados = detalles?.length > 0 && detalles.every(d => d.estado === 'Entregado')
+      const itemsListos = detalles?.length > 0 && detalles.every(d => d.estado === 'Listo para retiro' || d.estado === 'Notificado' || d.estado === 'Entregado')
       const pagoCompleto = totalPagado >= p.total_final
       
       let estadoMacro = ''
       let colorEstadoBg = ''
-      let colorEstadoText = ''
+      let colorEstadoText = '#000'
 
-      if (itemsCompletos && pagoCompleto) {
-        estadoMacro = 'Completado'; colorEstadoBg = '#dcfce7'; colorEstadoText = '#166534'
-      } else if (!itemsCompletos && pagoCompleto) {
-        estadoMacro = 'Pend. Entrega'; colorEstadoBg = '#dbeafe'; colorEstadoText = '#1e40af'
-      } else if (itemsCompletos && !pagoCompleto) {
-        estadoMacro = 'Pend. Pago'; colorEstadoBg = '#ffedd5'; colorEstadoText = '#c2410c'
+      if (itemsEntregados && pagoCompleto) {
+        estadoMacro = 'COMPLETADO'; colorEstadoBg = '#4ade80'
+      } else if (itemsEntregados && !pagoCompleto) {
+        estadoMacro = 'PEND. PAGO'; colorEstadoBg = '#fbbf24'
+      } else if (itemsListos) {
+        estadoMacro = 'LISTO / NOTIFICADO'; colorEstadoBg = '#3b82f6'; colorEstadoText = '#fff'
       } else {
-        estadoMacro = 'Pend. Entrega y Pago'; colorEstadoBg = '#fef3c7'; colorEstadoText = '#b45309'
+        estadoMacro = 'EN PRODUCCIÓN'; colorEstadoBg = '#f1f5f9'
       }
 
       return { 
@@ -66,6 +68,37 @@ export default function VerPedidos() {
   }, [router])
 
   useEffect(() => { cargar() }, [cargar])
+
+  // --- NUEVAS FUNCIONES ---
+
+  const notificarCliente = async (pedido: any) => {
+    if (!confirm(`¿Confirmar que ya avisaste a ${pedido.c_nombre}?`)) return
+    try {
+      await supabase.from('detalles_pedido')
+        .update({ estado: 'Notificado' })
+        .eq('pedido_id', pedido.id)
+        .neq('estado', 'Entregado')
+      
+      await registrarLog(`Avisó a cliente: ${pedido.c_nombre}`, `Pedido ${pedido.id}`)
+      cargar()
+    } catch (err) { alert("Error al notificar") }
+  }
+
+  const entregarTodo = async (pedido: any) => {
+    if (!confirm(`¿Marcar como retirado por el cliente? Esto cerrará las entregas.`)) return
+    try {
+      const promesas = pedido.detalles.map((det: any) => 
+        supabase.from('detalles_pedido').update({ 
+          estado: 'Entregado', 
+          cantidad_entregada: det.cantidad 
+        }).eq('id', det.id)
+      )
+      await Promise.all(promesas)
+      await supabase.from('pedidos').update({ estado: 'Completado' }).eq('id', pedido.id)
+      await registrarLog(`ENTREGA TOTAL a ${pedido.c_nombre}`, `Pedido ${pedido.id} retirado`)
+      cargar()
+    } catch (err) { alert("Error al entregar") }
+  }
 
   const actualizarEntrega = async (det: any, cambio: number) => {
     const actual = det.cantidad_entregada || 0
@@ -115,7 +148,7 @@ export default function VerPedidos() {
   const filtrados = datos.filter(p => {
     const t = busqueda.toLowerCase()
     return p.c_nombre.toLowerCase().includes(t) || p.c_telefono.includes(t) || (p.colegio && p.colegio.toLowerCase().includes(t))
-  }).filter(p => filtro === 'Todos' || (filtro === 'Pendientes' && p.estado_macro !== 'Completado') || p.estado_macro === filtro)
+  }).filter(p => filtro === 'Todos' || (filtro === 'Pendientes' && p.estado_macro !== 'COMPLETADO') || p.estado_macro === filtro)
 
   return (
     <main style={{ minHeight: '100vh', backgroundColor: '#ffffff', padding: '20px', fontFamily: 'sans-serif' }}>
@@ -132,7 +165,7 @@ export default function VerPedidos() {
         <div style={{ marginBottom: '25px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
           <div style={{ position: 'relative' }}>
             <Search style={{ position: 'absolute', left: '14px', top: '14px' }} size={20} color="#000" />
-            <input placeholder="Buscar cliente o colegio..." style={{ width: '100%', padding: '14px 40px', border: '3px solid #000', borderRadius: '12px', fontWeight: '700', boxShadow: '4px 4px 0px #000' }} onChange={(e) => setBusqueda(e.target.value)} />
+            <input placeholder="Buscar cliente o colegio..." style={{ width: '100%', padding: '14px 40px', border: '3px solid #000', borderRadius: '12px', fontWeight: '700', boxShadow: '4px 4px 0px #000', color: '#000' }} onChange={(e) => setBusqueda(e.target.value)} />
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
             {['Todos', 'Pendientes', 'Completado'].map(f => (
@@ -154,21 +187,38 @@ export default function VerPedidos() {
                 {/* LÍNEA SUPERIOR: COLEGIO Y ESTADO */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', alignItems: 'flex-start' }}>
                   <div>
-                    <span style={{ fontWeight: '800', fontSize: '12px', color: '#000', display: 'flex', alignItems: 'center', gap: '4px', textTransform: 'uppercase' }}>
+                    <span style={{ fontWeight: '900', fontSize: '12px', color: '#000', display: 'flex', alignItems: 'center', gap: '4px', textTransform: 'uppercase' }}>
                       <School size={12} /> {p.colegio || 'Particular'}
                     </span>
-                    {/* FECHA DE ENTREGA AÑADIDA AQUÍ */}
                     <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#000', color: '#fff', padding: '5px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: '900' }}>
                       <Calendar size={14} /> ENTREGA: {fechaEntrega}
                     </div>
                   </div>
-                  <span style={{ backgroundColor: p.color_bg, color: p.color_text, padding: '6px 12px', borderRadius: '8px', fontWeight: '800', border: '2px solid #000', fontSize: '12px' }}>{p.estado_macro}</span>
+                  <span style={{ backgroundColor: p.color_bg, color: p.color_text, padding: '6px 12px', borderRadius: '8px', fontWeight: '900', border: '2px solid #000', fontSize: '11px' }}>{p.estado_macro}</span>
                 </div>
 
                 <h2 style={{ fontWeight: '900', fontSize: '24px', color: '#000', marginBottom: '4px' }}>{p.c_nombre}</h2>
-                <p style={{ fontSize: '14px', fontWeight: '800', color: '#64748b', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <p style={{ fontSize: '14px', fontWeight: '800', color: '#000', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '5px' }}>
                   <Phone size={14} /> {p.c_telefono}
                 </p>
+
+                {/* BOTONES DE ACCIÓN (NUEVOS) */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '20px' }}>
+                  <button 
+                    onClick={() => notificarCliente(p)}
+                    disabled={p.estado_macro === 'COMPLETADO'}
+                    style={{ backgroundColor: '#3b82f6', color: '#fff', border: '3px solid #000', padding: '12px', borderRadius: '12px', fontWeight: '900', fontSize: '11px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', boxShadow: '3px 3px 0px #000', opacity: p.estado_macro === 'COMPLETADO' ? 0.5 : 1 }}
+                  >
+                    <Bell size={16} /> AVISAR CLIENTE
+                  </button>
+                  <button 
+                    onClick={() => entregarTodo(p)}
+                    disabled={p.estado_macro === 'COMPLETADO'}
+                    style={{ backgroundColor: '#4ade80', color: '#000', border: '3px solid #000', padding: '12px', borderRadius: '12px', fontWeight: '900', fontSize: '11px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', boxShadow: '3px 3px 0px #000', opacity: p.estado_macro === 'COMPLETADO' ? 0.5 : 1 }}
+                  >
+                    <Package size={16} /> ENTREGAR TODO
+                  </button>
+                </div>
 
                 {p.observaciones && (
                   <div style={{ backgroundColor: '#fff7ed', border: '2px solid #ea580c', padding: '12px', borderRadius: '12px', marginBottom: '16px' }}>
@@ -177,15 +227,15 @@ export default function VerPedidos() {
                   </div>
                 )}
 
-                <button onClick={() => setExpandidos(prev => ({ ...prev, [p.id]: !prev[p.id] }))} style={{ width: '100%', marginBottom: '16px', border: '3px solid #000', borderRadius: '10px', padding: '10px', fontWeight: '900', background: '#000000' }}>{expandido ? 'Ocultar Detalle' : 'Ver Detalle'}</button>
+                <button onClick={() => setExpandidos(prev => ({ ...prev, [p.id]: !prev[p.id] }))} style={{ width: '100%', marginBottom: '16px', border: '3px solid #000', borderRadius: '10px', padding: '10px', fontWeight: '900', background: '#000', color: '#fff' }}>{expandido ? 'Ocultar Detalle' : 'Ver Detalle'}</button>
 
                 {expandido && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '20px' }}>
                     {p.detalles?.map((det: any, idx: number) => (
                       <div key={idx} style={{ padding: '12px', border: '2px solid #000', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', background: '#ffffff' }}>
                         <div>
-                          <p style={{ fontWeight: '800', color: '#000' }}>{det.p_nombre}</p>
-                          <p style={{ fontSize: '12px', color: '#000' }}>Talla: {det.talla} | {det.cantidad_entregada || 0} de {det.cantidad}</p>
+                          <p style={{ fontWeight: '900', color: '#000' }}>{det.p_nombre}</p>
+                          <p style={{ fontSize: '12px', color: '#000', fontWeight: '800' }}>Talla: {det.talla} | {det.cantidad_entregada || 0} de {det.cantidad} ({det.estado})</p>
                         </div>
                         <div style={{ display: 'flex', gap: '5px' }}>
                           <button onClick={() => actualizarEntrega(det, -1)} style={{ border: '2px solid #000', borderRadius: '8px', padding: '5px', background: '#ef4444', color: '#fff' }}>-</button>
@@ -198,12 +248,12 @@ export default function VerPedidos() {
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>
                   <div style={{ background: '#f0fdf4', padding: '16px', borderRadius: '16px', border: '3px solid #000' }}>
-                    <p style={{ fontSize: '10px', fontWeight: '800', color: '#000' }}>PAGADO</p>
+                    <p style={{ fontSize: '10px', fontWeight: '900', color: '#000' }}>PAGADO</p>
                     <p style={{ fontSize: '20px', fontWeight: '900', color: '#166534' }}>${Number(p.total_pagado || 0).toLocaleString('es-CL')}</p>
                     <button onClick={() => agregarPago(p)} style={{ background: '#000', color: '#fff', padding: '4px 8px', borderRadius: '6px', fontSize: '10px', fontWeight: '900', marginTop: '8px' }}>+ Pago</button>
                   </div>
                   <div style={{ background: deuda > 0 ? '#fef2f2' : '#f0fdf4', padding: '16px', borderRadius: '16px', border: '3px solid #000' }}>
-                    <p style={{ fontSize: '10px', fontWeight: '800', color: '#000' }}>DEUDA</p>
+                    <p style={{ fontSize: '10px', fontWeight: '900', color: '#000' }}>DEUDA</p>
                     <p style={{ fontSize: '20px', fontWeight: '900', color: deuda > 0 ? '#991b1b' : '#166534' }}>${deuda.toLocaleString('es-CL')}</p>
                   </div>
                 </div>
@@ -211,8 +261,8 @@ export default function VerPedidos() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '3px solid #000', paddingTop: '16px' }}>
                   <button onClick={() => borrarPedido(p.id, p.c_nombre)} style={{ color: '#991b1b', fontWeight: '900', border: 'none', background: 'none', display: 'flex', alignItems: 'center', gap: '5px' }}><Trash2 size={16} /> Borrar</button>
                   <div style={{ display: 'flex', gap: '10px' }}>
-                    <button onClick={() => window.open(`https://wa.me/${p.c_telefono}`, '_blank')} style={{ background: '#25D366', color: '#fff', padding: '10px', borderRadius: '10px', border: '2px solid #000', boxShadow: '3px 3px 0px #000' }}><MessageCircle size={18} /></button>
-                    <button onClick={() => window.open(`/ticket/${p.id}`, '_blank')} style={{ background: '#fff', color: '#000', padding: '10px', borderRadius: '10px', border: '2px solid #000', boxShadow: '3px 3px 0px #000' }}><Printer size={18} /></button>
+                    <button onClick={() => window.open(`https://wa.me/${p.c_telefono}`, '_blank')} style={{ background: '#25D366', color: '#fff', padding: '10px', borderRadius: '12px', border: '2px solid #000', boxShadow: '3px 3px 0px #000' }}><MessageCircle size={18} /></button>
+                    <button onClick={() => window.open(`/ticket/${p.id}`, '_blank')} style={{ background: '#fff', color: '#000', padding: '10px', borderRadius: '12px', border: '2px solid #000', boxShadow: '3px 3px 0px #000' }}><Printer size={18} /></button>
                   </div>
                 </div>
 
