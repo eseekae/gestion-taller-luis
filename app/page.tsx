@@ -99,8 +99,7 @@ export default function Home() {
 
           <MenuButton 
             icon={<Scissors size={24} />} 
-            title="Producción" 
-            subtitle="Pendientes por fabricar"
+            title="Pendientes" 
             color="#f472b6" 
             onClick={() => router.push('/pendientes')} 
           />
