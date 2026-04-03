@@ -153,7 +153,7 @@ export default function TicketPedido() {
           <div style={{ borderTop: '2px dashed #000', margin: '15px 0' }}></div>
 
           <div style={{ marginBottom: '15px', lineHeight: '1.4' }}>
-            <p style={{ margin: '2px 0' }}><b>BOLETA N° :</b> {pedido.id}</p>
+            <p style={{ margin: '2px 0' }}><b>TICKET DE VENTA N° :</b> {pedido.id}</p>
             <p style={{ margin: '2px 0' }}><b>FECHA    :</b> {fechaHoy}</p>
             <p style={{ margin: '2px 0' }}><b>CLIENTE  :</b> {pedido.clientes.nombre.toUpperCase()}</p>
             <p style={{ margin: '2px 0' }}><b>COLEGIO  :</b> {pedido.colegio.toUpperCase()}</p>

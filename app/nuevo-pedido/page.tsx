@@ -142,9 +142,8 @@ export default function RegistroPedido() {
     finally { setLoading(false) }
   }
 
-  // ESTILOS
   const cardStyle = { backgroundColor: '#fff', padding: '20px', borderRadius: '28px', border: '4px solid #000', boxShadow: '8px 8px 0px #000', marginBottom: '24px' }
-  const inputStyle = { width: '100%', padding: '16px', border: '3px solid #000', borderRadius: '16px', fontSize: '16px', fontWeight: '900', color: '#000', backgroundColor: '#fff', boxSizing: 'border-box' as const, outline: 'none' }
+  const inputStyle = { width: '100%', padding: '16px', border: '3px solid #000', borderRadius: '16px', fontSize: '16px', fontWeight: '950', color: '#000', backgroundColor: '#fff', boxSizing: 'border-box' as const, outline: 'none' }
   const labelStyle = { fontSize: '11px', fontWeight: '950', color: '#000', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase' as const, letterSpacing: '0.5px' }
 
   return (
@@ -156,14 +155,18 @@ export default function RegistroPedido() {
       padding: '30px 15px', 
       fontFamily: 'system-ui, -apple-system, sans-serif' 
     }}>
-      {/* MÉTODO NUCLEAR PARA COLOR NEGRO */}
-      <style jsx>{`
-        select, option {
-          color: #000 !important;
+      {/* 💣 ELIMINADOR DE GRISES: ESTO FUERZA EL NEGRO EN CUALQUIER CELULAR */}
+      <style jsx global>{`
+        select, option, input, textarea {
+          color: #000000 !important;
+          -webkit-text-fill-color: #000000 !important;
           opacity: 1 !important;
-          -webkit-text-fill-color: #000 !important;
-          -webkit-opacity: 1 !important;
+          background-color: #ffffff !important;
           font-weight: 900 !important;
+        }
+        select:focus, input:focus {
+          color: #000000 !important;
+          -webkit-text-fill-color: #000000 !important;
         }
       `}</style>
 
@@ -221,7 +224,7 @@ export default function RegistroPedido() {
               <div>
                 <label style={labelStyle}><School size={16} /> Institución / Colegio</label>
                 <select style={inputStyle} value={colegio} onChange={e => setColegio(e.target.value)}>
-                  {listaColegios.map(c => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
+                  {listaColegios.map(c => <option key={c.id} value={c.nombre} style={{color:'#000'}}>{c.nombre}</option>)}
                 </select>
               </div>
             </div>
@@ -233,22 +236,22 @@ export default function RegistroPedido() {
             </h2>
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '12px', marginBottom: '16px' }}>
               <select style={inputStyle} value={nombreSeleccionado} onChange={e => setNombreSeleccionado(e.target.value)}>
-                {productosUnicos.map(n => <option key={n} value={n}>{n}</option>)}
+                {productosUnicos.map(n => <option key={n} value={n} style={{color:'#000'}}>{n}</option>)}
               </select>
               <input type="number" min="1" style={inputStyle} value={cantidad} onChange={e => setCantidad(Number(e.target.value))} />
             </div>
             <div style={{ marginBottom: '20px' }}>
-              {/* STOCK AL PRINCIPIO Y FORZADO A NEGRO */}
+              {/* STOCK AL PRINCIPIO: IMPOSIBLE QUE SE PIERDA */}
               <select style={inputStyle} value={tallaSeleccionada} onChange={e => setTallaSeleccionada(e.target.value)}>
                 {tallasDeInventario.map(t => {
                   const disponible = t.stock - (t.stock_reservado || 0);
                   return (
-                    <option key={t.id} value={t.talla} style={{ color: '#000', fontWeight: '950', backgroundColor: '#fff' }}>
-                      STOCK: {disponible} —— Talla {t.talla} (${Number(t.precio_base).toLocaleString()})
+                    <option key={t.id} value={t.talla} style={{ color: '#000000', fontWeight: '950', backgroundColor: '#ffffff' }}>
+                      [STOCK: {disponible}] —— Talla {t.talla} (${Number(t.precio_base).toLocaleString()})
                     </option>
                   )
                 })}
-                <option value="ESPECIAL">✨ TALLA ESPECIAL</option>
+                <option value="ESPECIAL" style={{color:'#000'}}>✨ TALLA ESPECIAL</option>
               </select>
               {tallaSeleccionada === 'ESPECIAL' && (
                 <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} style={{ marginTop: '12px' }}>
@@ -273,7 +276,6 @@ export default function RegistroPedido() {
                   </div>
                 ))}
                 
-                {/* SUBTOTAL DEL CARRITO */}
                 <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '4px solid #000', textAlign: 'right' }}>
                   <p style={{ margin: 0, fontSize: '12px', fontWeight: '900', color: '#64748b' }}>SUBTOTAL PRENDAS</p>
                   <p style={{ margin: 0, fontSize: '24px', fontWeight: '950', color: '#000' }}>${totalOriginal.toLocaleString('es-CL')}</p>
@@ -320,10 +322,10 @@ export default function RegistroPedido() {
               <div>
                 <label style={{ color: '#fff', fontSize: '11px', fontWeight: '950', marginBottom: '5px', display: 'block' }}>MÉTODO</label>
                 <select style={inputStyle} value={metodoPago} onChange={e => setMetodoPago(e.target.value)}>
-                  <option value="Transferencia">Transferencia</option>
-                  <option value="Efectivo">Efectivo</option>
-                  <option value="Débito">Débito</option>
-                  <option value="Crédito">Crédito</option>
+                  <option value="Transferencia" style={{color:'#000'}}>Transferencia</option>
+                  <option value="Efectivo" style={{color:'#000'}}>Efectivo</option>
+                  <option value="Débito" style={{color:'#000'}}>Débito</option>
+                  <option value="Crédito" style={{color:'#000'}}>Crédito</option>
                 </select>
               </div>
               <motion.button type="submit" disabled={loading || carrito.length === 0} style={{ width: '100%', backgroundColor: '#4ade80', color: '#000', border: '3px solid #000', padding: '20px', borderRadius: '20px', fontWeight: '950', fontSize: '20px', cursor: 'pointer' }}>
