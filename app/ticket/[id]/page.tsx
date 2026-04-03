@@ -16,8 +16,8 @@ export default function TicketPedido() {
 
   useEffect(() => {
     const cargarTicket = async () => {
-      // Ajuste de consulta para los nuevos IDs numéricos
-      const { data } = await supabase
+      // FIX: Forzamos que el ID sea un número para que coincida con el BIGINT de la DB
+      const { data, error } = await supabase
         .from('pedidos')
         .select(`
           *,
@@ -25,13 +25,17 @@ export default function TicketPedido() {
           detalles_pedido (*),
           pagos (*)
         `)
-        .eq('id', id)
+        .eq('id', Number(id)) // <-- Cambio clave aquí
         .single()
 
-      if (data) setPedido(data)
+      if (data) {
+        setPedido(data)
+      } else {
+        console.error("Error al cargar ticket:", error)
+      }
       setLoading(false)
     }
-    cargarTicket()
+    if (id) cargarTicket()
   }, [id])
 
   const exportarImagen = async () => {
@@ -44,7 +48,7 @@ export default function TicketPedido() {
         pixelRatio: 2
       })
       const link = document.createElement('a')
-      link.download = `Ticket_${pedido.clientes.nombre}_${pedido.id}.png`
+      link.download = `Ticket_${pedido?.clientes?.nombre || 'Pedido'}_${pedido?.id || id}.png`
       link.href = dataUrl
       link.click()
     } catch (err) {
@@ -63,7 +67,16 @@ export default function TicketPedido() {
     </div>
   )
 
-  if (!pedido) return <div style={{ padding: '50px', textAlign: 'center', fontWeight: '950' }}>PEDIDO NO ENCONTRADO</div>
+  if (!pedido) return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: '20px' }}>
+      <div style={{ padding: '50px', textAlign: 'center', fontWeight: '950', border: '4px solid #000', backgroundColor: '#fff', boxShadow: '8px 8px 0px #000' }}>
+        PEDIDO NO ENCONTRADO
+      </div>
+      <button onClick={() => router.back()} style={{ padding: '12px 24px', background: '#fff', border: '3px solid #000', borderRadius: '12px', fontWeight: '950', cursor: 'pointer', boxShadow: '4px 4px 0px #000' }}>
+        VOLVER ATRÁS
+      </button>
+    </div>
+  )
 
   const totalPagado = pedido.pagos?.reduce((acc: number, p: any) => acc + Number(p.monto), 0) || 0
   const saldoPendiente = pedido.total_final - totalPagado
@@ -107,7 +120,7 @@ export default function TicketPedido() {
 
         <div style={{ fontSize: '12px', fontWeight: '800' }}>
           <div style={{ marginBottom: '15px', lineHeight: '1.4' }}>
-            {/* AJUSTE: Formateamos el ID para que se vea como #0001 */}
+            {/* ID formateado para Luis */}
             <p style={{ margin: '2px 0' }}>
               <b>TICKET DE VENTA N° :</b> #{pedido.id.toString().padStart(4, '0')}
             </p>

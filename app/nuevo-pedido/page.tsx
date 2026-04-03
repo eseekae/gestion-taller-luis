@@ -105,7 +105,6 @@ export default function RegistroPedido() {
       const estadoPedido = tipoEntrega === 'inmediata' ? 'Completado' : 'Pendiente'
       const fechaFinalEntrega = tipoEntrega === 'inmediata' ? new Date().toISOString().split('T')[0] : (fechaEntrega || null)
       
-      // FIX: Insertamos sin enviar ID, Supabase genera el número (1, 2, 3...)
       const { data: ped, error: pedError } = await supabase.from('pedidos').insert([{
         cliente_id: cli.id, total_final: totalConDescuento, estado: estadoPedido,
         colegio: colegio || 'Particular', fecha_entrega: fechaFinalEntrega,
@@ -115,7 +114,6 @@ export default function RegistroPedido() {
       
       if (pedError || !ped) throw new Error(`Error pedido: ${pedError?.message}`)
       
-      // El ped.id que recibimos ahora es un número
       const detalles = carrito.map(item => ({
         pedido_id: ped.id, producto_id: item.id_inv, cantidad: item.cantidad, 
         cantidad_entregada: tipoEntrega === 'inmediata' ? item.cantidad : 0, 
@@ -138,7 +136,6 @@ export default function RegistroPedido() {
         }
       }
       
-      // Log con el nuevo ID numérico
       await registrarLog(`${usuarioActivo} creó venta de $${totalConDescuento}`, `Pedido #${ped.id}`)
       alert(`✅ Venta registrada correctamente como Pedido #${ped.id}`); 
       router.push('/pedidos')
@@ -146,7 +143,6 @@ export default function RegistroPedido() {
     finally { setLoading(false) }
   }
 
-  // ESTILOS
   const cardStyle = { backgroundColor: '#fff', padding: '20px', borderRadius: '28px', border: '4px solid #000', boxShadow: '8px 8px 0px #000', marginBottom: '24px' }
   const inputStyle = { width: '100%', padding: '16px', border: '3px solid #000', borderRadius: '16px', fontSize: '16px', fontWeight: '800', color: '#000', backgroundColor: '#fff', boxSizing: 'border-box' as const, outline: 'none' }
   const labelStyle = { fontSize: '11px', fontWeight: '950', color: '#000', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase' as const, letterSpacing: '0.5px' }
@@ -316,7 +312,8 @@ export default function RegistroPedido() {
 
           <div style={{ marginTop: '25px', marginBottom: '40px' }}>
             <label style={labelStyle}><MessageSquare size={16} /> Notas</label>
-            <textarea placeholder="Ej: Bordado especial..." style={{ ...inputStyle, height: '80px', resize: 'none' }} value={observaciones} onChange={e => setObservations(e.target.value)} />
+            {/* FIX: Se corrigió el nombre de la función setter */}
+            <textarea placeholder="Ej: Bordado especial..." style={{ ...inputStyle, height: '80px', resize: 'none' }} value={observaciones} onChange={e => setObservaciones(e.target.value)} />
           </div>
         </form>
       </div>
