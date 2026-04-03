@@ -297,7 +297,7 @@ export default function Inventario() {
                                         </div>
                                       </div>
                                       
-                                      <div style={{ textAlign: 'right', marginTop: '15px' }}>
+                                      <div style={{ textAlign: 'right', marginTop: '15px', color: '#fff' }}>
                                         <span style={{ backgroundColor: disponible <= 0 ? '#000' : '#4ade80', color: disponible <= 0 ? '#fff' : '#000', padding: '8px 16px', borderRadius: '12px', fontSize: '13px', fontWeight: '1000', border: '3px solid #000', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                                           {disponible <= 0 && <AlertCircle size={14} />} DISPONIBLE: {disponible}
                                         </span>
