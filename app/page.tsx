@@ -9,8 +9,10 @@ export default function Home() {
   const [user, setUser] = useState<any>(null)
 
   useEffect(() => {
-    const session = sessionStorage.getItem('user_role')
-    const userName = sessionStorage.getItem('user_name')
+    // FIX: Cambiamos sessionStorage por localStorage para romper el círculo vicioso
+    const session = localStorage.getItem('user_role')
+    const userName = localStorage.getItem('user_name')
+    
     if (!session) {
       router.push('/login') 
     } else {
@@ -19,7 +21,8 @@ export default function Home() {
   }, [router])
 
   const logout = () => {
-    sessionStorage.clear()
+    // FIX: Limpiamos localStorage para cerrar la sesión de verdad
+    localStorage.clear()
     router.push('/login')
   }
 
@@ -102,7 +105,7 @@ export default function Home() {
           </motion.div>
         </div>
 
-        {/* GRILLA DE ACCIONES (NEUBRUTALISM PREMIUM) */}
+        {/* GRILLA DE ACCIONES */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           
           <MenuButton 
@@ -148,7 +151,7 @@ export default function Home() {
             />
           </div>
 
-          {/* BOTÓN SALIR CON ESTILO */}
+          {/* BOTÓN SALIR */}
           <motion.button 
             variants={{ hidden: { opacity: 0 }, visible: { opacity: 1 } }}
             whileHover={{ y: -4, backgroundColor: '#000', color: '#fff', boxShadow: '0px 8px 0px #ef4444' }}
