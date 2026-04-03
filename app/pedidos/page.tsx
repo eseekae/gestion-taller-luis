@@ -177,15 +177,15 @@ export default function VerPedidos() {
                   </div>
                 )}
 
-                <button onClick={() => setExpandidos(prev => ({ ...prev, [p.id]: !prev[p.id] }))} style={{ width: '100%', marginBottom: '16px', border: '3px solid #000', borderRadius: '10px', padding: '10px', fontWeight: '900', background: '#000000' }}>{expandido ? 'Ocultar Detalle' : 'Ver Detalle'}</button>
+                <button onClick={() => setExpandidos(prev => ({ ...prev, [p.id]: !prev[p.id] }))} style={{ width: '100%', marginBottom: '16px', border: '3px solid #000', borderRadius: '10px', padding: '10px', fontWeight: '900', background: '#f1f5f9' }}>{expandido ? 'Ocultar Detalle' : 'Ver Detalle'}</button>
 
                 {expandido && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '20px' }}>
                     {p.detalles?.map((det: any, idx: number) => (
                       <div key={idx} style={{ padding: '12px', border: '2px solid #000', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', background: '#f8fafc' }}>
                         <div>
-                          <p style={{ fontWeight: '800', color '#000' }}>{det.p_nombre}</p>
-                          <p style={{ fontSize: '12px', color: '#000' }}>Talla: {det.talla} | {det.cantidad_entregada || 0} de {det.cantidad}</p>
+                          <p style={{ fontWeight: '800', color: '#000' }}>{det.p_nombre}</p>
+                          <p style={{ fontSize: '12px' }}>Talla: {det.talla} | {det.cantidad_entregada || 0} de {det.cantidad}</p>
                         </div>
                         <div style={{ display: 'flex', gap: '5px' }}>
                           <button onClick={() => actualizarEntrega(det, -1)} style={{ border: '2px solid #000', borderRadius: '8px', padding: '5px', background: '#ef4444', color: '#fff' }}>-</button>
