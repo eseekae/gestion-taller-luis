@@ -111,10 +111,10 @@ export default function CalendarioLiteral() {
         {/* LEYENDA RÁPIDA */}
         <div style={{ display: 'flex', gap: '20px', marginBottom: '20px', justifyContent: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', fontWeight: '900', textTransform: 'uppercase' }}>
-            <div style={{ width: '12px', height: '12px', backgroundColor: '#3b82f6', borderRadius: '4px', border: '2px solid #000' }} /> PENDIENTES
+            <div style={{ width: '12px', height: '12px', backgroundColor: '#3b82f6', borderRadius: '4px', border: '2px solid #000', color: '#000' }} /> PENDIENTES
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', fontWeight: '900', textTransform: 'uppercase' }}>
-            <div style={{ width: '12px', height: '12px', backgroundColor: '#e2e8f0', borderRadius: '4px', border: '2px solid #000' }} /> ENTREGADOS
+            <div style={{ width: '12px', height: '12px', backgroundColor: '#e2e8f0', borderRadius: '4px', border: '2px solid #000', color: '#000' }} /> ENTREGADOS
           </div>
         </div>
 
