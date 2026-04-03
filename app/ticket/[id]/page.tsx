@@ -1,28 +1,24 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react' // Añadimos useRef
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '../../../lib/supabase'
-import { Printer, MessageCircle, ArrowLeft } from 'lucide-react'
+import { Printer, MessageCircle, ArrowLeft, Share2 } from 'lucide-react'
+import * as htmlToImage from 'html-to-image' // Importamos la librería
 
 export default function TicketPedido() {
   const { id } = useParams()
   const router = useRouter()
+  const ticketRef = useRef<HTMLDivElement>(null) // Referencia para capturar el ticket
   const [pedido, setPedido] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [compartiendo, setCompartiendo] = useState(false)
 
   useEffect(() => {
     const cargarTicket = async () => {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('pedidos')
-        .select(`
-          *,
-          clientes (*),
-          detalles_pedido (*, inventario (nombre)),
-          pagos (*)
-        `)
-        .eq('id', id)
-        .single()
-
+        .select(`*, clientes (*), detalles_pedido (*, inventario (nombre)), pagos (*)`)
+        .eq('id', id).single()
       if (data) setPedido(data)
       setLoading(false)
     }
@@ -37,43 +33,59 @@ export default function TicketPedido() {
   const fechaHoy = new Date().toLocaleDateString('es-CL')
   const fechaEntrega = pedido.fecha_entrega ? new Date(pedido.fecha_entrega).toLocaleDateString('es-CL') : 'Por definir'
 
-  // Función para mandar por WhatsApp
-  const enviarWhatsApp = () => {
-    const mensaje = `*TICKET DE PEDIDO - CREACIONES YOVI*%0A` +
-      `Hola ${pedido.clientes.nombre}, aquí tienes el detalle de tu pedido:%0A%0A` +
-      `*ID:* ${pedido.id}%0A` +
-      `*Total:* $${pedido.total_final.toLocaleString('es-CL')}%0A` +
-      `*Abonado:* $${totalPagado.toLocaleString('es-CL')}%0A` +
-      `*Saldo Pendiente:* $${saldoPendiente.toLocaleString('es-CL')}%0A` +
-      `*Entrega:* ${fechaEntrega}%0A%0A` +
-      `¡Gracias por preferir Creaciones Yovi!`;
-    
-    window.open(`https://wa.me/${pedido.clientes.telefono}?text=${mensaje}`, '_blank')
+  // --- LA MAGIA PARA MANDAR EL ARCHIVO ---
+  const compartirTicket = async () => {
+    if (!ticketRef.current) return
+    setCompartiendo(true)
+    try {
+      // 1. Convertimos el div del ticket en una imagen (PNG)
+      const dataUrl = await htmlToImage.toPng(ticketRef.current, { backgroundColor: '#fff' })
+      
+      // 2. Convertimos ese dataUrl en un archivo real
+      const blob = await (await fetch(dataUrl)).blob()
+      const file = new File([blob], `Ticket_Yovi_${pedido.id}.png`, { type: 'image/png' })
+
+      // 3. Usamos la API de compartir del celular
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: 'Ticket Creaciones Yovi',
+          text: `Detalle pedido de ${pedido.clientes.nombre}`,
+        })
+      } else {
+        alert("Tu navegador no permite compartir archivos directamente. ¡Prueba desde el celular!")
+      }
+    } catch (err) {
+      console.error("Error compartiendo:", err)
+      alert("Hubo un drama al generar la imagen.")
+    } finally {
+      setCompartiendo(false)
+    }
   }
 
   return (
     <main style={{ backgroundColor: '#f1f5f9', minHeight: '100vh', padding: '20px' }}>
       
-      {/* BOTONES DE ACCIÓN (Se ocultan al imprimir) */}
-      <div className="no-print" style={{ maxWidth: '300px', margin: '0 auto 20px auto', display: 'flex', flexWrap: 'wrap', gap: '10px', justifyContent: 'center' }}>
-        <button onClick={() => router.back()} style={{ background: '#fff', border: '2px solid #000', padding: '10px', borderRadius: '10px', fontWeight: 'bold' }}><ArrowLeft size={18} /></button>
-        <button onClick={() => window.print()} style={{ background: '#000', color: '#fff', padding: '10px 20px', borderRadius: '10px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}><Printer size={18} /> Imprimir</button>
-        <button onClick={enviarWhatsApp} style={{ background: '#25D366', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '10px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}><MessageCircle size={18} /> WhatsApp</button>
+      <div className="no-print" style={{ maxWidth: '350px', margin: '0 auto 20px auto', display: 'flex', flexWrap: 'wrap', gap: '10px', justifyContent: 'center' }}>
+        <button onClick={() => router.back()} style={{ background: '#fff', border: '3px solid #000', padding: '10px', borderRadius: '12px', boxShadow: '4px 4px 0px #000' }}><ArrowLeft size={18} /></button>
+        <button onClick={() => window.print()} style={{ background: '#000', color: '#fff', padding: '10px 20px', borderRadius: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '4px 4px 0px #3b82f6' }}><Printer size={18} /> Imprimir</button>
+        
+        {/* BOTÓN NUEVO: COMPARTIR IMAGEN */}
+        <button 
+          onClick={compartirTicket} 
+          disabled={compartiendo}
+          style={{ background: '#25D366', color: '#fff', border: '3px solid #000', padding: '10px 20px', borderRadius: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '4px 4px 0px #000' }}
+        >
+          <Share2 size={18} /> {compartiendo ? 'Generando...' : 'WhatsApp'}
+        </button>
       </div>
 
-      {/* ÁREA DEL TICKET (75mm de ancho para térmica) */}
-      <div style={{ 
-        width: '75mm', 
-        backgroundColor: '#fff', 
-        margin: '0 auto', 
-        padding: '10mm 5mm', 
-        boxShadow: '0 0 10px rgba(0,0,0,0.1)',
-        fontFamily: 'monospace',
-        color: '#000',
-        fontSize: '12px'
+      {/* AGREGAMOS LA REFERENCIA ticketRef PARA CAPTURAR ESTE DIV */}
+      <div ref={ticketRef} style={{ 
+        width: '75mm', backgroundColor: '#fff', margin: '0 auto', padding: '10mm 5mm', 
+        fontFamily: 'monospace', color: '#000', fontSize: '12px'
       }} className="ticket-container">
         
-        {/* ENCABEZADO */}
         <div style={{ textAlign: 'center', marginBottom: '15px' }}>
           <h1 style={{ fontSize: '18px', fontWeight: 'bold', margin: '0 0 5px 0' }}>CREACIONES YOVI</h1>
           <p style={{ margin: '0', fontSize: '10px' }}>Confección de Uniformes Escolares</p>
@@ -84,19 +96,16 @@ export default function TicketPedido() {
 
         <div style={{ borderTop: '1px dashed #000', margin: '10px 0' }}></div>
 
-        {/* INFO PEDIDO */}
-        <div style={{ marginBottom: '10px' }}>
+        <div>
           <p style={{ margin: '2px 0' }}><b>TICKET N°:</b> {pedido.id}</p>
           <p style={{ margin: '2px 0' }}><b>FECHA:</b> {fechaHoy}</p>
           <p style={{ margin: '2px 0' }}><b>CLIENTE:</b> {pedido.clientes.nombre}</p>
-          <p style={{ margin: '2px 0' }}><b>TELÉFONO:</b> {pedido.clientes.telefono}</p>
           <p style={{ margin: '2px 0' }}><b>COLEGIO:</b> {pedido.colegio}</p>
         </div>
 
         <div style={{ borderTop: '1px dashed #000', margin: '10px 0' }}></div>
 
-        {/* DETALLE ITEMS */}
-        <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '10px' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr>
               <th style={{ textAlign: 'left', fontSize: '10px' }}>CANT</th>
@@ -107,7 +116,7 @@ export default function TicketPedido() {
           <tbody>
             {pedido.detalles_pedido?.map((det: any, idx: number) => (
               <tr key={idx}>
-                <td style={{ verticalAlign: 'top' }}>{det.cantidad}</td>
+                <td>{det.cantidad}</td>
                 <td style={{ fontSize: '10px' }}>{det.inventario?.nombre} ({det.talla})</td>
                 <td style={{ textAlign: 'right' }}>${(det.cantidad * det.precio_unitario).toLocaleString()}</td>
               </tr>
@@ -117,30 +126,21 @@ export default function TicketPedido() {
 
         <div style={{ borderTop: '1px dashed #000', margin: '10px 0' }}></div>
 
-        {/* TOTALES */}
         <div style={{ textAlign: 'right', fontSize: '13px' }}>
           <p style={{ margin: '3px 0' }}>TOTAL: ${pedido.total_final.toLocaleString('es-CL')}</p>
           <p style={{ margin: '3px 0' }}>ABONADO: ${totalPagado.toLocaleString('es-CL')}</p>
           <p style={{ margin: '3px 0', fontWeight: 'bold' }}>SALDO: ${saldoPendiente.toLocaleString('es-CL')}</p>
         </div>
 
-        <div style={{ borderTop: '1px dashed #000', margin: '10px 0' }}></div>
-
-        {/* ENTREGA Y NOTAS */}
-        <div style={{ textAlign: 'center', marginTop: '10px' }}>
+        <div style={{ textAlign: 'center', marginTop: '15px' }}>
           <div style={{ background: '#000', color: '#fff', padding: '5px', fontWeight: 'bold', marginBottom: '10px' }}>
             ENTREGA ESTIMADA: {fechaEntrega}
           </div>
-          {pedido.observaciones && (
-            <p style={{ fontSize: '10px', fontStyle: 'italic' }}>Nota: {pedido.observaciones}</p>
-          )}
-          <p style={{ marginTop: '15px', fontSize: '10px' }}>¡Gracias por confiar en nosotros!</p>
-          <p style={{ fontSize: '9px' }}>Software por: Sebastian Ramirez</p>
+          <p style={{ fontSize: '9px' }}>¡Gracias por confiar en nosotros!</p>
+          <p style={{ fontSize: '8px', marginTop: '10px' }}>Software por: Sebastian Ramirez</p>
         </div>
-
       </div>
 
-      {/* ESTILOS PARA IMPRESIÓN */}
       <style jsx global>{`
         @media print {
           .no-print { display: none !important; }
