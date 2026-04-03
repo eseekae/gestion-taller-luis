@@ -84,39 +84,94 @@ export default function VerPedidos() {
 
   useEffect(() => { cargar() }, [cargar])
 
-  // --- LÓGICA DE EXPORTACIÓN EXCEL ---
+  // --- EXPORTACIÓN EXCEL ULTRA DETALLADA CON DISEÑO ---
   const exportarExcel = () => {
-    const filas: any[] = []
+    const dataFilas: any[] = []
     
+    // Encabezados con estilo
+    const headers = [
+      'ID PEDIDO', 'FECHA REG.', 'HORA REG.', 'CLIENTE', 'TELEFONO', 'COLEGIO',
+      'PRODUCTO', 'TALLA', 'CANT.', 'ENTREGADO', 'VALOR UNIT.', 'SUBTOTAL',
+      'TOTAL ORDEN', 'TOTAL ABONADO', 'SALDO PENDIENTE', 'ESTADO', 'DETALLE PAGOS', 'OBSERVACIONES'
+    ]
+
     datos.forEach(p => {
-      p.detalles?.forEach((d: any) => {
-        filas.push({
-          'ID': p.id,
-          'FECHA REGISTRO': new Date(p.created_at).toLocaleDateString('es-CL'),
+      const fechaObj = new Date(p.created_at)
+      const fecha = fechaObj.toLocaleDateString('es-CL')
+      const hora = fechaObj.toLocaleTimeString('es-CL')
+      const deuda = p.total_final - p.total_pagado
+      
+      // Combinamos pagos en un solo texto para que no sea un desorden
+      const historialPagos = p.pagos.map((pg: any) => 
+        `[${new Date(pg.fecha_pago).toLocaleDateString('es-CL')}] $${Number(pg.monto).toLocaleString()} (${pg.metodo_pago})`
+      ).join(' | ')
+
+      p.detalles?.forEach((d: any, index: number) => {
+        dataFilas.push({
+          'ID PEDIDO': p.id,
+          'FECHA REG.': fecha,
+          'HORA REG.': hora,
           'CLIENTE': p.c_nombre,
-          'TELÉFONO': p.c_telefono,
+          'TELEFONO': p.c_telefono,
           'COLEGIO': p.colegio || 'Particular',
           'PRODUCTO': d.p_nombre,
           'TALLA': d.talla,
-          'CANT. PEDIDA': d.cantidad,
-          'CANT. ENTREGADA': d.cantidad_entregada || 0,
-          'ESTADO ÍTEM': d.estado,
-          'PRECIO UNIT.': d.precio_unitario,
-          'SUBTOTAL ÍTEM': d.cantidad * d.precio_unitario,
-          'TOTAL PEDIDO': p.total_final,
-          'TOTAL PAGADO': p.total_pagado,
-          'DEUDA RESTANTE': p.total_final - p.total_pagado,
-          'ESTADO GENERAL': p.estado_macro,
-          'OBSERVACIONES': p.observaciones || ''
+          'CANT.': d.cantidad,
+          'ENTREGADO': d.cantidad_entregada || 0,
+          'VALOR UNIT.': d.precio_unitario,
+          'SUBTOTAL': d.cantidad * d.precio_unitario,
+          'TOTAL ORDEN': index === 0 ? p.total_final : '',
+          'TOTAL ABONADO': index === 0 ? p.total_pagado : '',
+          'SALDO PENDIENTE': index === 0 ? deuda : '',
+          'ESTADO': p.estado_macro,
+          'DETALLE PAGOS': index === 0 ? historialPagos : '',
+          'OBSERVACIONES': index === 0 ? p.observaciones || '' : ''
         })
       })
+
+      // Fila de separación gris para diferenciar pedidos
+      dataFilas.push(Object.fromEntries(headers.map(h => [h, '---'])))
     })
 
-    const ws = XLSX.utils.json_to_sheet(filas)
+    const ws = XLSX.utils.json_to_sheet(dataFilas)
+
+    // Aplicamos estilos a las celdas (Requiere xlsx-js-style)
+    const range = XLSX.utils.decode_range(ws['!ref']!)
+    for (let R = range.s.r; R <= range.e.r; ++R) {
+      for (let C = range.s.c; C <= range.e.c; ++C) {
+        const cell_address = { c: C, r: R }
+        const cell_ref = XLSX.utils.encode_cell(cell_address)
+        if (!ws[cell_ref]) continue
+
+        // Estilo base: Bordes para todos
+        ws[cell_ref].s = {
+          border: {
+            top: { style: "thin", color: { rgb: "000000" } },
+            bottom: { style: "thin", color: { rgb: "000000" } },
+            left: { style: "thin", color: { rgb: "000000" } },
+            right: { style: "thin", color: { rgb: "000000" } }
+          },
+          font: { name: "Arial", sz: 10 }
+        }
+
+        // Estilo de encabezado
+        if (R === 0) {
+          ws[cell_ref].s.fill = { fgColor: { rgb: "000000" } }
+          ws[cell_ref].s.font = { color: { rgb: "FFFFFF" }, bold: true, sz: 11 }
+        }
+
+        // Estilo fila separadora
+        if (ws[cell_ref].v === '---') {
+          ws[cell_ref].s.fill = { fgColor: { rgb: "E2E8F0" } }
+          ws[cell_ref].s.font = { color: { rgb: "E2E8F0" } } // Ocultamos el texto
+        }
+      }
+    }
+
     const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, "Reporte Pedidos")
-    XLSX.writeFile(wb, `Pedidos_Creaciones_Yovi_${new Date().toISOString().split('T')[0]}.xlsx`)
-    registrarLog("Exportó listado de pedidos a Excel", "Descarga de reporte completo")
+    XLSX.utils.book_append_sheet(wb, ws, "PEDIDOS YOVI")
+    XLSX.writeFile(wb, `Reporte_Taller_Yovi_${new Date().toISOString().split('T')[0]}.xlsx`)
+    registrarLog("Exportó Excel de pedidos", "Reporte detallado con pagos y horas")
   }
 
   // --- ACCIONES DE ENTREGA PARCIAL / TOTAL ---
@@ -193,6 +248,7 @@ export default function VerPedidos() {
     return p.c_nombre.toLowerCase().includes(t) || p.c_telefono.includes(t) || (p.colegio && p.colegio.toLowerCase().includes(t)) || p.id.toString().includes(t)
   }).filter(p => filtro === 'Todos' || (filtro === 'Pendientes' && p.estado_macro !== 'FINALIZADO (OK)') || p.estado_macro === filtro)
 
+  // ESTILOS
   const containerStyle = { minHeight: '100vh', backgroundColor: '#f8fafc', backgroundImage: `radial-gradient(#cbd5e1 1.5px, transparent 1.5px)`, backgroundSize: '32px 32px', padding: '40px 20px', fontFamily: 'system-ui, -apple-system, sans-serif' }
   const cardStyle = { backgroundColor: '#fff', padding: '24px', borderRadius: '28px', border: '4px solid #000', boxShadow: '8px 8px 0px #000' }
   const labelStyle = { fontSize: '11px', fontWeight: '950', color: '#64748b', marginBottom: '4px', textTransform: 'uppercase' as const }
@@ -217,7 +273,7 @@ export default function VerPedidos() {
             onClick={exportarExcel}
             style={{ backgroundColor: '#166534', color: '#fff', border: '3px solid #000', padding: '12px 18px', borderRadius: '16px', boxShadow: '4px 4px 0px #000', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '900' }}
           >
-            <Download size={20} /> <span style={{fontSize: '13px'}}>EXCEL</span>
+            <Download size={20} /> <span style={{fontSize: '13px'}}>REPORTE PRO</span>
           </motion.button>
         </motion.div>
 
@@ -238,7 +294,6 @@ export default function VerPedidos() {
 
             return (
               <motion.div key={p.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.05 }} style={cardStyle}>
-                
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', alignItems: 'flex-start' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <div style={{ display: 'flex', gap: '8px' }}>
@@ -258,10 +313,7 @@ export default function VerPedidos() {
                   <span style={{ fontSize: '14px', fontWeight: '800', color: '#000', display: 'flex', alignItems: 'center', gap: '6px' }}><Phone size={14} /> {p.c_telefono}</span>
                 </div>
 
-                <motion.button 
-                  onClick={() => toggleExpandir(p.id)}
-                  style={{ width: '100%', padding: '12px', border: '3px solid #000', borderRadius: '14px', marginBottom: '16px', backgroundColor: '#f1f5f9', fontWeight: '950', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', color: '#000' }}
-                >
+                <motion.button onClick={() => toggleExpandir(p.id)} style={{ width: '100%', padding: '12px', border: '3px solid #000', borderRadius: '14px', marginBottom: '16px', backgroundColor: '#f1f5f9', fontWeight: '950', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', color: '#000' }}>
                   {expandido ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
                   {expandido ? 'OCULTAR DETALLES' : 'VER ARTÍCULOS Y NOTAS'}
                 </motion.button>
@@ -365,14 +417,8 @@ export default function VerPedidos() {
                   <button onClick={() => setModalPago({...modalPago, open: false})} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={28} /></button>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                  <div>
-                    <label style={labelStyle}>Monto ($)</label>
-                    <input type="number" style={{...inputStyle, borderColor: modalPago.esCorreccion ? '#ef4444' : '#000'}} value={modalPago.monto} onChange={e => setModalPago({...modalPago, monto: e.target.value})} />
-                  </div>
-                  <div>
-                    <label style={labelStyle}>Fecha</label>
-                    <input type="date" style={inputStyle} value={modalPago.fecha} onChange={e => setModalPago({...modalPago, fecha: e.target.value})} />
-                  </div>
+                  <div><label style={labelStyle}>Monto ($)</label><input type="number" style={{...inputStyle, borderColor: modalPago.esCorreccion ? '#ef4444' : '#000'}} value={modalPago.monto} onChange={e => setModalPago({...modalPago, monto: e.target.value})} /></div>
+                  <div><label style={labelStyle}>Fecha</label><input type="date" style={inputStyle} value={modalPago.fecha} onChange={e => setModalPago({...modalPago, fecha: e.target.value})} /></div>
                   <div>
                     <label style={labelStyle}>Método</label>
                     <select style={inputStyle} value={modalPago.metodo} onChange={e => setModalPago({...modalPago, metodo: e.target.value})}>
