@@ -22,7 +22,9 @@ export default function RegistroPedido() {
   const [nombreSeleccionado, setNombreSeleccionado] = useState('')
   const [tallaSeleccionada, setTallaSeleccionada] = useState('')
   const [precioManualEspecial, setPrecioManualEspecial] = useState('')
-  const [cantidad, setCantidad] = useState(1)
+  
+  // FIX: Ahora el estado inicial es vacío para obligar al ingreso manual
+  const [cantidad, setCantidad] = useState<number | string>('')
 
   const [nombreCliente, setNombreCliente] = useState('')
   const [rut, setRut] = useState('')
@@ -43,7 +45,6 @@ export default function RegistroPedido() {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    // FIX: Ahora usamos localStorage para mantener la sesión abierta
     setUsuarioActivo(localStorage.getItem('user_name') || '')
     const fetch = async () => {
       const { data: inv } = await supabase.from('inventario').select('*').order('nombre')
@@ -67,18 +68,25 @@ export default function RegistroPedido() {
   const tallasDeInventario = useMemo(() => inventario.filter(i => i.nombre === nombreSeleccionado), [nombreSeleccionado, inventario])
 
   const agregarAlCarrito = () => {
+    // VALIDACIÓN: Si el campo está vacío o es 0, no permite agregar
+    if (cantidad === '' || Number(cantidad) <= 0) {
+      return alert("Hrmn, tienes que ingresar una cantidad válida antes de añadir al pedido.")
+    }
+
     let item; let precio;
     if (tallaSeleccionada === 'ESPECIAL') {
       if (!precioManualEspecial) return alert("Ingresa el precio para la talla especial")
       precio = Number(precioManualEspecial)
-      item = { id_inv: tallasDeInventario[0]?.id, nombre: nombreSeleccionado, talla: 'ESPECIAL', precio, cantidad }
+      item = { id_inv: tallasDeInventario[0]?.id, nombre: nombreSeleccionado, talla: 'ESPECIAL', precio, cantidad: Number(cantidad) }
     } else {
       const invItem = inventario.find(i => i.nombre === nombreSeleccionado && i.talla === tallaSeleccionada)
       precio = Number(invItem?.precio_base || 0)
-      item = { id_inv: invItem.id, nombre: nombreSeleccionado, talla: tallaSeleccionada, precio, cantidad }
+      item = { id_inv: invItem.id, nombre: nombreSeleccionado, talla: tallaSeleccionada, precio, cantidad: Number(cantidad) }
     }
     setCarrito([...carrito, { ...item, tempId: Date.now() }])
     setPrecioManualEspecial('')
+    // Limpiamos el campo después de agregar
+    setCantidad('')
   }
 
   const quitarDelCarrito = (id: number) => setCarrito(carrito.filter(c => c.tempId !== id))
@@ -225,7 +233,15 @@ export default function RegistroPedido() {
               <select style={inputStyle} value={nombreSeleccionado} onChange={e => setNombreSeleccionado(e.target.value)}>
                 {productosUnicos.map(n => <option key={n} value={n}>{n}</option>)}
               </select>
-              <input type="number" min="1" style={inputStyle} value={cantidad} onChange={e => setCantidad(Number(e.target.value))} />
+              
+              {/* FIX: Input ahora maneja el estado vacío correctamente */}
+              <input 
+                type="number" 
+                placeholder="CANT." 
+                style={{...inputStyle, textAlign: 'center'}} 
+                value={cantidad} 
+                onChange={e => setCantidad(e.target.value === '' ? '' : Number(e.target.value))} 
+              />
             </div>
             <div style={{ marginBottom: '20px' }}>
               <select style={inputStyle} value={tallaSeleccionada} onChange={e => setTallaSeleccionada(e.target.value)}>
