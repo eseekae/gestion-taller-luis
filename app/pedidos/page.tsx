@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { registrarLog } from '../../lib/auditoria'
 import { motion, AnimatePresence } from 'framer-motion'
 import * as XLSX from 'xlsx-js-style'
-import { ArrowLeft, Search, School, Phone, Calendar, Printer, Trash2, MessageCircle, Download, MessageSquare, Bell, Package, CheckCircle, X, Banknote } from 'lucide-react'
+import { ArrowLeft, Search, School, Phone, Calendar, Printer, Trash2, MessageCircle, Download, MessageSquare, Bell, Package, CheckCircle, X, Banknote, History } from 'lucide-react'
 
 export default function VerPedidos() {
   const router = useRouter()
@@ -155,19 +155,18 @@ export default function VerPedidos() {
           </div>
         </div>
 
-        {/* LISTADO */}
+        {/* LISTADO DE PEDIDOS */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '25px' }}>
           {filtrados.map(p => {
             const deuda = p.total_final - (p.total_pagado || 0)
             const expandido = !!expandidos[p.id]
-            const fechaEntrega = p.fecha_entrega ? new Date(p.fecha_entrega).toLocaleDateString('es-CL') : 'POR DEFINIR'
+            const fechaEntrega = p.fecha_entrega ? new Date(p.fecha_entrega).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'POR DEFINIR'
 
             return (
               <div key={p.id} style={{ backgroundColor: '#fff', padding: '24px', borderRadius: '24px', border: '3px solid #000', boxShadow: '8px 8px 0px #000' }}>
                 
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', alignItems: 'flex-start' }}>
                   <div>
-                    {/* ID DEL PEDIDO AÑADIDO AQUÍ */}
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
                       <span style={{ background: '#fbbf24', border: '2px solid #000', padding: '2px 8px', borderRadius: '6px', fontSize: '10px', fontWeight: '900', color: '#000' }}>
                         ID #{p.id}
@@ -235,6 +234,30 @@ export default function VerPedidos() {
           })}
         </div>
 
+        {/* SECCIÓN DE AUDITORÍA (NUEVA) */}
+        <div style={{ marginTop: '50px', borderTop: '4px solid #000', paddingTop: '30px', marginBottom: '50px' }}>
+          <h2 style={{ fontSize: '22px', fontWeight: '900', color: '#000', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <History size={24} /> Historial de Actividad
+          </h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {logs.map((log, idx) => (
+              <div key={idx} style={{ backgroundColor: '#fff', border: '3px solid #000', padding: '15px', borderRadius: '16px', boxShadow: '4px 4px 0px #000' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div>
+                    <p style={{ margin: 0, fontWeight: '900', fontSize: '14px', color: '#000' }}>{log.accion}</p>
+                    <p style={{ margin: '4px 0 0 0', fontSize: '12px', fontWeight: '800', color: '#475569' }}>{log.detalles}</p>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <p style={{ margin: 0, fontSize: '11px', fontWeight: '900', color: '#000' }}>{new Date(log.fecha).toLocaleDateString('es-CL')}</p>
+                    <p style={{ margin: 0, fontSize: '10px', fontWeight: '800', color: '#64748b' }}>{new Date(log.fecha).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {logs.length === 0 && <p style={{ textAlign: 'center', fontWeight: '800', color: '#64748b' }}>No hay registros de actividad aún.</p>}
+          </div>
+        </div>
+
         {/* MODAL DE PAGO */}
         <AnimatePresence>
           {modalPago.open && (
@@ -245,13 +268,10 @@ export default function VerPedidos() {
                   <button onClick={() => setModalPago({...modalPago, open: false})} style={{ background: 'none', border: 'none' }}><X color="#000" /></button>
                 </div>
                 <p style={{ fontSize: '14px', fontWeight: '900', marginBottom: '15px', color: '#000' }}>Cliente: {modalPago.nombreCliente}</p>
-                
                 <label style={{ fontSize: '11px', fontWeight: '900', display: 'block', marginBottom: '5px', color: '#000' }}>MONTO $</label>
                 <input type="number" style={{ width: '100%', padding: '12px', border: '3px solid #000', borderRadius: '12px', fontWeight: '900', marginBottom: '15px', color: '#000' }} value={modalPago.monto} onChange={e => setModalPago({...modalPago, monto: e.target.value})} />
-                
                 <label style={{ fontSize: '11px', fontWeight: '900', display: 'block', marginBottom: '5px', color: '#000' }}>FECHA</label>
                 <input type="date" style={{ width: '100%', padding: '12px', border: '3px solid #000', borderRadius: '12px', fontWeight: '900', marginBottom: '15px', color: '#000' }} value={modalPago.fecha} onChange={e => setModalPago({...modalPago, fecha: e.target.value})} />
-                
                 <label style={{ fontSize: '11px', fontWeight: '900', display: 'block', marginBottom: '5px', color: '#000' }}>MÉTODO</label>
                 <select style={{ width: '100%', padding: '12px', border: '3px solid #000', borderRadius: '12px', fontWeight: '900', marginBottom: '25px', color: '#000' }} value={modalPago.metodo} onChange={e => setModalPago({...modalPago, metodo: e.target.value})}>
                   <option value="Transferencia">Transferencia</option>
@@ -259,7 +279,6 @@ export default function VerPedidos() {
                   <option value="Débito">Débito</option>
                   <option value="Crédito">Crédito</option>
                 </select>
-
                 <button onClick={guardarPago} style={{ width: '100%', backgroundColor: '#4ade80', color: '#000', padding: '15px', borderRadius: '15px', border: '3px solid #000', fontWeight: '900', boxShadow: '4px 4px 0px #000', cursor: 'pointer' }}>
                   CONFIRMAR PAGO
                 </button>
