@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { 
   ArrowLeft, ChevronLeft, ChevronRight, User, School, 
   Package, X, Calendar as CalendarIcon, Clock, 
-  CheckCircle, ChevronDown, ChevronUp, Scissors, Info
+  CheckCircle, ChevronDown, ChevronUp, Scissors, Info, Printer
 } from 'lucide-react'
 
 export default function CalendarioLiteral() {
@@ -17,7 +17,6 @@ export default function CalendarioLiteral() {
   const [verEntregados, setVerEntregados] = useState(false)
   const [loading, setLoading] = useState(true)
 
-  // 1. Cargar pedidos (Mantenemos la funcionalidad original)
   useEffect(() => {
     const cargar = async () => {
       setLoading(true)
@@ -32,7 +31,6 @@ export default function CalendarioLiteral() {
     cargar()
   }, [])
 
-  // 2. Lógica del Calendario
   const diasMes = useMemo(() => {
     const año = fechaActual.getFullYear()
     const mes = fechaActual.getMonth()
@@ -47,7 +45,6 @@ export default function CalendarioLiteral() {
 
   const nombreMes = fechaActual.toLocaleString('es-CL', { month: 'long', year: 'numeric' })
 
-  // 3. Agrupar por fecha y por ESTADO (Mantenemos la lógica de carpetas)
   const pedidosAgrupados = useMemo(() => {
     return pedidos.reduce((acc: any, p: any) => {
       const fecha = p.fecha_entrega
@@ -66,7 +63,6 @@ export default function CalendarioLiteral() {
     setFechaActual(new Date(fechaActual.getFullYear(), fechaActual.getMonth() + offset, 1))
   }
 
-  // ESTILOS NEUBRUTALISTAS PULIDOS
   const shadowStyle = "8px 8px 0px #000"
   const cellStyle = { 
     height: '115px', 
@@ -88,7 +84,6 @@ export default function CalendarioLiteral() {
     }}>
       <div style={{ maxWidth: '850px', margin: '0 auto' }}>
         
-        {/* HEADER CON FACHA */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '35px' }}>
           <motion.button 
             whileHover={{ scale: 1.1 }}
@@ -108,7 +103,6 @@ export default function CalendarioLiteral() {
           <div style={{ width: '50px' }}></div>
         </div>
 
-        {/* LEYENDA RÁPIDA */}
         <div style={{ display: 'flex', gap: '20px', marginBottom: '20px', justifyContent: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', fontWeight: '900', textTransform: 'uppercase', color: '#000' }}>
             <div style={{ width: '12px', height: '12px', backgroundColor: '#3b82f6', borderRadius: '4px', border: '2px solid #000' }} /> PENDIENTES
@@ -118,7 +112,6 @@ export default function CalendarioLiteral() {
           </div>
         </div>
 
-        {/* GRILLA CALENDARIO */}
         <div style={{ 
           display: 'grid', 
           gridTemplateColumns: 'repeat(7, 1fr)', 
@@ -154,7 +147,6 @@ export default function CalendarioLiteral() {
                 <span style={{ position: 'absolute', top: '8px', left: '10px', fontWeight: '950', fontSize: '16px', color: '#000' }}>{dia}</span>
                 
                 <div style={{ position: 'absolute', bottom: '10px', right: '10px', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
-                  {/* PENDIENTES (Estilo Magnético) */}
                   {dataDia.pendientes.length > 0 && (
                     <motion.div 
                       initial={{ scale: 0 }} animate={{ scale: 1 }}
@@ -163,7 +155,6 @@ export default function CalendarioLiteral() {
                       {dataDia.pendientes.length}
                     </motion.div>
                   )}
-                  {/* ENTREGADOS */}
                   {dataDia.entregados.length > 0 && (
                     <motion.div 
                       initial={{ scale: 0 }} animate={{ scale: 1 }}
@@ -178,7 +169,6 @@ export default function CalendarioLiteral() {
           })}
         </div>
 
-        {/* MODAL "CARPETA DE PRODUCCIÓN" */}
         <AnimatePresence>
           {diaSeleccionado && (
             <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '15px' }}>
@@ -188,7 +178,6 @@ export default function CalendarioLiteral() {
                 exit={{ y: 100, opacity: 0 }}
                 style={{ backgroundColor: '#fff', width: '100%', maxWidth: '500px', borderRadius: '32px', border: '5px solid #000', overflow: 'hidden', boxShadow: '15px 15px 0px #3b82f6' }}
               >
-                {/* Header Modal Estilo Ficha */}
                 <div style={{ backgroundColor: '#000', color: '#fff', padding: '25px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '5px solid #000' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <CalendarIcon size={24} color="#fbbf24" />
@@ -201,19 +190,18 @@ export default function CalendarioLiteral() {
 
                 <div style={{ padding: '25px', maxHeight: '65vh', overflowY: 'auto', backgroundColor: '#f8fafc', display: 'flex', flexDirection: 'column', gap: '20px' }}>
                   
-                  {/* SECCIÓN PENDIENTES */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <Scissors size={18} color="#3b82f6" />
-                    <p style={{ margin: 0, fontSize: '13px', fontWeight: '950', color: '#3b82f6', letterSpacing: '1px', textTransform: 'uppercase' }}>PENDIENTES DE ENTREGA ({pedidosAgrupados[diaSeleccionado]?.pendientes.length})</p>
+                    <p style={{ margin: 0, fontSize: '13px', fontWeight: '950', color: '#3b82f6', letterSpacing: '1px', textTransform: 'uppercase' }}>PENDIENTES DE ENTREGA ({pedidosAgrupados[diaSeleccionado]?.pendientes.length || 0})</p>
                   </div>
                   
-                  {pedidosAgrupados[diaSeleccionado]?.pendientes.length === 0 && (
+                  {(!pedidosAgrupados[diaSeleccionado]?.pendientes || pedidosAgrupados[diaSeleccionado].pendientes.length === 0) && (
                     <div style={{ padding: '20px', border: '3px dashed #cbd5e1', borderRadius: '20px', textAlign: 'center', color: '#64748b', fontWeight: '800', fontSize: '14px' }}>
                       Todo al día para esta fecha. 🧵
                     </div>
                   )}
                   
-                  {pedidosAgrupados[diaSeleccionado]?.pendientes.map((p: any) => (
+                  {pedidosAgrupados[diaSeleccionado]?.pendientes?.map((p: any) => (
                     <motion.div 
                       key={p.id} 
                       initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }}
@@ -221,7 +209,9 @@ export default function CalendarioLiteral() {
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', alignItems: 'center' }}>
                         <span style={{ fontWeight: '950', fontSize: '18px', color: '#000', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <User size={18} /> {p.clientes.nombre}
+                          <User size={18} /> 
+                          {/* FIX: Optional chaining para evitar el crash */}
+                          {p.clientes?.nombre || 'Cliente sin nombre'} 
                         </span>
                         <span style={{ background: '#fbbf24', border: '2px solid #000', padding: '4px 10px', borderRadius: '10px', fontSize: '11px', fontWeight: '950', color: '#000' }}>ID #{p.id}</span>
                       </div>
@@ -229,7 +219,7 @@ export default function CalendarioLiteral() {
                       <div style={{ backgroundColor: '#f1f5f9', padding: '12px', borderRadius: '16px', border: '2px solid #000', marginBottom: '15px' }}>
                         {p.detalles_pedido?.map((det: any, idx: number) => (
                           <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '5px' }}>
-                            <span style={{ fontWeight: '800', color: '#000' }}>{det.cantidad}x {det.inventario?.nombre}</span>
+                            <span style={{ fontWeight: '800', color: '#000' }}>{det.cantidad}x {det.inventario?.nombre || 'Producto'}</span>
                             <span style={{ fontWeight: '950', color: '#3b82f6' }}>TALLA {det.talla}</span>
                           </div>
                         ))}
@@ -245,7 +235,6 @@ export default function CalendarioLiteral() {
                     </motion.div>
                   ))}
 
-                  {/* PESTAÑA ENTREGADOS (COLAPSABLE) */}
                   <div style={{ marginTop: '10px' }}>
                     <motion.button 
                       whileHover={{ backgroundColor: '#e2e8f0' }}
@@ -253,8 +242,8 @@ export default function CalendarioLiteral() {
                       style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px', backgroundColor: '#fff', border: '3px solid #cbd5e1', borderRadius: '20px', color: '#64748b', fontWeight: '950', fontSize: '13px', cursor: 'pointer' }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <CheckCircle size={18} color={pedidosAgrupados[diaSeleccionado]?.entregados.length > 0 ? "#10b981" : "#cbd5e1"} />
-                        <span>YA ENTREGADOS ({pedidosAgrupados[diaSeleccionado]?.entregados.length})</span>
+                        <CheckCircle size={18} color={(pedidosAgrupados[diaSeleccionado]?.entregados?.length > 0) ? "#10b981" : "#cbd5e1"} />
+                        <span>YA ENTREGADOS ({pedidosAgrupados[diaSeleccionado]?.entregados?.length || 0})</span>
                       </div>
                       {verEntregados ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
                     </motion.button>
@@ -265,11 +254,11 @@ export default function CalendarioLiteral() {
                           initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
                           style={{ overflow: 'hidden', marginTop: '15px', display: 'flex', flexDirection: 'column', gap: '12px' }}
                         >
-                          {pedidosAgrupados[diaSeleccionado]?.entregados.map((p: any) => (
+                          {pedidosAgrupados[diaSeleccionado]?.entregados?.map((p: any) => (
                             <div key={p.id} style={{ backgroundColor: '#f0fdf4', border: '2px solid #bcf0da', borderRadius: '18px', padding: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                               <div>
-                                <p style={{ margin: 0, fontWeight: '900', fontSize: '14px', color: '#166534' }}>{p.clientes.nombre}</p>
-                                <p style={{ margin: '2px 0 0 0', fontSize: '11px', color: '#64748b', fontWeight: '700' }}>ID #{p.id} • {p.detalles_pedido.length} items</p>
+                                <p style={{ margin: 0, fontWeight: '900', fontSize: '14px', color: '#166534' }}>{p.clientes?.nombre || 'S/N'}</p>
+                                <p style={{ margin: '2px 0 0 0', fontSize: '11px', color: '#64748b', fontWeight: '700' }}>ID #{p.id} • {p.detalles_pedido?.length || 0} items</p>
                               </div>
                               <div style={{ backgroundColor: '#fff', padding: '6px', borderRadius: '10px', border: '2px solid #166534' }}>
                                 <CheckCircle size={16} color="#166534" />
