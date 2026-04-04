@@ -119,7 +119,7 @@ export default function TicketPedido() {
         <div style={{ textAlign: 'center', borderBottom: '2px dashed #000', paddingBottom: '10px', marginBottom: '10px' }}>
           <ReceiptText size={35} color="#000" style={{ marginBottom: '5px' }} />
           <h1 style={{ margin: 0, fontSize: '18px', fontWeight: '1000' }}>Creaciones YOVI</h1>
-          <p style={{ margin: '2px 0', fontSize: '10px', fontWeight: '900' }}>Dirección: San Joaquín, Santiago</p>
+          <p style={{ margin: '2px 0', fontSize: '10px', fontWeight: '900' }}>Dirección: Vecinal 5989, San Joaquín</p>
           {/* FIX: Datos de contacto actualizados según petición */}
           <p style={{ margin: '2px 0', fontSize: '10px', fontWeight: '900' }}>WA: +569 7913 3576 | IG: @creacionesyovi</p>
         </div>
