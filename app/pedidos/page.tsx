@@ -8,7 +8,7 @@ import * as XLSX from 'xlsx-js-style'
 import { 
   ArrowLeft, Search, School, Phone, Calendar, Printer, Trash2, 
   MessageCircle, MessageSquare, Bell, Package, CheckCircle, 
-  X, History, User, CreditCard, Plus, Clock, Minus, ChevronDown, ChevronUp, Tag, Boxes, Download
+  X, History, User, CreditCard, Plus, Clock, Minus, ChevronDown, ChevronUp, Tag, Boxes, Download, FileText
 } from 'lucide-react'
 
 export default function VerPedidos() {
@@ -28,7 +28,7 @@ export default function VerPedidos() {
     fecha: new Date().toISOString().split('T')[0],
     metodo: 'Transferencia',
     esCorreccion: false,
-    deudaMaxima: 0 as number // FIX: Nueva propiedad para controlar el tope de pago
+    deudaMaxima: 0 as number 
   })
 
   const cargar = useCallback(async () => {
@@ -54,21 +54,24 @@ export default function VerPedidos() {
         return { ...d, p_nombre: prod?.nombre || 'Producto' }
       })
 
-      const itemsEntregados = detalles?.length > 0 && detalles.every(d => d.estado === 'Entregado')
-      const itemsListos = detalles?.length > 0 && detalles.every(d => d.estado === 'Listo para retiro' || d.estado === 'Notificado' || d.estado === 'Entregado')
+      // NUEVA LÓGICA DE ESTADOS (Pilar 4 de la propuesta)
+      const todoEntregado = detalles?.length > 0 && detalles.every(d => (d.cantidad_entregada || 0) >= d.cantidad)
+      const algoEntregado = detalles?.some(d => (d.cantidad_entregada || 0) > 0)
+      const todoListo = detalles?.length > 0 && detalles.every(d => d.estado === 'Listo para retiro' || d.estado === 'Notificado' || d.estado === 'Entregado')
       const pagoCompleto = totalPagado >= p.total_final
       
       let estadoMacro = ''
       let colorBg = ''
       let colorText = '#000'
 
-      if (itemsEntregados && pagoCompleto) {
-        estadoMacro = 'FINALIZADO (OK)'; colorBg = '#4ade80'
-      } else if (itemsEntregados && !pagoCompleto) {
+      if (todoEntregado && pagoCompleto) {
+        estadoMacro = 'FINALIZADO'; colorBg = '#4ade80'
+      } else if (todoEntregado && !pagoCompleto) {
         estadoMacro = 'ENTREGADO (DEUDA)'; colorBg = '#fbbf24'
-      } else if (itemsListos) {
-        estadoMacro = pagoCompleto ? 'LISTO (PAGADO)' : 'LISTO (PEND. PAGO)'; 
-        colorBg = '#3b82f6'; colorText = '#fff'
+      } else if (todoListo && !todoEntregado) {
+        estadoMacro = 'LISTO PARA RETIRO'; colorBg = '#3b82f6'; colorText = '#fff'
+      } else if (algoEntregado) {
+        estadoMacro = 'ENTREGA PARCIAL'; colorBg = '#a78bfa'; colorText = '#fff'
       } else {
         estadoMacro = 'EN TALLER'; colorBg = '#f1f5f9'
       }
@@ -76,7 +79,7 @@ export default function VerPedidos() {
       return { 
         ...p, c_nombre: cliente?.nombre || 'S/N', c_telefono: cliente?.telefono || '', 
         detalles, pagos, total_pagado: totalPagado, estado_macro: estadoMacro, color_bg: colorBg, color_text: colorText,
-        pagoCompleto, itemsEntregados, itemsListos
+        pagoCompleto, todoEntregado
       }
     })
     setDatos(cruzados)
@@ -85,7 +88,6 @@ export default function VerPedidos() {
 
   useEffect(() => { cargar() }, [cargar])
 
-  // --- EXPORTACIÓN EXCEL ---
   const exportarExcel = () => {
     const dataFilas: any[] = []
     const headers = [
@@ -143,7 +145,9 @@ export default function VerPedidos() {
     try {
       const rpcFunc = cambio > 0 ? 'entregar_stock' : 'revertir_entrega_stock'
       await supabase.rpc(rpcFunc, { prod_id: det.producto_id, cant: Math.abs(cambio) })
-      const nuevoEstado = nuevaCantidad === det.cantidad ? 'Entregado' : 'Pendiente'
+      
+      const nuevoEstado = nuevaCantidad === det.cantidad ? 'Entregado' : (nuevaCantidad > 0 ? 'Parcial' : 'Listo para retiro')
+      
       await supabase.from('detalles_pedido').update({ cantidad_entregada: nuevaCantidad, estado: nuevoEstado }).eq('id', det.id)
       await registrarLog(`${cambio > 0 ? 'Entregó' : 'Restó'} ${Math.abs(cambio)} unidad(es) de ${det.p_nombre}`, `Pedido ${det.pedido_id}`)
       cargar()
@@ -177,12 +181,10 @@ export default function VerPedidos() {
 
   const guardarPago = async () => {
     const { pedidoId, monto, fecha, metodo, nombreCliente, esCorreccion, deudaMaxima } = modalPago
-    // FIX: Limpiamos símbolos antes de procesar el número
     const valorNum = Number(monto.toString().replace(/\D/g, ''))
     
     if (valorNum <= 0) return alert("Ingresa un monto válido")
     
-    // VALIDACIÓN: Evitar pagos superiores a la deuda o correcciones mayores a lo pagado
     if (valorNum > deudaMaxima) {
       const msg = esCorreccion 
         ? `No puedes descontar más de lo que el cliente ya pagó ($${deudaMaxima.toLocaleString('es-CL')})`
@@ -214,7 +216,6 @@ export default function VerPedidos() {
     }
   }
 
-  // FIX: Función para mostrar separadores de mil y símbolo $ en el input
   const formatMontoInput = (val: string | number) => {
     const raw = val.toString().replace(/\D/g, '')
     if (!raw) return ''
@@ -239,7 +240,7 @@ export default function VerPedidos() {
   const filtrados = datos.filter(p => {
     const t = busqueda.toLowerCase()
     return p.c_nombre.toLowerCase().includes(t) || p.c_telefono.includes(t) || (p.colegio && p.colegio.toLowerCase().includes(t)) || p.id.toString().includes(t)
-  }).filter(p => filtro === 'Todos' || (filtro === 'Pendientes' && p.estado_macro !== 'FINALIZADO (OK)') || p.estado_macro === filtro)
+  }).filter(p => filtro === 'Todos' || p.estado_macro === filtro)
 
   // ESTILOS
   const containerStyle = { minHeight: '100vh', backgroundColor: '#f8fafc', backgroundImage: `radial-gradient(#cbd5e1 1.5px, transparent 1.5px)`, backgroundSize: '32px 32px', padding: '40px 20px', fontFamily: 'system-ui, -apple-system, sans-serif' }
@@ -287,9 +288,12 @@ export default function VerPedidos() {
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#000', fontWeight: '900', fontSize: '12px' }}><Calendar size={14} /> ENTREGA: {fechaEntrega}</div>
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <p style={labelStyle}>Institución</p>
-                    <p style={{ margin: 0, fontWeight: '950', fontSize: '14px', color: '#000' }}><School size={14} /> {p.colegio || 'Particular'}</p>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                     <button onClick={() => window.open(`/ticket/${p.id}`, '_blank')} title="Imprimir Ticket" style={{ background: '#fff', border: '2px solid #000', borderRadius: '10px', padding: '5px', cursor: 'pointer' }}><Printer size={18} color="#000" /></button>
+                     {/* BOTÓN NUEVO: VALE DE ENTREGA (Pilar 2) */}
+                     <button onClick={() => window.open(`/vale-entrega/${p.id}`, '_blank')} title="Generar Vale de Entrega" style={{ background: '#000', color: '#fff', border: '2px solid #000', borderRadius: '10px', padding: '5px', cursor: 'pointer' }}>
+                        <FileText size={18} />
+                     </button>
                   </div>
                 </div>
 
@@ -314,7 +318,7 @@ export default function VerPedidos() {
                               <p style={{ margin: 0, fontWeight: '900', fontSize: '15px', color: '#000' }}>{det.cantidad}x {det.p_nombre}</p>
                               <p style={{ margin: 0, fontSize: '12px', fontWeight: '800', color: '#64748b' }}>Talla: {det.talla} • ${Number(det.precio_unitario).toLocaleString()} c/u</p>
                               <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <span style={{ fontSize: '11px', fontWeight: '900', color: '#000', backgroundColor: det.cantidad_entregada === det.cantidad ? '#4ade80' : '#f1f5f9', padding: '2px 8px', borderRadius: '6px', border: '1px solid #000' }}>
+                                <span style={{ fontSize: '11px', fontWeight: '900', color: '#000', backgroundColor: (det.cantidad_entregada || 0) >= det.cantidad ? '#4ade80' : '#f1f5f9', padding: '2px 8px', borderRadius: '6px', border: '1px solid #000' }}>
                                   ENTREGADO: {det.cantidad_entregada || 0} de {det.cantidad}
                                 </span>
                               </div>
@@ -365,9 +369,7 @@ export default function VerPedidos() {
                     <p style={labelStyle}>PAGADO</p>
                     <p style={{ fontSize: '16px', fontWeight: '950', color: '#166534', margin: 0 }}>${Number(p.total_pagado || 0).toLocaleString('es-CL')}</p>
                     <div style={{ position: 'absolute', right: '5px', top: '15px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                       {/* FIX: Se pasa la deuda máxima al modal de pago */}
                        <button onClick={() => setModalPago({ ...modalPago, open: true, pedidoId: p.id, nombreCliente: p.c_nombre, esCorreccion: false, deudaMaxima: deuda })} style={{ background: '#000', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}><Plus size={12} /></button>
-                       {/* FIX: Se pasa el total pagado como límite para la corrección */}
                        <button onClick={() => setModalPago({ ...modalPago, open: true, pedidoId: p.id, nombreCliente: p.c_nombre, esCorreccion: true, deudaMaxima: p.total_pagado })} style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}><Minus size={12} /></button>
                     </div>
                   </div>
@@ -381,7 +383,6 @@ export default function VerPedidos() {
                   <button onClick={() => borrarPedido(p.id, p.c_nombre)} style={{ color: '#ef4444', fontWeight: '900', border: 'none', background: 'none', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px' }}><Trash2 size={16} /> ELIMINAR</button>
                   <div style={{ display: 'flex', gap: '12px' }}>
                     <button onClick={() => window.open(`https://wa.me/${p.c_telefono}`, '_blank')} style={{ background: '#22c55e', color: '#fff', padding: '10px', borderRadius: '14px', border: '2px solid #000', cursor: 'pointer' }}><MessageCircle size={20} /></button>
-                    <button onClick={() => window.open(`/ticket/${p.id}`, '_blank')} style={{ background: '#fff', color: '#000', padding: '10px', borderRadius: '14px', border: '2px solid #000', cursor: 'pointer' }}><Printer size={20} /></button>
                   </div>
                 </div>
               </motion.div>
@@ -418,7 +419,6 @@ export default function VerPedidos() {
                   <button onClick={() => setModalPago({...modalPago, open: false})} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={28} /></button>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                  {/* FIX: Input ahora es de texto para permitir separadores de mil y símbolo $ */}
                   <div>
                     <label style={labelStyle}>Monto a {modalPago.esCorreccion ? 'Descontar' : 'Abonar'}</label>
                     <input 
