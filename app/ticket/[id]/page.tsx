@@ -4,7 +4,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '../../../lib/supabase'
 import { Printer, ArrowLeft, ReceiptText, Smartphone, Share2 } from 'lucide-react'
 import { motion } from 'framer-motion'
-// Importamos jsPDF para generar el documento real
+// Generador de PDF y capturador de imagen
 import { jsPDF } from 'jspdf'
 import * as htmlToImage from 'html-to-image'
 
@@ -23,7 +23,6 @@ export default function TicketPedido() {
 
       try {
         setLoading(true)
-        // Mantenemos la consulta forzada a número para evitar el error de UUID
         const [pRes, dRes, pgRes, iRes] = await Promise.all([
           supabase.from('pedidos').select('*').eq('id', Number(id)).single(),
           supabase.from('detalles_pedido').select('*').eq('pedido_id', Number(id)),
@@ -45,25 +44,32 @@ export default function TicketPedido() {
     cargarDatos()
   }, [id, router])
 
-  // FUNCIÓN MAESTRA: Genera PDF y lo comparte como archivo
+  // FIX: Función de PDF mejorada para que no salga cortado
   const compartirTicketPDF = async () => {
     if (!ticketRef.current || !pedido) return
     setGenerando(true)
     
     try {
-      // 1. Capturamos el ticket como imagen de alta calidad
+      // 1. Capturamos el ticket con un pixelRatio alto para que no pierda calidad
       const dataUrl = await htmlToImage.toPng(ticketRef.current, { 
         backgroundColor: '#ffffff',
         pixelRatio: 3 
       })
 
-      // 2. Creamos un PDF de tamaño boleta (75mm de ancho)
+      // 2. Calculamos las dimensiones reales para el PDF
+      const img = new Image()
+      img.src = dataUrl
+      await new Promise((resolve) => (img.onload = resolve))
+
+      const pdfWidth = 75 // 75mm fijos de ancho
+      const pdfHeight = (img.height * pdfWidth) / img.width // Altura proporcional automática
+
       const pdf = new jsPDF({
         unit: 'mm',
-        format: [75, 180] 
+        format: [pdfWidth, pdfHeight] // El PDF ahora crece según el contenido
       })
 
-      pdf.addImage(dataUrl, 'PNG', 0, 0, 75, 150) 
+      pdf.addImage(dataUrl, 'PNG', 0, 0, pdfWidth, pdfHeight) 
       
       const pdfBlob = pdf.output('blob')
       const file = new File([pdfBlob], `Ticket_CreacionesYovi_#${pedido.id}.pdf`, { type: 'application/pdf' })
@@ -72,14 +78,14 @@ export default function TicketPedido() {
         await navigator.share({
           files: [file],
           title: `Ticket #${pedido.id}`,
-          text: `Hola ${pedido.clientes.nombre}, adjunto tu comprobante de compra.`
+          text: `Hola ${pedido.clientes.nombre}, adjunto tu comprobante de compra de Creaciones Yovi.`
         })
       } else {
         pdf.save(`Ticket_#${pedido.id}.pdf`)
       }
     } catch (err) {
       console.error('Error al compartir PDF:', err)
-      alert("No se pudo generar el archivo.")
+      alert("Error al generar el archivo.")
     } finally {
       setGenerando(false)
     }
@@ -119,8 +125,7 @@ export default function TicketPedido() {
         <div style={{ textAlign: 'center', borderBottom: '2px dashed #000', paddingBottom: '10px', marginBottom: '10px' }}>
           <ReceiptText size={35} color="#000" style={{ marginBottom: '5px' }} />
           <h1 style={{ margin: 0, fontSize: '18px', fontWeight: '1000' }}>Creaciones YOVI</h1>
-          <p style={{ margin: '2px 0', fontSize: '10px', fontWeight: '900' }}>Dirección: Vecinal 5989, San Joaquín</p>
-          {/* FIX: Datos de contacto actualizados según petición */}
+          {/* FIX: Se eliminó el apartado de la dirección */}
           <p style={{ margin: '2px 0', fontSize: '10px', fontWeight: '900' }}>WA: +569 7913 3576 | IG: @creacionesyovi</p>
         </div>
 
@@ -160,10 +165,8 @@ export default function TicketPedido() {
           </div>
         </div>
 
-        {/* PIE DE PÁGINA: Fecha de entrega resaltada */}
         <div style={{ textAlign: 'center', marginTop: '15px', borderTop: '2px dashed #000', paddingTop: '10px' }}>
           <div style={{ backgroundColor: '#000', color: '#fff', padding: '6px', marginBottom: '8px', borderRadius: '4px' }}>
-            {/* FIX: Aumentamos tamaño y peso de la fecha de entrega */}
             <p style={{ fontSize: '13px', fontWeight: '1000', margin: 0, textTransform: 'uppercase' }}>
               ENTREGA: {pedido.fecha_entrega ? new Date(pedido.fecha_entrega).toLocaleDateString('es-CL') : 'A CONVENIR'}
             </p>
