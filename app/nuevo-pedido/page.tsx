@@ -44,7 +44,8 @@ export default function RegistroPedido() {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    setUsuarioActivo(localStorage.getItem('user_name') || '')
+    // Restauramos el fallback para que los logs no salgan vacíos
+    setUsuarioActivo(localStorage.getItem('user_name') || 'Don Luis')
     const fetch = async () => {
       const { data: inv } = await supabase.from('inventario').select('*').order('nombre')
       if (inv) {
@@ -74,7 +75,9 @@ export default function RegistroPedido() {
   const tallasDeInventario = useMemo(() => inventario.filter(i => i.nombre === nombreSeleccionado), [nombreSeleccionado, inventario])
 
   const agregarAlCarrito = () => {
-    if (cantidad === '' || Number(cantidad) <= 0) {
+    // FIX: Aseguramos que la cantidad no sea negativa
+    const cantLimpia = cantidad.toString().replace(/\D/g, '')
+    if (cantLimpia === '' || Number(cantLimpia) <= 0) {
       return alert("Tienes que ingresar una cantidad válida antes de añadir al pedido.")
     }
 
@@ -83,11 +86,11 @@ export default function RegistroPedido() {
       const rawPrecio = precioManualEspecial.toString().replace(/\D/g, '')
       if (!rawPrecio) return alert("Ingresa el precio para la talla especial")
       precio = Number(rawPrecio)
-      item = { id_inv: tallasDeInventario[0]?.id, nombre: nombreSeleccionado, talla: 'ESPECIAL', precio, cantidad: Number(cantidad) }
+      item = { id_inv: tallasDeInventario[0]?.id, nombre: nombreSeleccionado, talla: 'ESPECIAL', precio, cantidad: Number(cantLimpia) }
     } else {
       const invItem = inventario.find(i => i.nombre === nombreSeleccionado && i.talla === tallaSeleccionada)
       precio = Number(invItem?.precio_base || 0)
-      item = { id_inv: invItem.id, nombre: nombreSeleccionado, talla: tallaSeleccionada, precio, cantidad: Number(cantidad) }
+      item = { id_inv: invItem.id, nombre: nombreSeleccionado, talla: tallaSeleccionada, precio, cantidad: Number(cantLimpia) }
     }
     setCarrito([...carrito, { ...item, tempId: Date.now() }])
     setPrecioManualEspecial('')
@@ -152,12 +155,14 @@ export default function RegistroPedido() {
       
       for (const item of carrito) {
         if (item.id_inv) {
+          // Lógica de stock según tipo de entrega
           const rpcFunc = tipoEntrega === 'inmediata' ? 'entregar_stock' : 'reservar_stock'
           await supabase.rpc(rpcFunc, { prod_id: item.id_inv, cant: item.cantidad })
         }
       }
       
-      await registrarLog(`${usuarioActivo} creó venta de $${totalConDescuento}`, `Pedido #${ped.id}`)
+      // Log detallado para Don Luis
+      await registrarLog(`${usuarioActivo} creó venta ${tipoEntrega.toUpperCase()} de $${totalConDescuento}`, `Pedido #${ped.id}`)
       alert(`✅ Venta registrada correctamente como Pedido #${ped.id}`); 
       router.push('/pedidos')
     } catch (err: any) { alert(err.message) }
@@ -263,7 +268,7 @@ export default function RegistroPedido() {
                 placeholder="CANT." 
                 style={{...inputStyle, textAlign: 'center'}} 
                 value={cantidad} 
-                onChange={e => setCantidad(e.target.value === '' ? '' : Number(e.target.value))} 
+                onChange={e => setCantidad(e.target.value === '' ? '' : Number(e.target.value.replace(/\D/g, '')))} 
               />
             </div>
             <div style={{ marginBottom: '20px' }}>
@@ -274,7 +279,6 @@ export default function RegistroPedido() {
               {tallaSeleccionada === 'ESPECIAL' && (
                 <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} style={{ marginTop: '12px' }}>
                   <label style={labelStyle}><Banknote size={14} /> Precio Acordado ($)</label>
-                  {/* FIX: Formateo de moneda en talla especial */}
                   <input 
                     type="text" 
                     style={{...inputStyle, borderColor: '#f472b6'}} 
