@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { 
   ArrowLeft, School, CheckCircle, User, Loader2, 
   PackageCheck, Scissors, ChevronDown, ChevronUp, Boxes, 
-  AlertTriangle, RefreshCw 
+  AlertTriangle, RefreshCw, Calendar, Hash 
 } from 'lucide-react'
 
 export default function PaginaProduccion() {
@@ -19,11 +19,12 @@ export default function PaginaProduccion() {
 
   const cargarPendientes = async () => {
     setLoading(true)
+    // FIX: Agregamos fecha_entrega a la consulta de pedidos
     const { data: detalles } = await supabase
       .from('detalles_pedido')
       .select(`
         *,
-        pedidos (id, colegio, clientes (nombre)),
+        pedidos (id, colegio, fecha_entrega, clientes (nombre)),
         inventario (nombre)
       `)
       .neq('estado', 'Entregado')
@@ -53,7 +54,9 @@ export default function PaginaProduccion() {
             id: item.id,
             nombre: item.pedidos?.clientes?.nombre,
             cantidad: faltan,
-            pedido_id: item.pedidos?.id
+            pedido_id: item.pedidos?.id,
+            // Guardamos la fecha para mostrarla
+            fecha: item.pedidos?.fecha_entrega 
           })
         }
         return acc
@@ -78,7 +81,7 @@ export default function PaginaProduccion() {
         .eq('id', detalleId)
       if (error) throw error
       await registrarLog(
-        `${sessionStorage.getItem('user_name') || 'Don Luis'} movió a STOCK CLIENTE: ${producto}`,
+        `${localStorage.getItem('user_name') || 'Don Luis'} movió a STOCK CLIENTE: ${producto}`,
         `Reservado para: ${clienteNombre} (ID: ${detalleId})`
       )
       cargarPendientes() 
@@ -89,7 +92,6 @@ export default function PaginaProduccion() {
 
   const colegiosDisponibles = ['Todos', ...Array.from(new Set(pendientes.map(p => p.nombre)))]
 
-  // ESTILOS UNIFICADOS
   const containerStyle = { minHeight: '100vh', backgroundColor: '#f8fafc', backgroundImage: `radial-gradient(#cbd5e1 1.5px, transparent 1.5px)`, backgroundSize: '32px 32px', padding: '40px 20px', fontFamily: 'system-ui, -apple-system, sans-serif' }
   const schoolCardStyle = { border: '4px solid #000', borderRadius: '28px', overflow: 'hidden', boxShadow: '8px 8px 0px #000', backgroundColor: '#fff', marginBottom: '25px' }
 
@@ -97,7 +99,6 @@ export default function PaginaProduccion() {
     <main style={containerStyle}>
       <div style={{ maxWidth: '650px', margin: '0 auto' }}>
         
-        {/* HEADER PRO */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '35px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
             <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => router.push('/')} style={{ backgroundColor: '#fff', border: '3px solid #000', padding: '12px', borderRadius: '16px', boxShadow: '4px 4px 0px #000', cursor: 'pointer' }}>
@@ -114,7 +115,6 @@ export default function PaginaProduccion() {
           </motion.button>
         </div>
 
-        {/* FILTRO DE COLEGIOS NEUBRUTALISTA */}
         <div style={{ marginBottom: '30px', display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '15px' }}>
           {colegiosDisponibles.map(c => (
             <motion.button 
@@ -158,7 +158,6 @@ export default function PaginaProduccion() {
                 transition={{ delay: idx * 0.1 }}
                 style={schoolCardStyle}
               >
-                {/* CABECERA COLEGIO */}
                 <div 
                   onClick={() => setExpandirColegio(expandirColegio === col.nombre ? null : col.nombre)}
                   style={{ backgroundColor: '#000', color: '#fff', padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
@@ -174,7 +173,6 @@ export default function PaginaProduccion() {
                   </div>
                 </div>
 
-                {/* LISTADO DE PRODUCTOS */}
                 <AnimatePresence>
                   {expandirColegio === col.nombre && (
                     <motion.div 
@@ -190,7 +188,7 @@ export default function PaginaProduccion() {
                                 <p style={{ fontSize: '14px', fontWeight: '900', color: '#3b82f6', margin: '4px 0 0 0' }}>TALLA: {prod.talla}</p>
                               </div>
                               <div style={{ textAlign: 'right', backgroundColor: '#fff1f2', padding: '8px 15px', borderRadius: '16px', border: '2px solid #e11d48' }}>
-                                <p style={{ fontSize: '10px', fontWeight: '950', color: '#e11d48', margin: 0 }}>PENDIENTES</p>
+                                <p style={{ fontSize: '10px', fontWeight: '950', color: '#e11d48', margin: 0 }}>TOTAL</p>
                                 <p style={{ fontSize: '28px', fontWeight: '950', color: '#e11d48', lineHeight: 1, margin: 0 }}>{prod.total}</p>
                               </div>
                             </div>
@@ -199,10 +197,25 @@ export default function PaginaProduccion() {
                               {prod.clientes.map((cli: any, cIdx: number) => (
                                 <div key={cIdx} style={{ backgroundColor: '#f8fafc', border: '2.5px solid #000', padding: '16px', borderRadius: '18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                   <div>
-                                    <p style={{ fontSize: '15px', fontWeight: '900', color: '#000', margin: 0 }}>{cli.nombre}</p>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
-                                      <Boxes size={14} color="#64748b" />
-                                      <p style={{ fontSize: '13px', fontWeight: '800', color: '#64748b', margin: 0 }}>PEDIDO: {cli.cantidad} UNID.</p>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                                      {/* NUEVO: Mostramos ID de Pedido */}
+                                      <span style={{ backgroundColor: '#000', color: '#fff', padding: '2px 8px', borderRadius: '8px', fontSize: '10px', fontWeight: '950' }}>
+                                        #{cli.pedido_id.toString().padStart(4, '0')}
+                                      </span>
+                                      <p style={{ fontSize: '15px', fontWeight: '900', color: '#000', margin: 0 }}>{cli.nombre}</p>
+                                    </div>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <Boxes size={14} color="#64748b" />
+                                        <p style={{ fontSize: '13px', fontWeight: '800', color: '#64748b', margin: 0 }}>{cli.cantidad} UNID.</p>
+                                      </div>
+                                      {/* NUEVO: Fecha de entrega resaltada */}
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <Calendar size={14} color="#ef4444" />
+                                        <p style={{ fontSize: '12px', fontWeight: '950', color: '#ef4444', margin: 0 }}>
+                                          PARA: {cli.fecha ? new Date(cli.fecha).toLocaleDateString('es-CL') : 'S/F'}
+                                        </p>
+                                      </div>
                                     </div>
                                   </div>
                                   <motion.button 

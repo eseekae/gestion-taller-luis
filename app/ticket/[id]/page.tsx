@@ -60,16 +60,14 @@ export default function TicketPedido() {
       // 2. Creamos un PDF de tamaño boleta (75mm de ancho)
       const pdf = new jsPDF({
         unit: 'mm',
-        format: [75, 180] // Formato boleta 75mm x 180mm aprox
+        format: [75, 180] 
       })
 
-      pdf.addImage(dataUrl, 'PNG', 0, 0, 75, 150) // Ajustamos la imagen al ancho del PDF
+      pdf.addImage(dataUrl, 'PNG', 0, 0, 75, 150) 
       
-      // 3. Convertimos el PDF a un Blob y luego a un File real
       const pdfBlob = pdf.output('blob')
       const file = new File([pdfBlob], `Ticket_CreacionesYovi_#${pedido.id}.pdf`, { type: 'application/pdf' })
 
-      // 4. Usamos el menú nativo para compartir el ARCHIVO, no el link
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({
           files: [file],
@@ -77,12 +75,11 @@ export default function TicketPedido() {
           text: `Hola ${pedido.clientes.nombre}, adjunto tu comprobante de compra.`
         })
       } else {
-        // Fallback: Descarga directa si el navegador no deja compartir archivos
         pdf.save(`Ticket_#${pedido.id}.pdf`)
       }
     } catch (err) {
       console.error('Error al compartir PDF:', err)
-      alert("No se pudo generar el archivo para compartir.")
+      alert("No se pudo generar el archivo.")
     } finally {
       setGenerando(false)
     }
@@ -100,7 +97,6 @@ export default function TicketPedido() {
   return (
     <main style={{ minHeight: '100vh', backgroundColor: '#e2e8f0', padding: '20px', fontFamily: 'monospace', color: '#000' }}>
       
-      {/* BOTONES DE ACCIÓN */}
       <div className="no-print" style={{ maxWidth: '400px', margin: '0 auto 20px auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
         <button onClick={() => router.push('/pedidos')} style={{ padding: '12px', background: '#fff', border: '3px solid #000', borderRadius: '12px', fontWeight: '950', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', boxShadow: '4px 4px 0px #000' }}>
           <ArrowLeft size={18} /> VOLVER
@@ -109,7 +105,6 @@ export default function TicketPedido() {
           <Printer size={18} /> IMPRIMIR
         </button>
         
-        {/* BOTÓN COMPARTIR PDF */}
         <button 
           onClick={compartirTicketPDF} 
           disabled={generando}
@@ -119,14 +114,14 @@ export default function TicketPedido() {
         </button>
       </div>
 
-      {/* DISEÑO TICKET 75mm (BLACK ON WHITE) */}
       <div ref={ticketRef} style={{ maxWidth: '280px', margin: '0 auto', backgroundColor: '#ffffff', border: '2px solid #000', padding: '15px', color: '#000' }}>
         
         <div style={{ textAlign: 'center', borderBottom: '2px dashed #000', paddingBottom: '10px', marginBottom: '10px' }}>
           <ReceiptText size={35} color="#000" style={{ marginBottom: '5px' }} />
           <h1 style={{ margin: 0, fontSize: '18px', fontWeight: '1000' }}>Creaciones YOVI</h1>
-          <p style={{ margin: '2px 0', fontSize: '10px', fontWeight: '900' }}>Dirección: San Joaquín, Santiago</p>
-          <p style={{ margin: '2px 0', fontSize: '10px', fontWeight: '900' }}>WA: +569 8450 7104 | IG: @creaciones_yovi</p>
+          <p style={{ margin: '2px 0', fontSize: '10px', fontWeight: '900' }}>Dirección: Vecinal 5989, San Joaquín</p>
+          {/* FIX: Datos de contacto actualizados según petición */}
+          <p style={{ margin: '2px 0', fontSize: '10px', fontWeight: '900' }}>WA: +569 7913 3576 | IG: @creacionesyovi</p>
         </div>
 
         <div style={{ fontSize: '10px', fontWeight: '900', borderBottom: '1px solid #000', paddingBottom: '8px', marginBottom: '8px' }}>
@@ -165,9 +160,15 @@ export default function TicketPedido() {
           </div>
         </div>
 
+        {/* PIE DE PÁGINA: Fecha de entrega resaltada */}
         <div style={{ textAlign: 'center', marginTop: '15px', borderTop: '2px dashed #000', paddingTop: '10px' }}>
-          <p style={{ fontSize: '9px', fontWeight: '950', margin: 0 }}>ENTREGA: {pedido.fecha_entrega ? new Date(pedido.fecha_entrega).toLocaleDateString('es-CL') : 'A CONVENIR'}</p>
-          <p style={{ fontSize: '9px', fontWeight: '950', marginTop: '5px' }}>*** COMPROBANTE DE VENTA INTERNA ***</p>
+          <div style={{ backgroundColor: '#000', color: '#fff', padding: '6px', marginBottom: '8px', borderRadius: '4px' }}>
+            {/* FIX: Aumentamos tamaño y peso de la fecha de entrega */}
+            <p style={{ fontSize: '13px', fontWeight: '1000', margin: 0, textTransform: 'uppercase' }}>
+              ENTREGA: {pedido.fecha_entrega ? new Date(pedido.fecha_entrega).toLocaleDateString('es-CL') : 'A CONVENIR'}
+            </p>
+          </div>
+          <p style={{ fontSize: '9px', fontWeight: '950', margin: 0 }}>*** COMPROBANTE DE VENTA INTERNA ***</p>
         </div>
       </div>
 

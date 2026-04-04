@@ -23,7 +23,6 @@ export default function RegistroPedido() {
   const [tallaSeleccionada, setTallaSeleccionada] = useState('')
   const [precioManualEspecial, setPrecioManualEspecial] = useState('')
   
-  // FIX PREVIO: Estado inicial vacío para obligar al ingreso manual
   const [cantidad, setCantidad] = useState<number | string>('')
 
   const [nombreCliente, setNombreCliente] = useState('')
@@ -64,6 +63,13 @@ export default function RegistroPedido() {
     fetch()
   }, [])
 
+  // FIX: Función para separadores de mil y símbolo $
+  const formatMontoInput = (val: string | number) => {
+    const raw = val.toString().replace(/\D/g, '')
+    if (!raw) return ''
+    return `$${Number(raw).toLocaleString('es-CL')}`
+  }
+
   const productosUnicos = useMemo(() => Array.from(new Set(inventario.map(i => i.nombre))), [inventario])
   const tallasDeInventario = useMemo(() => inventario.filter(i => i.nombre === nombreSeleccionado), [nombreSeleccionado, inventario])
 
@@ -74,8 +80,9 @@ export default function RegistroPedido() {
 
     let item; let precio;
     if (tallaSeleccionada === 'ESPECIAL') {
-      if (!precioManualEspecial) return alert("Ingresa el precio para la talla especial")
-      precio = Number(precioManualEspecial)
+      const rawPrecio = precioManualEspecial.toString().replace(/\D/g, '')
+      if (!rawPrecio) return alert("Ingresa el precio para la talla especial")
+      precio = Number(rawPrecio)
       item = { id_inv: tallasDeInventario[0]?.id, nombre: nombreSeleccionado, talla: 'ESPECIAL', precio, cantidad: Number(cantidad) }
     } else {
       const invItem = inventario.find(i => i.nombre === nombreSeleccionado && i.talla === tallaSeleccionada)
@@ -100,10 +107,17 @@ export default function RegistroPedido() {
   const guardar = async (e: any) => {
     e.preventDefault()
     if (carrito.length === 0) return alert("Añade productos al pedido")
-    // VALIDACIÓN: Asegura exactamente 8 números antes de guardar
     if (telefono.length !== 8) return alert("El teléfono debe tener exactamente 8 números.")
     if (tipoEntrega === 'agendada' && !fechaEntrega) return alert("Selecciona una fecha de entrega")
     
+    // FIX: Limpiamos el abono antes de validar
+    const pagoFinal = Number(montoPagado.toString().replace(/\D/g, ''))
+    
+    // VALIDACIÓN: No permitir pagar más del total
+    if (pagoFinal > totalConDescuento) {
+      return alert(`No puedes abonar más del total de la venta ($${totalConDescuento.toLocaleString('es-CL')})`)
+    }
+
     setLoading(true)
     try {
       const telefonoCompleto = `+569${telefono}`
@@ -129,7 +143,6 @@ export default function RegistroPedido() {
       }))
       await supabase.from('detalles_pedido').insert(detalles)
       
-      const pagoFinal = Number(montoPagado)
       if (pagoFinal > 0) {
         await supabase.from('pagos').insert([{
           pedido_id: ped.id, monto: pagoFinal, fecha_pago: new Date().toISOString().split('T')[0], 
@@ -212,8 +225,6 @@ export default function RegistroPedido() {
                 <label style={labelStyle}><Phone size={14} /> Teléfono Móvil</label>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <div style={{ padding: '16px 10px', border: '3px solid #000', borderRadius: '16px', fontSize: '14px', fontWeight: '950', backgroundColor: '#e2e8f0', color: '#000', display: 'flex', alignItems: 'center' }}>+569</div>
-                  
-                  {/* AJUSTE: Limitamos a 8 números y mantenemos el prefijo predeterminado */}
                   <input 
                     required 
                     type="tel" 
@@ -224,7 +235,6 @@ export default function RegistroPedido() {
                     placeholder="87654321"
                   />
                 </div>
-                {/* ADVERTENCIA VISUAL: Avisa en tiempo real si faltan números */}
                 {telefono.length > 0 && telefono.length < 8 && (
                   <p style={{ color: '#ef4444', fontSize: '11px', fontWeight: '900', marginTop: '5px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <AlertCircle size={12} /> FALTAN {8 - telefono.length} NÚMEROS
@@ -264,7 +274,14 @@ export default function RegistroPedido() {
               {tallaSeleccionada === 'ESPECIAL' && (
                 <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} style={{ marginTop: '12px' }}>
                   <label style={labelStyle}><Banknote size={14} /> Precio Acordado ($)</label>
-                  <input type="number" style={{...inputStyle, borderColor: '#f472b6'}} placeholder="Valor especial" value={precioManualEspecial} onChange={e => setPrecioManualEspecial(e.target.value)} />
+                  {/* FIX: Formateo de moneda en talla especial */}
+                  <input 
+                    type="text" 
+                    style={{...inputStyle, borderColor: '#f472b6'}} 
+                    placeholder="Valor especial" 
+                    value={formatMontoInput(precioManualEspecial)} 
+                    onChange={e => setPrecioManualEspecial(e.target.value.replace(/\D/g, ''))} 
+                  />
                 </motion.div>
               )}
             </div>
@@ -326,7 +343,17 @@ export default function RegistroPedido() {
             </div>
 
             <div style={{ display: 'grid', gap: '20px' }}>
-              <div><label style={{ color: '#fff', fontSize: '11px', fontWeight: '950', marginBottom: '5px', display: 'block' }}>ABONO RECIBIDO ($)</label><input type="number" style={{ ...inputStyle, textAlign: 'center' }} value={montoPagado} onChange={e => setMontoPagado(e.target.value)} /></div>
+              <div>
+                <label style={{ color: '#fff', fontSize: '11px', fontWeight: '950', marginBottom: '5px', display: 'block' }}>ABONO RECIBIDO ($)</label>
+                {/* FIX: Formateo de moneda y seguridad en abono */}
+                <input 
+                  type="text" 
+                  style={{ ...inputStyle, textAlign: 'center' }} 
+                  value={formatMontoInput(montoPagado)} 
+                  onChange={e => setMontoPagado(e.target.value.replace(/\D/g, ''))} 
+                  placeholder="$0"
+                />
+              </div>
               <div>
                 <label style={{ color: '#fff', fontSize: '11px', fontWeight: '950', marginBottom: '5px', display: 'block' }}>MÉTODO</label>
                 <select style={inputStyle} value={metodoPago} onChange={e => setMetodoPago(e.target.value)}>
