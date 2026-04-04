@@ -19,7 +19,6 @@ export default function PaginaProduccion() {
 
   const cargarPendientes = async () => {
     setLoading(true)
-    // FIX: Agregamos fecha_entrega a la consulta de pedidos
     const { data: detalles } = await supabase
       .from('detalles_pedido')
       .select(`
@@ -28,7 +27,7 @@ export default function PaginaProduccion() {
         inventario (nombre)
       `)
       .neq('estado', 'Entregado')
-      .neq('estado', 'Listo para retiro') 
+      .neq('estado', 'Listo para retiro') // Filtramos los que ya están en el estante de retiro
 
     if (detalles) {
       const agrupado = detalles.reduce((acc: any, item: any) => {
@@ -55,7 +54,6 @@ export default function PaginaProduccion() {
             nombre: item.pedidos?.clientes?.nombre,
             cantidad: faltan,
             pedido_id: item.pedidos?.id,
-            // Guardamos la fecha para mostrarla
             fecha: item.pedidos?.fecha_entrega 
           })
         }
@@ -73,19 +71,26 @@ export default function PaginaProduccion() {
   }
 
   const enviarAStockCliente = async (detalleId: number, clienteNombre: string, producto: string) => {
-    if (!confirm(`¿Confirmar que la prenda de ${clienteNombre} está terminada y lista?`)) return
+    // FIX: Confirmación alineada al nuevo flujo logístico de Don Luis
+    if (!confirm(`¿Confirmar que la prenda de ${clienteNombre} está terminada y lista para retiro?`)) return
     try {
       const { error } = await supabase
         .from('detalles_pedido')
-        .update({ estado: 'Listo para retiro' })
+        .update({ estado: 'Listo para retiro' }) // Este estado activa el color azul en Pedidos
         .eq('id', detalleId)
+      
       if (error) throw error
+      
+      // Registro de auditoría detallado
       await registrarLog(
-        `${localStorage.getItem('user_name') || 'Don Luis'} movió a STOCK CLIENTE: ${producto}`,
-        `Reservado para: ${clienteNombre} (ID: ${detalleId})`
+        `${localStorage.getItem('user_name') || 'Don Luis'} pasó a LISTO PARA RETIRO: ${producto}`,
+        `Pedido #${detalleId} - Cliente: ${clienteNombre}`
       )
+      
       cargarPendientes() 
-    } catch (err) { alert("❌ Error al mover a stock.") }
+    } catch (err) { 
+      alert("❌ Error al actualizar el estado de producción.") 
+    }
   }
 
   useEffect(() => { cargarPendientes() }, [])
@@ -198,7 +203,6 @@ export default function PaginaProduccion() {
                                 <div key={cIdx} style={{ backgroundColor: '#f8fafc', border: '2.5px solid #000', padding: '16px', borderRadius: '18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                   <div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                                      {/* NUEVO: Mostramos ID de Pedido */}
                                       <span style={{ backgroundColor: '#000', color: '#fff', padding: '2px 8px', borderRadius: '8px', fontSize: '10px', fontWeight: '950' }}>
                                         #{cli.pedido_id.toString().padStart(4, '0')}
                                       </span>
@@ -209,7 +213,6 @@ export default function PaginaProduccion() {
                                         <Boxes size={14} color="#64748b" />
                                         <p style={{ fontSize: '13px', fontWeight: '800', color: '#64748b', margin: 0 }}>{cli.cantidad} UNID.</p>
                                       </div>
-                                      {/* NUEVO: Fecha de entrega resaltada */}
                                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                         <Calendar size={14} color="#ef4444" />
                                         <p style={{ fontSize: '12px', fontWeight: '950', color: '#ef4444', margin: 0 }}>
