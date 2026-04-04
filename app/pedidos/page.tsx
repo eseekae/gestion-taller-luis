@@ -242,7 +242,6 @@ export default function VerPedidos() {
     return p.c_nombre.toLowerCase().includes(t) || p.c_telefono.includes(t) || (p.colegio && p.colegio.toLowerCase().includes(t)) || p.id.toString().includes(t)
   }).filter(p => filtro === 'Todos' || p.estado_macro === filtro)
 
-  // ESTILOS
   const containerStyle = { minHeight: '100vh', backgroundColor: '#f8fafc', backgroundImage: `radial-gradient(#cbd5e1 1.5px, transparent 1.5px)`, backgroundSize: '32px 32px', padding: '40px 20px', fontFamily: 'system-ui, -apple-system, sans-serif' }
   const cardStyle = { backgroundColor: '#fff', padding: '24px', borderRadius: '28px', border: '4px solid #000', boxShadow: '8px 8px 0px #000' }
   const labelStyle = { fontSize: '11px', fontWeight: '950', color: '#64748b', marginBottom: '4px', textTransform: 'uppercase' as const }
@@ -277,6 +276,9 @@ export default function VerPedidos() {
             const fechaEntrega = p.fecha_entrega ? new Date(p.fecha_entrega).toLocaleDateString('es-CL') : 'S/F'
             const expandido = !!expandidos[p.id]
             const idFormateado = p.id.toString().padStart(4, '0')
+            
+            // FIX: Candado inteligente para bloquear modificaciones
+            const esFinalizado = p.estado_macro === 'FINALIZADO'
 
             return (
               <motion.div key={p.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.05 }} style={cardStyle}>
@@ -290,7 +292,6 @@ export default function VerPedidos() {
                   </div>
                   <div style={{ display: 'flex', gap: '8px' }}>
                      <button onClick={() => window.open(`/ticket/${p.id}`, '_blank')} title="Imprimir Ticket" style={{ background: '#fff', border: '2px solid #000', borderRadius: '10px', padding: '5px', cursor: 'pointer' }}><Printer size={18} color="#000" /></button>
-                     {/* BOTÓN NUEVO: VALE DE ENTREGA (Pilar 2) */}
                      <button onClick={() => window.open(`/vale-entrega/${p.id}`, '_blank')} title="Generar Vale de Entrega" style={{ background: '#000', color: '#fff', border: '2px solid #000', borderRadius: '10px', padding: '5px', cursor: 'pointer' }}>
                         <FileText size={18} />
                      </button>
@@ -324,8 +325,9 @@ export default function VerPedidos() {
                               </div>
                             </div>
                             <div style={{ display: 'flex', gap: '6px' }}>
-                              <button onClick={() => actualizarEntregaItem(det, -1)} style={{ background: '#ef4444', color: '#fff', border: '2px solid #000', borderRadius: '8px', width: '30px', height: '30px', fontWeight: '950', cursor: 'pointer' }}>-</button>
-                              <button onClick={() => actualizarEntregaItem(det, 1)} style={{ background: '#4ade80', color: '#000', border: '2px solid #000', borderRadius: '8px', width: '30px', height: '30px', fontWeight: '950', cursor: 'pointer' }}>+</button>
+                              {/* FIX: Deshabilitar botones de entrega si está FINALIZADO */}
+                              <button disabled={esFinalizado} onClick={() => actualizarEntregaItem(det, -1)} style={{ background: '#ef4444', color: '#fff', border: '2px solid #000', borderRadius: '8px', width: '30px', height: '30px', fontWeight: '950', cursor: esFinalizado ? 'not-allowed' : 'pointer', opacity: esFinalizado ? 0.4 : 1 }}>-</button>
+                              <button disabled={esFinalizado} onClick={() => actualizarEntregaItem(det, 1)} style={{ background: '#4ade80', color: '#000', border: '2px solid #000', borderRadius: '8px', width: '30px', height: '30px', fontWeight: '950', cursor: esFinalizado ? 'not-allowed' : 'pointer', opacity: esFinalizado ? 0.4 : 1 }}>+</button>
                             </div>
                           </div>
                         ))}
@@ -341,20 +343,19 @@ export default function VerPedidos() {
                 </AnimatePresence>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '24px' }}>
+                  {/* FIX: Deshabilitar botones de acción si está FINALIZADO */}
                   <motion.button 
-                    whileHover={{ scale: 1.02, y: -2 }} 
-                    whileTap={{ scale: 0.98, y: 0 }} 
+                    disabled={esFinalizado}
                     onClick={() => notificarCliente(p)} 
-                    style={{ backgroundColor: '#3b82f6', color: '#fff', border: '3px solid #000', padding: '16px', borderRadius: '18px', fontWeight: '950', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '6px 6px 0px #000', cursor: 'pointer' }}
+                    style={{ backgroundColor: '#3b82f6', color: '#fff', border: '3px solid #000', padding: '16px', borderRadius: '18px', fontWeight: '950', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: esFinalizado ? 'none' : '6px 6px 0px #000', cursor: esFinalizado ? 'not-allowed' : 'pointer', opacity: esFinalizado ? 0.4 : 1 }}
                   >
                     <Bell size={20} /> AVISAR AL CLIENTE
                   </motion.button>
                   
                   <motion.button 
-                    whileHover={{ scale: 1.02, y: -2 }} 
-                    whileTap={{ scale: 0.98, y: 0 }} 
+                    disabled={esFinalizado}
                     onClick={() => entregarTodo(p)} 
-                    style={{ backgroundColor: '#4ade80', color: '#000', border: '3px solid #000', padding: '16px', borderRadius: '18px', fontWeight: '950', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '6px 6px 0px #000', cursor: 'pointer' }}
+                    style={{ backgroundColor: '#4ade80', color: '#000', border: '3px solid #000', padding: '16px', borderRadius: '18px', fontWeight: '950', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: esFinalizado ? 'none' : '6px 6px 0px #000', cursor: esFinalizado ? 'not-allowed' : 'pointer', opacity: esFinalizado ? 0.4 : 1 }}
                   >
                     <Package size={20} /> ENTREGA TOTAL
                   </motion.button>
@@ -369,13 +370,14 @@ export default function VerPedidos() {
                     <p style={labelStyle}>PAGADO</p>
                     <p style={{ fontSize: '16px', fontWeight: '950', color: '#166534', margin: 0 }}>${Number(p.total_pagado || 0).toLocaleString('es-CL')}</p>
                     <div style={{ position: 'absolute', right: '5px', top: '15px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                       <button onClick={() => setModalPago({ ...modalPago, open: true, pedidoId: p.id, nombreCliente: p.c_nombre, esCorreccion: false, deudaMaxima: deuda })} style={{ background: '#000', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}><Plus size={12} /></button>
-                       <button onClick={() => setModalPago({ ...modalPago, open: true, pedidoId: p.id, nombreCliente: p.c_nombre, esCorreccion: true, deudaMaxima: p.total_pagado })} style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}><Minus size={12} /></button>
+                       {/* FIX: Deshabilitar botones de pago si está FINALIZADO */}
+                       <button disabled={esFinalizado} onClick={() => setModalPago({ ...modalPago, open: true, pedidoId: p.id, nombreCliente: p.c_nombre, esCorreccion: false, deudaMaxima: deuda })} style={{ background: '#000', color: '#fff', border: 'none', borderRadius: '4px', cursor: esFinalizado ? 'not-allowed' : 'pointer', opacity: esFinalizado ? 0.3 : 1 }}><Plus size={12} /></button>
+                       <button disabled={esFinalizado} onClick={() => setModalPago({ ...modalPago, open: true, pedidoId: p.id, nombreCliente: p.c_nombre, esCorreccion: true, deudaMaxima: p.total_pagado })} style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: esFinalizado ? 'not-allowed' : 'pointer', opacity: esFinalizado ? 0.3 : 1 }}><Minus size={12} /></button>
                     </div>
                   </div>
                   <div style={{ background: deuda > 0 ? '#fef2f2' : '#f0fdf4', padding: '12px', borderRadius: '16px', border: '3px solid #000' }}>
                     <p style={labelStyle}>DEUDA</p>
-                    <p style={{ fontSize: '16px', fontWeight: '950', color: deuda > 0 ? '#b91c1c' : '#166534', margin: 0 }}>${deuda.toLocaleString('es-CL')}</p>
+                    <p style={{ fontSize: '14px', fontWeight: '950', color: deuda > 0 ? '#b91c1c' : '#166534', margin: 0 }}>${deuda.toLocaleString('es-CL')}</p>
                   </div>
                 </div>
 
