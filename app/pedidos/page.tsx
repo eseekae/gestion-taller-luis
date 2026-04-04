@@ -8,8 +8,8 @@ import * as XLSX from 'xlsx-js-style'
 import { 
   ArrowLeft, Search, School, Phone, Calendar, Printer, Trash2, 
   MessageCircle, MessageSquare, Bell, Package, CheckCircle, 
-  X, History, User, CreditCard, Plus, Clock, Minus, ChevronDown, ChevronUp, Tag, Boxes, Download
-} from 'lucide-react'
+  X, History, User, CreditCard, Plus, Clock, Minus, ChevronDown, ChevronUp, Tag, Boxes, Download, FileText
+} from 'lucide-center'
 
 export default function VerPedidos() {
   const router = useRouter()
@@ -28,7 +28,7 @@ export default function VerPedidos() {
     fecha: new Date().toISOString().split('T')[0],
     metodo: 'Transferencia',
     esCorreccion: false,
-    deudaMaxima: 0 as number // FIX: Nueva propiedad para controlar el tope de pago
+    deudaMaxima: 0
   })
 
   const cargar = useCallback(async () => {
@@ -54,21 +54,24 @@ export default function VerPedidos() {
         return { ...d, p_nombre: prod?.nombre || 'Producto' }
       })
 
-      const itemsEntregados = detalles?.length > 0 && detalles.every(d => d.estado === 'Entregado')
-      const itemsListos = detalles?.length > 0 && detalles.every(d => d.estado === 'Listo para retiro' || d.estado === 'Notificado' || d.estado === 'Entregado')
+      // NUEVA LÓGICA DE ESTADOS LOGÍSTICOS
+      const todoEntregado = detalles?.length > 0 && detalles.every(d => (d.cantidad_entregada || 0) >= d.cantidad)
+      const algoEntregado = detalles?.some(d => (d.cantidad_entregada || 0) > 0)
+      const todoListo = detalles?.length > 0 && detalles.every(d => d.estado === 'Listo para retiro' || d.estado === 'Notificado' || d.estado === 'Entregado')
       const pagoCompleto = totalPagado >= p.total_final
       
       let estadoMacro = ''
       let colorBg = ''
       let colorText = '#000'
 
-      if (itemsEntregados && pagoCompleto) {
-        estadoMacro = 'FINALIZADO (OK)'; colorBg = '#4ade80'
-      } else if (itemsEntregados && !pagoCompleto) {
+      if (todoEntregado && pagoCompleto) {
+        estadoMacro = 'FINALIZADO'; colorBg = '#4ade80'
+      } else if (todoEntregado && !pagoCompleto) {
         estadoMacro = 'ENTREGADO (DEUDA)'; colorBg = '#fbbf24'
-      } else if (itemsListos) {
-        estadoMacro = pagoCompleto ? 'LISTO (PAGADO)' : 'LISTO (PEND. PAGO)'; 
-        colorBg = '#3b82f6'; colorText = '#fff'
+      } else if (todoListo && !todoEntregado) {
+        estadoMacro = 'LISTO PARA RETIRO'; colorBg = '#3b82f6'; colorText = '#fff'
+      } else if (algoEntregado) {
+        estadoMacro = 'ENTREGA PARCIAL'; colorBg = '#a78bfa'; colorText = '#fff'
       } else {
         estadoMacro = 'EN TALLER'; colorBg = '#f1f5f9'
       }
@@ -76,7 +79,7 @@ export default function VerPedidos() {
       return { 
         ...p, c_nombre: cliente?.nombre || 'S/N', c_telefono: cliente?.telefono || '', 
         detalles, pagos, total_pagado: totalPagado, estado_macro: estadoMacro, color_bg: colorBg, color_text: colorText,
-        pagoCompleto, itemsEntregados, itemsListos
+        pagoCompleto, todoEntregado
       }
     })
     setDatos(cruzados)
@@ -85,7 +88,7 @@ export default function VerPedidos() {
 
   useEffect(() => { cargar() }, [cargar])
 
-  // --- EXPORTACIÓN EXCEL ---
+  // --- RESTAURACIÓN DE EXPORTACIÓN EXCEL ---
   const exportarExcel = () => {
     const dataFilas: any[] = []
     const headers = [
@@ -143,78 +146,40 @@ export default function VerPedidos() {
     try {
       const rpcFunc = cambio > 0 ? 'entregar_stock' : 'revertir_entrega_stock'
       await supabase.rpc(rpcFunc, { prod_id: det.producto_id, cant: Math.abs(cambio) })
-      const nuevoEstado = nuevaCantidad === det.cantidad ? 'Entregado' : 'Pendiente'
-      await supabase.from('detalles_pedido').update({ cantidad_entregada: nuevaCantidad, estado: nuevoEstado }).eq('id', det.id)
-      await registrarLog(`${cambio > 0 ? 'Entregó' : 'Restó'} ${Math.abs(cambio)} unidad(es) de ${det.p_nombre}`, `Pedido ${det.pedido_id}`)
+      
+      const nuevoEstado = nuevaCantidad === det.cantidad ? 'Entregado' : (nuevaCantidad > 0 ? 'Parcial' : 'Listo para retiro')
+      
+      await supabase.from('detalles_pedido').update({ 
+        cantidad_entregada: nuevaCantidad, 
+        estado: nuevoEstado 
+      }).eq('id', det.id)
+      
+      await registrarLog(`${cambio > 0 ? 'Entregó' : 'Restó'} ${Math.abs(cambio)} unidad de ${det.p_nombre}`, `Pedido ${det.pedido_id}`)
       cargar()
     } catch (err) { alert("Error al actualizar entrega") }
   }
 
-  const notificarCliente = async (pedido: any) => {
-    if (!confirm(`¿Confirmar aviso a ${pedido.c_nombre}?`)) return
-    try {
-      await supabase.from('detalles_pedido').update({ estado: 'Notificado' }).eq('pedido_id', pedido.id).neq('estado', 'Entregado')
-      await registrarLog(`Avisó a cliente: ${pedido.c_nombre}`, `Pedido ${pedido.id}`)
-      cargar()
-    } catch (err) { alert("Error al notificar") }
-  }
-
-  const entregarTodo = async (pedido: any) => {
-    if (!confirm(`¿Marcar TODO el pedido como RETIRADO?`)) return
-    try {
-      for (const det of pedido.detalles) {
-        const faltante = det.cantidad - (det.cantidad_entregada || 0)
-        if (faltante > 0) {
-          await supabase.rpc('entregar_stock', { prod_id: det.producto_id, cant: faltante })
-          await supabase.from('detalles_pedido').update({ cantidad_entregada: det.cantidad, estado: 'Entregado' }).eq('id', det.id)
-        }
-      }
-      await supabase.from('pedidos').update({ estado: 'Completado' }).eq('id', pedido.id)
-      await registrarLog(`ENTREGA TOTAL a ${pedido.c_nombre}`, `Pedido ${pedido.id}`)
-      cargar()
-    } catch (err) { alert("Error al entregar") }
-  }
-
   const guardarPago = async () => {
     const { pedidoId, monto, fecha, metodo, nombreCliente, esCorreccion, deudaMaxima } = modalPago
-    // FIX: Limpiamos símbolos antes de procesar el número
     const valorNum = Number(monto.toString().replace(/\D/g, ''))
     
     if (valorNum <= 0) return alert("Ingresa un monto válido")
-    
-    // VALIDACIÓN: Evitar pagos superiores a la deuda o correcciones mayores a lo pagado
     if (valorNum > deudaMaxima) {
-      const msg = esCorreccion 
-        ? `No puedes descontar más de lo que el cliente ya pagó ($${deudaMaxima.toLocaleString('es-CL')})`
-        : `No puedes cobrar más de lo que el cliente debe ($${deudaMaxima.toLocaleString('es-CL')})`;
+      const msg = esCorreccion ? "No puedes descontar más de lo pagado" : "No puedes cobrar más de la deuda";
       return alert(msg)
     }
     
     const montoFinal = esCorreccion ? valorNum * -1 : valorNum
-    
     try {
-      const { error } = await supabase.from('pagos').insert([{ 
-        pedido_id: pedidoId, 
-        monto: montoFinal, 
-        fecha_pago: fecha, 
-        metodo_pago: metodo, 
-        creado_por: localStorage.getItem('user_name') || 'Don Luis' 
+      await supabase.from('pagos').insert([{ 
+        pedido_id: pedidoId, monto: montoFinal, fecha_pago: fecha, 
+        metodo_pago: metodo, creado_por: localStorage.getItem('user_name') || 'Don Luis' 
       }])
-
-      if (error) throw error
-
-      const tipoMsg = esCorreccion ? "CORRIGIÓ/DESCONTÓ" : "Registró"
-      await registrarLog(`${tipoMsg} pago de $${valorNum} (${metodo})`, `Cliente: ${nombreCliente}`)
-      
-      setModalPago({ ...modalPago, open: false, monto: '', esCorreccion: false, pedidoId: null })
-      await cargar() 
-
-    } catch (err: any) { 
-      alert("Error al guardar pago: " + err.message) 
-    }
+      setModalPago({ ...modalPago, open: false, monto: '' })
+      cargar()
+    } catch (err) { alert("Error al guardar pago") }
   }
 
-  // FIX: Función para mostrar separadores de mil y símbolo $ en el input
   const formatMontoInput = (val: string | number) => {
     const raw = val.toString().replace(/\D/g, '')
     if (!raw) return ''
@@ -238,11 +203,11 @@ export default function VerPedidos() {
 
   const filtrados = datos.filter(p => {
     const t = busqueda.toLowerCase()
-    return p.c_nombre.toLowerCase().includes(t) || p.c_telefono.includes(t) || (p.colegio && p.colegio.toLowerCase().includes(t)) || p.id.toString().includes(t)
-  }).filter(p => filtro === 'Todos' || (filtro === 'Pendientes' && p.estado_macro !== 'FINALIZADO (OK)') || p.estado_macro === filtro)
+    return p.c_nombre.toLowerCase().includes(t) || p.id.toString().includes(t)
+  }).filter(p => filtro === 'Todos' || p.estado_macro === filtro)
 
   // ESTILOS
-  const containerStyle = { minHeight: '100vh', backgroundColor: '#f8fafc', backgroundImage: `radial-gradient(#cbd5e1 1.5px, transparent 1.5px)`, backgroundSize: '32px 32px', padding: '40px 20px', fontFamily: 'system-ui, -apple-system, sans-serif' }
+  const containerStyle = { minHeight: '100vh', backgroundColor: '#f8fafc', backgroundImage: `radial-gradient(#cbd5e1 1.5px, transparent 1.5px)`, backgroundSize: '32px 32px', padding: '40px 20px', fontFamily: 'system-ui, sans-serif' }
   const cardStyle = { backgroundColor: '#fff', padding: '24px', borderRadius: '28px', border: '4px solid #000', boxShadow: '8px 8px 0px #000' }
   const labelStyle = { fontSize: '11px', fontWeight: '950', color: '#64748b', marginBottom: '4px', textTransform: 'uppercase' as const }
   const inputStyle = { width: '100%', padding: '16px', border: '3px solid #000', borderRadius: '16px', fontWeight: '900', fontSize: '16px', color: '#000', outline: 'none' }
@@ -251,84 +216,77 @@ export default function VerPedidos() {
     <main style={containerStyle}>
       <div style={{ maxWidth: '650px', margin: '0 auto' }}>
         
-        <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '32px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '32px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-            <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => router.push('/')} style={{ backgroundColor: '#fff', border: '3px solid #000', padding: '10px', borderRadius: '16px', boxShadow: '4px 4px 0px #000', cursor: 'pointer' }}>
-              <ArrowLeft size={24} color="#000" />
-            </motion.button>
-            <h1 style={{ margin: 0, fontSize: '32px', fontWeight: '950', color: '#000', letterSpacing: '-1.5px' }}>GESTIÓN PEDIDOS</h1>
+            <button onClick={() => router.push('/')} style={{ backgroundColor: '#fff', border: '3px solid #000', padding: '10px', borderRadius: '16px', boxShadow: '4px 4px 0px #000', cursor: 'pointer' }}>
+              <ArrowLeft size={24} />
+            </button>
+            <h1 style={{ margin: 0, fontSize: '32px', fontWeight: '950', color: '#000', letterSpacing: '-1.5px' }}>GESTIÓN DE PEDIDOS</h1>
           </div>
-          <motion.button whileHover={{ scale: 1.05, y: -2 }} whileTap={{ scale: 0.95, y: 0 }} onClick={exportarExcel} style={{ backgroundColor: '#166534', color: '#fff', border: '3px solid #000', padding: '12px 18px', borderRadius: '16px', boxShadow: '4px 4px 0px #000', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '900' }}>
+          <button onClick={exportarExcel} style={{ backgroundColor: '#166534', color: '#fff', border: '3px solid #000', padding: '12px 18px', borderRadius: '16px', boxShadow: '4px 4px 0px #000', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '900' }}>
             <Download size={20} /> <span style={{fontSize: '13px'}}>REPORTE VENTAS</span>
-          </motion.button>
-        </motion.div>
+          </button>
+        </div>
 
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} style={{ marginBottom: '32px' }}>
+        <div style={{ marginBottom: '32px' }}>
           <div style={{ position: 'relative' }}>
             <Search style={{ position: 'absolute', left: '16px', top: '16px' }} size={22} color="#000" />
-            <input placeholder="Buscar por cliente, colegio o ID..." style={{ ...inputStyle, paddingLeft: '50px', boxShadow: '6px 6px 0px #000' }} onChange={(e) => setBusqueda(e.target.value)} />
+            <input placeholder="Buscar por cliente o ID..." style={{ ...inputStyle, paddingLeft: '50px', boxShadow: '6px 6px 0px #000' }} onChange={(e) => setBusqueda(e.target.value)} />
           </div>
-        </motion.div>
+        </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
-          {filtrados.map((p, idx) => {
+          {filtrados.map((p) => {
             const deuda = p.total_final - (p.total_pagado || 0)
-            const fechaEntrega = p.fecha_entrega ? new Date(p.fecha_entrega).toLocaleDateString('es-CL') : 'S/F'
             const expandido = !!expandidos[p.id]
-            const idFormateado = p.id.toString().padStart(4, '0')
 
             return (
-              <motion.div key={p.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.05 }} style={cardStyle}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', alignItems: 'flex-start' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <span style={{ background: '#fbbf24', border: '2px solid #000', padding: '4px 10px', borderRadius: '10px', fontSize: '12px', fontWeight: '950', color: '#000' }}>#{idFormateado}</span>
-                      <span style={{ backgroundColor: p.color_bg, color: p.color_text, padding: '4px 12px', borderRadius: '10px', fontWeight: '900', border: '2px solid #000', fontSize: '11px' }}>{p.estado_macro}</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#000', fontWeight: '900', fontSize: '12px' }}><Calendar size={14} /> ENTREGA: {fechaEntrega}</div>
+              <motion.div key={p.id} style={cardStyle}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <span style={{ background: '#fbbf24', border: '2px solid #000', padding: '4px 10px', borderRadius: '10px', fontSize: '12px', fontWeight: '950' }}>#{p.id.toString().padStart(4, '0')}</span>
+                    <span style={{ backgroundColor: p.color_bg, color: p.color_text, padding: '4px 12px', borderRadius: '10px', fontWeight: '900', border: '2px solid #000', fontSize: '11px' }}>{p.estado_macro}</span>
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <p style={labelStyle}>Institución</p>
-                    <p style={{ margin: 0, fontWeight: '950', fontSize: '14px', color: '#000' }}><School size={14} /> {p.colegio || 'Particular'}</p>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                     <button onClick={() => window.open(`/ticket/${p.id}`, '_blank')} title="Imprimir Ticket" style={{ background: '#fff', border: '2px solid #000', borderRadius: '10px', padding: '5px', cursor: 'pointer' }}><Printer size={18} /></button>
+                     <button onClick={() => window.open(`/vale-entrega/${p.id}`, '_blank')} title="Generar Vale de Entrega" style={{ background: '#000', color: '#fff', border: '2px solid #000', borderRadius: '10px', padding: '5px', cursor: 'pointer' }}>
+                        <FileText size={18} />
+                     </button>
                   </div>
                 </div>
 
                 <div style={{ marginBottom: '16px' }}>
-                  <h2 style={{ fontWeight: '950', fontSize: '26px', color: '#000', margin: '0 0 4px 0', letterSpacing: '-0.5px' }}>{p.c_nombre}</h2>
-                  <span style={{ fontSize: '14px', fontWeight: '800', color: '#000', display: 'flex', alignItems: 'center', gap: '6px' }}><Phone size={14} /> {p.c_telefono}</span>
+                  <h2 style={{ fontWeight: '950', fontSize: '26px', color: '#000', margin: 0 }}>{p.c_nombre}</h2>
+                  <span style={{ fontSize: '14px', fontWeight: '800', color: '#64748b' }}>{p.colegio || 'Particular'} • {p.c_telefono}</span>
                 </div>
 
-                <motion.button onClick={() => toggleExpandir(p.id)} style={{ width: '100%', padding: '12px', border: '3px solid #000', borderRadius: '14px', marginBottom: '16px', backgroundColor: '#f1f5f9', fontWeight: '950', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', color: '#000' }}>
-                  {expandido ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
-                  {expandido ? 'OCULTAR DETALLES' : 'VER ARTÍCULOS Y NOTAS'}
-                </motion.button>
+                <button onClick={() => toggleExpandir(p.id)} style={{ width: '100%', padding: '12px', border: '3px solid #000', borderRadius: '14px', marginBottom: '16px', backgroundColor: '#f1f5f9', fontWeight: '950', cursor: 'pointer' }}>
+                  {expandido ? 'OCULTAR ARTÍCULOS' : 'VER ARTÍCULOS Y ENTREGAR'}
+                </button>
 
                 <AnimatePresence>
                   {expandido && (
                     <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} style={{ overflow: 'hidden', marginBottom: '20px' }}>
-                      <div style={{ padding: '20px', border: '3px solid #000', borderRadius: '20px', backgroundColor: '#fff', boxShadow: '4px 4px 0px #000' }}>
-                        <p style={labelStyle}><Boxes size={12}/> Artículos y Entregas:</p>
+                      <div style={{ padding: '20px', border: '3px solid #000', borderRadius: '20px', backgroundColor: '#fff' }}>
+                        <p style={labelStyle}><Boxes size={12}/> Detalle de Artículos:</p>
                         {p.detalles?.map((det: any, i: number) => (
                           <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: i === p.detalles.length - 1 ? 'none' : '1px solid #e2e8f0' }}>
                             <div style={{ flex: 1 }}>
-                              <p style={{ margin: 0, fontWeight: '900', fontSize: '15px', color: '#000' }}>{det.cantidad}x {det.p_nombre}</p>
-                              <p style={{ margin: 0, fontSize: '12px', fontWeight: '800', color: '#64748b' }}>Talla: {det.talla} • ${Number(det.precio_unitario).toLocaleString()} c/u</p>
-                              <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <span style={{ fontSize: '11px', fontWeight: '900', color: '#000', backgroundColor: det.cantidad_entregada === det.cantidad ? '#4ade80' : '#f1f5f9', padding: '2px 8px', borderRadius: '6px', border: '1px solid #000' }}>
-                                  ENTREGADO: {det.cantidad_entregada || 0} de {det.cantidad}
-                                </span>
-                              </div>
+                              <p style={{ margin: 0, fontWeight: '900', fontSize: '15px' }}>{det.cantidad}x {det.p_nombre} (T{det.talla})</p>
+                              <p style={{ margin: 0, fontSize: '11px', fontWeight: '900', color: (det.cantidad_entregada || 0) >= det.cantidad ? '#166534' : '#64748b' }}>
+                                ENTREGADO: {det.cantidad_entregada || 0} de {det.cantidad}
+                              </p>
                             </div>
                             <div style={{ display: 'flex', gap: '6px' }}>
-                              <button onClick={() => actualizarEntregaItem(det, -1)} style={{ background: '#ef4444', color: '#fff', border: '2px solid #000', borderRadius: '8px', width: '30px', height: '30px', fontWeight: '950', cursor: 'pointer' }}>-</button>
-                              <button onClick={() => actualizarEntregaItem(det, 1)} style={{ background: '#4ade80', color: '#000', border: '2px solid #000', borderRadius: '8px', width: '30px', height: '30px', fontWeight: '950', cursor: 'pointer' }}>+</button>
+                              <button onClick={() => actualizarEntregaItem(det, -1)} style={{ background: '#ef4444', color: '#fff', border: '2px solid #000', borderRadius: '8px', width: '32px', height: '32px', fontWeight: '950', cursor: 'pointer' }}>-</button>
+                              <button onClick={() => actualizarEntregaItem(det, 1)} style={{ background: '#4ade80', color: '#000', border: '2px solid #000', borderRadius: '8px', width: '32px', height: '32px', fontWeight: '950', cursor: 'pointer' }}>+</button>
                             </div>
                           </div>
                         ))}
                         {p.observaciones && (
                           <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '2px dashed #000' }}>
-                            <p style={labelStyle}><MessageSquare size={12}/> Notas Especiales:</p>
-                            <p style={{ margin: 0, fontSize: '13px', fontWeight: '800', color: '#000' }}>{p.observaciones}</p>
+                            <p style={labelStyle}><MessageSquare size={12}/> Notas:</p>
+                            <p style={{ margin: 0, fontSize: '13px', fontWeight: '800' }}>{p.observaciones}</p>
                           </div>
                         )}
                       </div>
@@ -336,44 +294,22 @@ export default function VerPedidos() {
                   )}
                 </AnimatePresence>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '24px' }}>
-                  <motion.button 
-                    whileHover={{ scale: 1.02, y: -2 }} 
-                    whileTap={{ scale: 0.98, y: 0 }} 
-                    onClick={() => notificarCliente(p)} 
-                    style={{ backgroundColor: '#3b82f6', color: '#fff', border: '3px solid #000', padding: '16px', borderRadius: '18px', fontWeight: '950', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '6px 6px 0px #000', cursor: 'pointer' }}
-                  >
-                    <Bell size={20} /> AVISAR AL CLIENTE
-                  </motion.button>
-                  
-                  <motion.button 
-                    whileHover={{ scale: 1.02, y: -2 }} 
-                    whileTap={{ scale: 0.98, y: 0 }} 
-                    onClick={() => entregarTodo(p)} 
-                    style={{ backgroundColor: '#4ade80', color: '#000', border: '3px solid #000', padding: '16px', borderRadius: '18px', fontWeight: '950', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '6px 6px 0px #000', cursor: 'pointer' }}
-                  >
-                    <Package size={20} /> ENTREGA TOTAL
-                  </motion.button>
-                </div>
-
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '24px' }}>
                   <div style={{ background: '#f1f5f9', padding: '12px', borderRadius: '16px', border: '3px solid #000' }}>
                     <p style={labelStyle}>VALOR TOTAL</p>
-                    <p style={{ fontSize: '16px', fontWeight: '950', color: '#000', margin: 0 }}>${Number(p.total_final).toLocaleString('es-CL')}</p>
+                    <p style={{ fontSize: '14px', fontWeight: '950' }}>${Number(p.total_final).toLocaleString('es-CL')}</p>
                   </div>
                   <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '16px', border: '3px solid #000', position: 'relative' }}>
                     <p style={labelStyle}>PAGADO</p>
-                    <p style={{ fontSize: '16px', fontWeight: '950', color: '#166534', margin: 0 }}>${Number(p.total_pagado || 0).toLocaleString('es-CL')}</p>
+                    <p style={{ fontSize: '14px', fontWeight: '950', color: '#166534' }}>${Number(p.total_pagado || 0).toLocaleString('es-CL')}</p>
                     <div style={{ position: 'absolute', right: '5px', top: '15px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                       {/* FIX: Se pasa la deuda máxima al modal de pago */}
                        <button onClick={() => setModalPago({ ...modalPago, open: true, pedidoId: p.id, nombreCliente: p.c_nombre, esCorreccion: false, deudaMaxima: deuda })} style={{ background: '#000', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}><Plus size={12} /></button>
-                       {/* FIX: Se pasa el total pagado como límite para la corrección */}
                        <button onClick={() => setModalPago({ ...modalPago, open: true, pedidoId: p.id, nombreCliente: p.c_nombre, esCorreccion: true, deudaMaxima: p.total_pagado })} style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}><Minus size={12} /></button>
                     </div>
                   </div>
                   <div style={{ background: deuda > 0 ? '#fef2f2' : '#f0fdf4', padding: '12px', borderRadius: '16px', border: '3px solid #000' }}>
                     <p style={labelStyle}>DEUDA</p>
-                    <p style={{ fontSize: '16px', fontWeight: '950', color: deuda > 0 ? '#b91c1c' : '#166534', margin: 0 }}>${deuda.toLocaleString('es-CL')}</p>
+                    <p style={{ fontSize: '14px', fontWeight: '950', color: deuda > 0 ? '#b91c1c' : '#166534' }}>${deuda.toLocaleString('es-CL')}</p>
                   </div>
                 </div>
 
@@ -381,7 +317,6 @@ export default function VerPedidos() {
                   <button onClick={() => borrarPedido(p.id, p.c_nombre)} style={{ color: '#ef4444', fontWeight: '900', border: 'none', background: 'none', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px' }}><Trash2 size={16} /> ELIMINAR</button>
                   <div style={{ display: 'flex', gap: '12px' }}>
                     <button onClick={() => window.open(`https://wa.me/${p.c_telefono}`, '_blank')} style={{ background: '#22c55e', color: '#fff', padding: '10px', borderRadius: '14px', border: '2px solid #000', cursor: 'pointer' }}><MessageCircle size={20} /></button>
-                    <button onClick={() => window.open(`/ticket/${p.id}`, '_blank')} style={{ background: '#fff', color: '#000', padding: '10px', borderRadius: '14px', border: '2px solid #000', cursor: 'pointer' }}><Printer size={20} /></button>
                   </div>
                 </div>
               </motion.div>
@@ -389,6 +324,7 @@ export default function VerPedidos() {
           })}
         </div>
 
+        {/* HISTORIAL RECIENTE */}
         <div style={{ marginTop: '60px', marginBottom: '60px' }}>
           <h2 style={{ fontSize: '22px', fontWeight: '950', color: '#000', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px' }}><History size={26} /> HISTORIAL RECIENTE</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
@@ -396,11 +332,11 @@ export default function VerPedidos() {
               <div key={idx} style={{ backgroundColor: '#fff', border: '3px solid #000', padding: '16px', borderRadius: '20px', boxShadow: '4px 4px 0px #000' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <div style={{ flex: 1 }}>
-                    <p style={{ margin: 0, fontWeight: '900', fontSize: '15px', color: '#000' }}>{log.accion}</p>
+                    <p style={{ margin: 0, fontWeight: '900', fontSize: '15px' }}>{log.accion}</p>
                     <p style={{ margin: '4px 0 0 0', fontSize: '12px', fontWeight: '700', color: '#475569' }}>{log.detalles}</p>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <p style={{ margin: 0, fontSize: '11px', fontWeight: '900', color: '#000' }}>{new Date(log.fecha).toLocaleDateString('es-CL')}</p>
+                    <p style={{ margin: 0, fontSize: '11px', fontWeight: '900' }}>{new Date(log.fecha).toLocaleDateString('es-CL')}</p>
                   </div>
                 </div>
               </div>
@@ -408,26 +344,19 @@ export default function VerPedidos() {
           </div>
         </div>
 
-        {/* MODAL DE PAGO / CORRECCIÓN */}
+        {/* MODAL PAGO */}
         <AnimatePresence>
           {modalPago.open && (
             <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
               <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} style={{ backgroundColor: '#fff', border: '5px solid #000', borderRadius: '32px', padding: '35px', width: '100%', maxWidth: '420px', boxShadow: '15px 15px 0px #3b82f6' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '25px' }}>
-                  <h3 style={{ fontWeight: '950', fontSize: '24px', color: '#000' }}>{modalPago.esCorreccion ? 'CORREGIR PAGO' : 'NUEVO PAGO'}</h3>
+                  <h3 style={{ fontWeight: '950', fontSize: '24px' }}>{modalPago.esCorreccion ? 'CORREGIR PAGO' : 'REGISTRAR PAGO'}</h3>
                   <button onClick={() => setModalPago({...modalPago, open: false})} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={28} /></button>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                  {/* FIX: Input ahora es de texto para permitir separadores de mil y símbolo $ */}
                   <div>
-                    <label style={labelStyle}>Monto a {modalPago.esCorreccion ? 'Descontar' : 'Abonar'}</label>
-                    <input 
-                      type="text" 
-                      style={{...inputStyle, borderColor: modalPago.esCorreccion ? '#ef4444' : '#000'}} 
-                      value={formatMontoInput(modalPago.monto)} 
-                      onChange={e => setModalPago({...modalPago, monto: e.target.value.replace(/\D/g, '')})} 
-                      placeholder="$0"
-                    />
+                    <label style={labelStyle}>Monto</label>
+                    <input type="text" style={inputStyle} value={formatMontoInput(modalPago.monto)} onChange={e => setModalPago({...modalPago, monto: e.target.value.replace(/\D/g, '')})} placeholder="$0" />
                   </div>
                   <div><label style={labelStyle}>Fecha</label><input type="date" style={inputStyle} value={modalPago.fecha} onChange={e => setModalPago({...modalPago, fecha: e.target.value})} /></div>
                   <div>
@@ -447,7 +376,6 @@ export default function VerPedidos() {
             </div>
           )}
         </AnimatePresence>
-
       </div>
     </main>
   )
