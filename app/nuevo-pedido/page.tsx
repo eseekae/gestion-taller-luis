@@ -74,6 +74,7 @@ export default function RegistroPedido() {
   const tallasDeInventario = useMemo(() => inventario.filter(i => i.nombre === nombreSeleccionado), [nombreSeleccionado, inventario])
 
   const agregarAlCarrito = () => {
+    // FIX: Limpieza de cantidad para evitar negativos
     const cantNum = Number(cantidad.toString().replace(/\D/g, ''))
     if (cantidad === '' || cantNum <= 0) {
       return alert("Ingresa una cantidad válida.")
@@ -111,7 +112,7 @@ export default function RegistroPedido() {
     if (telefono.length !== 8) return alert("El teléfono debe tener 8 números.")
     if (tipoEntrega === 'agendada' && !fechaEntrega) return alert("Selecciona fecha de entrega")
     
-    // Limpieza de abono y validación de tope máximo
+    // FIX: Limpieza de abono y validación de tope máximo
     const pagoFinal = Number(montoPagado.toString().replace(/\D/g, ''))
     
     if (pagoFinal > totalConDescuento) {
