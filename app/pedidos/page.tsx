@@ -27,7 +27,8 @@ export default function VerPedidos() {
     monto: '',
     fecha: new Date().toISOString().split('T')[0],
     metodo: 'Transferencia',
-    esCorreccion: false 
+    esCorreccion: false,
+    deudaMaxima: 0 as number // FIX: Nueva propiedad para controlar el tope de pago
   })
 
   const cargar = useCallback(async () => {
@@ -84,6 +85,7 @@ export default function VerPedidos() {
 
   useEffect(() => { cargar() }, [cargar])
 
+  // --- EXPORTACIÓN EXCEL ---
   const exportarExcel = () => {
     const dataFilas: any[] = []
     const headers = [
@@ -174,9 +176,19 @@ export default function VerPedidos() {
   }
 
   const guardarPago = async () => {
-    const { pedidoId, monto, fecha, metodo, nombreCliente, esCorreccion } = modalPago
-    const valorNum = Number(monto)
-    if (!monto || valorNum <= 0) return alert("Ingresa un monto válido")
+    const { pedidoId, monto, fecha, metodo, nombreCliente, esCorreccion, deudaMaxima } = modalPago
+    // FIX: Limpiamos símbolos antes de procesar el número
+    const valorNum = Number(monto.toString().replace(/\D/g, ''))
+    
+    if (valorNum <= 0) return alert("Ingresa un monto válido")
+    
+    // VALIDACIÓN: Evitar pagos superiores a la deuda o correcciones mayores a lo pagado
+    if (valorNum > deudaMaxima) {
+      const msg = esCorreccion 
+        ? `No puedes descontar más de lo que el cliente ya pagó ($${deudaMaxima.toLocaleString('es-CL')})`
+        : `No puedes cobrar más de lo que el cliente debe ($${deudaMaxima.toLocaleString('es-CL')})`;
+      return alert(msg)
+    }
     
     const montoFinal = esCorreccion ? valorNum * -1 : valorNum
     
@@ -200,6 +212,13 @@ export default function VerPedidos() {
     } catch (err: any) { 
       alert("Error al guardar pago: " + err.message) 
     }
+  }
+
+  // FIX: Función para mostrar separadores de mil y símbolo $ en el input
+  const formatMontoInput = (val: string | number) => {
+    const raw = val.toString().replace(/\D/g, '')
+    if (!raw) return ''
+    return `$${Number(raw).toLocaleString('es-CL')}`
   }
 
   const borrarPedido = async (id: number, nombre: string) => {
@@ -318,7 +337,6 @@ export default function VerPedidos() {
                 </AnimatePresence>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '24px' }}>
-                  {/* FIX: Botones siempre disponibles y resaltados con sombra Neubrutalista pesada */}
                   <motion.button 
                     whileHover={{ scale: 1.02, y: -2 }} 
                     whileTap={{ scale: 0.98, y: 0 }} 
@@ -347,8 +365,10 @@ export default function VerPedidos() {
                     <p style={labelStyle}>PAGADO</p>
                     <p style={{ fontSize: '16px', fontWeight: '950', color: '#166534', margin: 0 }}>${Number(p.total_pagado || 0).toLocaleString('es-CL')}</p>
                     <div style={{ position: 'absolute', right: '5px', top: '15px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                       <button onClick={() => setModalPago({ ...modalPago, open: true, pedidoId: p.id, nombreCliente: p.c_nombre, esCorreccion: false })} style={{ background: '#000', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}><Plus size={12} /></button>
-                       <button onClick={() => setModalPago({ ...modalPago, open: true, pedidoId: p.id, nombreCliente: p.c_nombre, esCorreccion: true })} style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}><Minus size={12} /></button>
+                       {/* FIX: Se pasa la deuda máxima al modal de pago */}
+                       <button onClick={() => setModalPago({ ...modalPago, open: true, pedidoId: p.id, nombreCliente: p.c_nombre, esCorreccion: false, deudaMaxima: deuda })} style={{ background: '#000', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}><Plus size={12} /></button>
+                       {/* FIX: Se pasa el total pagado como límite para la corrección */}
+                       <button onClick={() => setModalPago({ ...modalPago, open: true, pedidoId: p.id, nombreCliente: p.c_nombre, esCorreccion: true, deudaMaxima: p.total_pagado })} style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}><Minus size={12} /></button>
                     </div>
                   </div>
                   <div style={{ background: deuda > 0 ? '#fef2f2' : '#f0fdf4', padding: '12px', borderRadius: '16px', border: '3px solid #000' }}>
@@ -388,6 +408,7 @@ export default function VerPedidos() {
           </div>
         </div>
 
+        {/* MODAL DE PAGO / CORRECCIÓN */}
         <AnimatePresence>
           {modalPago.open && (
             <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
@@ -397,7 +418,17 @@ export default function VerPedidos() {
                   <button onClick={() => setModalPago({...modalPago, open: false})} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={28} /></button>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                  <div><label style={labelStyle}>Monto ($)</label><input type="number" style={{...inputStyle, borderColor: modalPago.esCorreccion ? '#ef4444' : '#000'}} value={modalPago.monto} onChange={e => setModalPago({...modalPago, monto: e.target.value})} /></div>
+                  {/* FIX: Input ahora es de texto para permitir separadores de mil y símbolo $ */}
+                  <div>
+                    <label style={labelStyle}>Monto a {modalPago.esCorreccion ? 'Descontar' : 'Abonar'}</label>
+                    <input 
+                      type="text" 
+                      style={{...inputStyle, borderColor: modalPago.esCorreccion ? '#ef4444' : '#000'}} 
+                      value={formatMontoInput(modalPago.monto)} 
+                      onChange={e => setModalPago({...modalPago, monto: e.target.value.replace(/\D/g, '')})} 
+                      placeholder="$0"
+                    />
+                  </div>
                   <div><label style={labelStyle}>Fecha</label><input type="date" style={inputStyle} value={modalPago.fecha} onChange={e => setModalPago({...modalPago, fecha: e.target.value})} /></div>
                   <div>
                     <label style={labelStyle}>Método</label>
