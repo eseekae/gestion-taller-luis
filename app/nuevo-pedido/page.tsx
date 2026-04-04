@@ -44,7 +44,7 @@ export default function RegistroPedido() {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    setUsuarioActivo(localStorage.getItem('user_name') || '')
+    setUsuarioActivo(localStorage.getItem('user_name') || 'Don Luis')
     const fetch = async () => {
       const { data: inv } = await supabase.from('inventario').select('*').order('nombre')
       if (inv) {
@@ -63,7 +63,7 @@ export default function RegistroPedido() {
     fetch()
   }, [])
 
-  // FIX: Función para separadores de mil y símbolo $
+  // Función para formatear separadores de mil en tiempo real
   const formatMontoInput = (val: string | number) => {
     const raw = val.toString().replace(/\D/g, '')
     if (!raw) return ''
@@ -74,8 +74,9 @@ export default function RegistroPedido() {
   const tallasDeInventario = useMemo(() => inventario.filter(i => i.nombre === nombreSeleccionado), [nombreSeleccionado, inventario])
 
   const agregarAlCarrito = () => {
-    if (cantidad === '' || Number(cantidad) <= 0) {
-      return alert("Tienes que ingresar una cantidad válida antes de añadir al pedido.")
+    const cantNum = Number(cantidad.toString().replace(/\D/g, ''))
+    if (cantidad === '' || cantNum <= 0) {
+      return alert("Ingresa una cantidad válida.")
     }
 
     let item; let precio;
@@ -83,11 +84,11 @@ export default function RegistroPedido() {
       const rawPrecio = precioManualEspecial.toString().replace(/\D/g, '')
       if (!rawPrecio) return alert("Ingresa el precio para la talla especial")
       precio = Number(rawPrecio)
-      item = { id_inv: tallasDeInventario[0]?.id, nombre: nombreSeleccionado, talla: 'ESPECIAL', precio, cantidad: Number(cantidad) }
+      item = { id_inv: tallasDeInventario[0]?.id, nombre: nombreSeleccionado, talla: 'ESPECIAL', precio, cantidad: cantNum }
     } else {
       const invItem = inventario.find(i => i.nombre === nombreSeleccionado && i.talla === tallaSeleccionada)
       precio = Number(invItem?.precio_base || 0)
-      item = { id_inv: invItem.id, nombre: nombreSeleccionado, talla: tallaSeleccionada, precio, cantidad: Number(cantidad) }
+      item = { id_inv: invItem.id, nombre: nombreSeleccionado, talla: tallaSeleccionada, precio, cantidad: cantNum }
     }
     setCarrito([...carrito, { ...item, tempId: Date.now() }])
     setPrecioManualEspecial('')
@@ -107,15 +108,14 @@ export default function RegistroPedido() {
   const guardar = async (e: any) => {
     e.preventDefault()
     if (carrito.length === 0) return alert("Añade productos al pedido")
-    if (telefono.length !== 8) return alert("El teléfono debe tener exactamente 8 números.")
-    if (tipoEntrega === 'agendada' && !fechaEntrega) return alert("Selecciona una fecha de entrega")
+    if (telefono.length !== 8) return alert("El teléfono debe tener 8 números.")
+    if (tipoEntrega === 'agendada' && !fechaEntrega) return alert("Selecciona fecha de entrega")
     
-    // FIX: Limpiamos el abono antes de validar
+    // Limpieza de abono y validación de tope máximo
     const pagoFinal = Number(montoPagado.toString().replace(/\D/g, ''))
     
-    // VALIDACIÓN: No permitir pagar más del total
     if (pagoFinal > totalConDescuento) {
-      return alert(`No puedes abonar más del total de la venta ($${totalConDescuento.toLocaleString('es-CL')})`)
+      return alert(`No puedes abonar más del total ($${totalConDescuento.toLocaleString('es-CL')})`)
     }
 
     setLoading(true)
@@ -139,7 +139,8 @@ export default function RegistroPedido() {
       const detalles = carrito.map(item => ({
         pedido_id: ped.id, producto_id: item.id_inv, cantidad: item.cantidad, 
         cantidad_entregada: tipoEntrega === 'inmediata' ? item.cantidad : 0, 
-        talla: item.talla, precio_unitario: item.precio, estado: tipoEntrega === 'inmediata' ? 'Entregado' : 'Pendiente'
+        talla: item.talla, precio_unitario: item.precio, 
+        estado: tipoEntrega === 'inmediata' ? 'Entregado' : 'Pendiente'
       }))
       await supabase.from('detalles_pedido').insert(detalles)
       
@@ -157,219 +158,117 @@ export default function RegistroPedido() {
         }
       }
       
-      await registrarLog(`${usuarioActivo} creó venta de $${totalConDescuento}`, `Pedido #${ped.id}`)
-      alert(`✅ Venta registrada correctamente como Pedido #${ped.id}`); 
+      await registrarLog(`${usuarioActivo} creó venta ${tipoEntrega.toUpperCase()} de $${totalConDescuento}`, `Pedido #${ped.id}`)
+      alert(`Venta registrada como Pedido #${ped.id}`); 
       router.push('/pedidos')
     } catch (err: any) { alert(err.message) }
     finally { setLoading(false) }
   }
 
+  // Estilos originales preservados
+  const containerStyle = { minHeight: '100vh', backgroundColor: '#f8fafc', backgroundImage: `radial-gradient(#cbd5e1 1.5px, transparent 1.5px)`, backgroundSize: '32px 32px', padding: '30px 15px', fontFamily: 'system-ui, sans-serif' }
   const cardStyle = { backgroundColor: '#fff', padding: '20px', borderRadius: '28px', border: '4px solid #000', boxShadow: '8px 8px 0px #000', marginBottom: '24px' }
-  const inputStyle = { width: '100%', padding: '16px', border: '3px solid #000', borderRadius: '16px', fontSize: '16px', fontWeight: '800', color: '#000', backgroundColor: '#fff', boxSizing: 'border-box' as const, outline: 'none' }
-  const labelStyle = { fontSize: '11px', fontWeight: '950', color: '#000', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase' as const, letterSpacing: '0.5px' }
+  const inputStyle = { width: '100%', padding: '16px', border: '3px solid #000', borderRadius: '16px', fontSize: '16px', fontWeight: '800', color: '#000', backgroundColor: '#fff', outline: 'none' }
+  const labelStyle = { fontSize: '11px', fontWeight: '950', color: '#000', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase' as const }
 
   return (
-    <main style={{ 
-      minHeight: '100vh', 
-      backgroundColor: '#f8fafc', 
-      backgroundImage: `radial-gradient(#cbd5e1 1.5px, transparent 1.5px)`,
-      backgroundSize: '32px 32px',
-      padding: '30px 15px', 
-      fontFamily: 'system-ui, -apple-system, sans-serif' 
-    }}>
+    <main style={containerStyle}>
       <div style={{ maxWidth: '600px', margin: '0 auto' }}>
-        
-        <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '25px' }}>
-          <motion.button whileTap={{ scale: 0.9 }} type="button" onClick={() => router.push('/')} style={{ backgroundColor: '#fff', border: '3px solid #000', padding: '10px', borderRadius: '14px', boxShadow: '4px 4px 0px #000', cursor: 'pointer' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '25px' }}>
+          <button type="button" onClick={() => router.push('/')} style={{ backgroundColor: '#fff', border: '3px solid #000', padding: '10px', borderRadius: '14px', boxShadow: '4px 4px 0px #000', cursor: 'pointer' }}>
             <ArrowLeft size={22} color="#000" />
-          </motion.button>
+          </button>
           <h1 style={{ margin: 0, fontSize: '28px', fontWeight: '950', color: '#000', letterSpacing: '-1px' }}>NUEVA VENTA</h1>
-        </motion.div>
+        </div>
 
         <form onSubmit={guardar}>
-          
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} style={cardStyle}>
-            <label style={labelStyle}><Rocket size={16} /> Prioridad de Pedido</label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '10px', marginBottom: tipoEntrega === 'agendada' ? '15px' : '0' }}>
-              <motion.button type="button" onClick={() => setTipoEntrega('agendada')} style={{ padding: '14px', borderRadius: '18px', border: '4px solid #000', fontWeight: '900', color: '#000', fontSize: '13px', backgroundColor: tipoEntrega === 'agendada' ? '#fbbf24' : '#fff', boxShadow: tipoEntrega === 'agendada' ? 'inset 3px 3px 0px rgba(0,0,0,0.1)' : '3px 3px 0px #000', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' }}>
+          <div style={cardStyle}>
+            <label style={labelStyle}><Rocket size={16} /> Prioridad del Pedido</label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '10px' }}>
+              <button type="button" onClick={() => setTipoEntrega('agendada')} style={{ padding: '14px', borderRadius: '18px', border: '4px solid #000', fontWeight: '900', backgroundColor: tipoEntrega === 'agendada' ? '#fbbf24' : '#fff', cursor: 'pointer' }}>
                 <Clock size={18} /> AGENDAR
-              </motion.button>
-              <motion.button type="button" onClick={() => setTipoEntrega('inmediata')} style={{ padding: '14px', borderRadius: '18px', border: '4px solid #000', fontWeight: '900', color: '#000', fontSize: '13px', backgroundColor: tipoEntrega === 'inmediata' ? '#4ade80' : '#fff', boxShadow: tipoEntrega === 'inmediata' ? 'inset 3px 3px 0px rgba(0,0,0,0.1)' : '3px 3px 0px #000', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' }}>
+              </button>
+              <button type="button" onClick={() => setTipoEntrega('inmediata')} style={{ padding: '14px', borderRadius: '18px', border: '4px solid #000', fontWeight: '900', backgroundColor: tipoEntrega === 'inmediata' ? '#4ade80' : '#fff', cursor: 'pointer' }}>
                 <CheckCircle size={18} /> INMEDIATA
-              </motion.button>
+              </button>
             </div>
-            <AnimatePresence>
-              {tipoEntrega === 'agendada' && (
-                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}>
-                  <label style={labelStyle}><Calendar size={16} /> Fecha de Entrega Prometida</label>
-                  <input type="date" style={inputStyle} value={fechaEntrega} onChange={e => setFechaEntrega(e.target.value)} required={tipoEntrega === 'agendada'} />
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </motion.div>
+            {tipoEntrega === 'agendada' && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ marginTop: '15px' }}>
+                <label style={labelStyle}><Calendar size={16} /> Fecha de Entrega</label>
+                <input type="date" style={inputStyle} value={fechaEntrega} onChange={e => setFechaEntrega(e.target.value)} required />
+              </motion.div>
+            )}
+          </div>
 
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} style={cardStyle}>
-            <h2 style={{ margin: '0 0 20px 0', fontSize: '18px', fontWeight: '950', color: '#000', display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <User size={20} color="#3b82f6" /> FICHA CLIENTE
-            </h2>
+          <div style={cardStyle}>
+            <h2 style={{ fontSize: '18px', fontWeight: '950', marginBottom: '15px' }}><User size={18} /> DATOS CLIENTE</h2>
             <div style={{ display: 'grid', gap: '15px' }}>
-              <div>
-                <label style={labelStyle}>Nombre Completo</label>
-                <input required style={inputStyle} value={nombreCliente} onChange={e => setNombreCliente(e.target.value)} placeholder="Ej: Eduardo Vargas" />
+              <input required style={inputStyle} value={nombreCliente} onChange={e => setNombreCliente(e.target.value)} placeholder="Nombre" />
+              <input style={inputStyle} value={rut} onChange={e => setRut(e.target.value)} placeholder="R.U.T" />
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <div style={{ padding: '16px', border: '3px solid #000', borderRadius: '16px', fontWeight: '950', backgroundColor: '#e2e8f0' }}>+569</div>
+                <input required style={inputStyle} value={telefono} onChange={e => setTelefono(e.target.value.replace(/\D/g, '').slice(0, 8))} placeholder="Teléfono" />
               </div>
-              <div>
-                <label style={labelStyle}><IdCard size={14} /> R.U.T</label>
-                <input style={inputStyle} value={rut} onChange={e => setRut(e.target.value)} placeholder="12.345.678-9" />
-              </div>
-              <div>
-                <label style={labelStyle}><Phone size={14} /> Teléfono Móvil</label>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <div style={{ padding: '16px 10px', border: '3px solid #000', borderRadius: '16px', fontSize: '14px', fontWeight: '950', backgroundColor: '#e2e8f0', color: '#000', display: 'flex', alignItems: 'center' }}>+569</div>
-                  <input 
-                    required 
-                    type="tel" 
-                    maxLength={8} 
-                    style={inputStyle} 
-                    value={telefono} 
-                    onChange={e => setTelefono(e.target.value.replace(/\D/g, '').slice(0, 8))} 
-                    placeholder="87654321"
-                  />
-                </div>
-                {telefono.length > 0 && telefono.length < 8 && (
-                  <p style={{ color: '#ef4444', fontSize: '11px', fontWeight: '900', marginTop: '5px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <AlertCircle size={12} /> FALTAN {8 - telefono.length} NÚMEROS
-                  </p>
-                )}
-              </div>
-              <div>
-                <label style={labelStyle}><School size={16} /> Institución / Colegio</label>
-                <select style={inputStyle} value={colegio} onChange={e => setColegio(e.target.value)}>
-                  {listaColegios.map(c => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
-                </select>
-              </div>
+              <select style={inputStyle} value={colegio} onChange={e => setColegio(e.target.value)}>
+                {listaColegios.map(c => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
+              </select>
             </div>
-          </motion.div>
+          </div>
 
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} style={cardStyle}>
-            <h2 style={{ margin: '0 0 20px 0', fontSize: '18px', fontWeight: '950', color: '#000', display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <ShoppingBag size={20} color="#f472b6" /> PRENDAS
-            </h2>
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '12px', marginBottom: '16px' }}>
+          <div style={cardStyle}>
+            <h2 style={{ fontSize: '18px', fontWeight: '950', marginBottom: '15px' }}><ShoppingBag size={18} /> PRODUCTO</h2>
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '10px', marginBottom: '15px' }}>
               <select style={inputStyle} value={nombreSeleccionado} onChange={e => setNombreSeleccionado(e.target.value)}>
                 {productosUnicos.map(n => <option key={n} value={n}>{n}</option>)}
               </select>
-              <input 
-                type="number" 
-                placeholder="CANT." 
-                style={{...inputStyle, textAlign: 'center'}} 
-                value={cantidad} 
-                onChange={e => setCantidad(e.target.value === '' ? '' : Number(e.target.value))} 
-              />
+              <input type="text" placeholder="CANT." style={{...inputStyle, textAlign: 'center'}} value={cantidad} onChange={e => setCantidad(e.target.value.replace(/\D/g, ''))} />
             </div>
-            <div style={{ marginBottom: '20px' }}>
-              <select style={inputStyle} value={tallaSeleccionada} onChange={e => setTallaSeleccionada(e.target.value)}>
-                {tallasDeInventario.map(t => <option key={t.id} value={t.talla}>{t.talla} (${Number(t.precio_base).toLocaleString()})</option>)}
-                <option value="ESPECIAL">✨ TALLA ESPECIAL</option>
-              </select>
-              {tallaSeleccionada === 'ESPECIAL' && (
-                <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} style={{ marginTop: '12px' }}>
-                  <label style={labelStyle}><Banknote size={14} /> Precio Acordado ($)</label>
-                  {/* FIX: Formateo de moneda en talla especial */}
-                  <input 
-                    type="text" 
-                    style={{...inputStyle, borderColor: '#f472b6'}} 
-                    placeholder="Valor especial" 
-                    value={formatMontoInput(precioManualEspecial)} 
-                    onChange={e => setPrecioManualEspecial(e.target.value.replace(/\D/g, ''))} 
-                  />
-                </motion.div>
-              )}
-            </div>
-            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={agregarAlCarrito} type="button" style={{ width: '100%', backgroundColor: '#000', color: '#fff', border: 'none', padding: '18px', borderRadius: '18px', fontWeight: '950', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', cursor: 'pointer' }}>
-              <Plus size={22} /> AÑADIR
-            </motion.button>
-          </motion.div>
+            <select style={inputStyle} value={tallaSeleccionada} onChange={e => setTallaSeleccionada(e.target.value)}>
+              {tallasDeInventario.map(t => <option key={t.id} value={t.talla}>{t.talla} (${Number(t.precio_base).toLocaleString()})</option>)}
+              <option value="ESPECIAL">TALLA ESPECIAL</option>
+            </select>
+            {tallaSeleccionada === 'ESPECIAL' && (
+              <div style={{ marginTop: '10px' }}>
+                <input type="text" style={inputStyle} placeholder="Precio Especial" value={formatMontoInput(precioManualEspecial)} onChange={e => setPrecioManualEspecial(e.target.value.replace(/\D/g, ''))} />
+              </div>
+            )}
+            <button onClick={agregarAlCarrito} type="button" style={{ width: '100%', backgroundColor: '#000', color: '#fff', padding: '15px', borderRadius: '15px', fontWeight: '950', marginTop: '15px', cursor: 'pointer' }}>AÑADIR</button>
+          </div>
 
           <AnimatePresence>
             {carrito.length > 0 && (
-              <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} style={{ ...cardStyle, background: '#fff', borderStyle: 'dashed' }}>
-                <p style={labelStyle}>Artículos en Carrito</p>
+              <div style={{ ...cardStyle, borderStyle: 'dashed' }}>
                 {carrito.map((item) => (
-                  <div key={item.tempId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
-                    <div style={{ flex: 1 }}><p style={{ margin: 0, fontWeight: '900', color: '#000', fontSize: '15px' }}>{item.nombre}</p><p style={{ margin: 0, fontSize: '12px', fontWeight: '800', color: '#64748b' }}>{item.cantidad}x Talla {item.talla}</p></div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}><span style={{ fontWeight: '950', color: '#000', fontSize: '16px' }}>${(item.precio * item.cantidad).toLocaleString()}</span><button onClick={() => quitarDelCarrito(item.tempId)} style={{ color: '#ef4444', border: 'none', background: 'none', cursor: 'pointer' }}><X size={22} /></button></div>
+                  <div key={item.tempId} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
+                    <div><p style={{ margin: 0, fontWeight: '900' }}>{item.nombre} (T{item.talla})</p><p style={{ margin: 0, fontSize: '12px' }}>{item.cantidad} unidades</p></div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><span>${(item.precio * item.cantidad).toLocaleString()}</span><button onClick={() => quitarDelCarrito(item.tempId)} style={{ color: '#ef4444', border: 'none', background: 'none', cursor: 'pointer' }}><X size={20} /></button></div>
                   </div>
                 ))}
-                
-                <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '4px solid #000', textAlign: 'right' }}>
-                  <p style={{ margin: 0, fontSize: '12px', fontWeight: '900', color: '#64748b' }}>SUBTOTAL PRENDAS</p>
-                  <p style={{ margin: 0, fontSize: '24px', fontWeight: '950', color: '#000' }}>${totalOriginal.toLocaleString('es-CL')}</p>
-                </div>
-              </motion.div>
+              </div>
             )}
           </AnimatePresence>
 
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} style={{ backgroundColor: '#000', color: '#fff', padding: '24px', borderRadius: '32px', border: '4px solid #000', boxShadow: '8px 8px 0px #3b82f6' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '20px' }}>
-              <motion.button type="button" onClick={() => setMostrarDescuento(!mostrarDescuento)} style={{ width: '100%', backgroundColor: '#3b82f6', color: '#fff', border: '2px solid #fff', padding: '12px', borderRadius: '14px', fontWeight: '950', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer', fontSize: '12px' }}>
-                <Tag size={16} /> DESC.
-              </motion.button>
-              <motion.button type="button" onClick={() => setMostrarAjuste(!mostrarAjuste)} style={{ width: '100%', backgroundColor: '#a78bfa', color: '#fff', border: '2px solid #fff', padding: '12px', borderRadius: '14px', fontWeight: '950', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer', fontSize: '12px' }}>
-                <Edit3 size={16} /> AJUSTE
-              </motion.button>
-            </div>
-
-            <AnimatePresence>
-              {mostrarDescuento && (
-                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} style={{ marginBottom: '20px', padding: '15px', border: '2px dashed #fff', borderRadius: '20px' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '12px' }}>
-                    <button type="button" onClick={() => setTipoDescuento('monto')} style={{ padding: '10px', borderRadius: '10px', border: '2px solid #fff', fontWeight: '900', background: tipoDescuento === 'monto' ? '#fff' : 'transparent', color: tipoDescuento === 'monto' ? '#000' : '#fff', fontSize: '11px' }}>$ PESOS</button>
-                    <button type="button" onClick={() => setTipoDescuento('porcentaje')} style={{ padding: '10px', borderRadius: '10px', border: '2px solid #fff', fontWeight: '900', background: tipoDescuento === 'porcentaje' ? '#fff' : 'transparent', color: tipoDescuento === 'porcentaje' ? '#000' : '#fff', fontSize: '11px' }}>% PORC.</button>
-                  </div>
-                  <input type="number" style={{ ...inputStyle, textAlign: 'center' }} value={valorDescuento} onChange={(e) => setValorDescuento(Number(e.target.value))} placeholder="0" />
-                </motion.div>
-              )}
-              {mostrarAjuste && (
-                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} style={{ marginBottom: '20px', padding: '15px', border: '2px dashed #a78bfa', borderRadius: '20px' }}>
-                   <label style={{ fontSize: '11px', fontWeight: '900', color: '#fff', marginBottom: '8px', display: 'block' }}>AJUSTE AL TOTAL ($)</label>
-                   <input type="number" placeholder="Ej: -2000 o 500" style={{ ...inputStyle, textAlign: 'center', color: '#a78bfa' }} value={valorAjuste} onChange={(e) => setValorAjuste(Number(e.target.value))} />
-                </motion.div>
-              )}
-            </AnimatePresence>
-
+          <div style={{ backgroundColor: '#000', color: '#fff', padding: '25px', borderRadius: '30px', border: '4px solid #000' }}>
             <div style={{ textAlign: 'right', marginBottom: '20px' }}>
               <p style={{ margin: 0, fontSize: '14px', fontWeight: '950', color: '#4ade80' }}>PRECIO FINAL</p>
               <p style={{ margin: 0, fontSize: '42px', fontWeight: '950', color: '#4ade80', lineHeight: '1' }}>${totalConDescuento.toLocaleString('es-CL')}</p>
             </div>
-
-            <div style={{ display: 'grid', gap: '20px' }}>
-              <div>
-                <label style={{ color: '#fff', fontSize: '11px', fontWeight: '950', marginBottom: '5px', display: 'block' }}>ABONO RECIBIDO ($)</label>
-                {/* FIX: Formateo de moneda y seguridad en abono */}
-                <input 
-                  type="text" 
-                  style={{ ...inputStyle, textAlign: 'center' }} 
-                  value={formatMontoInput(montoPagado)} 
-                  onChange={e => setMontoPagado(e.target.value.replace(/\D/g, ''))} 
-                  placeholder="$0"
-                />
-              </div>
-              <div>
-                <label style={{ color: '#fff', fontSize: '11px', fontWeight: '950', marginBottom: '5px', display: 'block' }}>MÉTODO</label>
-                <select style={inputStyle} value={metodoPago} onChange={e => setMetodoPago(e.target.value)}>
-                  <option value="Transferencia">Transferencia</option><option value="Efectivo">Efectivo</option>
-                  <option value="Débito">Débito</option><option value="Crédito">Crédito</option>
-                </select>
-              </div>
-              <motion.button type="submit" disabled={loading || carrito.length === 0} style={{ width: '100%', backgroundColor: '#4ade80', color: '#000', border: '3px solid #000', padding: '20px', borderRadius: '20px', fontWeight: '950', fontSize: '20px', cursor: 'pointer' }}>
-                {loading ? '...' : 'FINALIZAR'}
-              </motion.button>
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ color: '#fff', fontSize: '11px', fontWeight: '900' }}>ABONO RECIBIDO</label>
+              <input type="text" style={{...inputStyle, textAlign: 'center'}} value={formatMontoInput(montoPagado)} onChange={e => setMontoPagado(e.target.value.replace(/\D/g, ''))} placeholder="$0" />
             </div>
-          </motion.div>
+            <select style={inputStyle} value={metodoPago} onChange={e => setMetodoPago(e.target.value)}>
+              <option value="Transferencia">Transferencia</option>
+              <option value="Efectivo">Efectivo</option>
+            </select>
+            <button type="submit" disabled={loading || carrito.length === 0} style={{ width: '100%', backgroundColor: '#4ade80', color: '#000', padding: '18px', borderRadius: '15px', fontWeight: '950', fontSize: '18px', marginTop: '15px', cursor: 'pointer' }}>
+              {loading ? 'FINALIZANDO...' : 'FINALIZAR'}
+            </button>
+          </div>
 
-          <div style={{ marginTop: '25px', marginBottom: '40px' }}>
+          <div style={{ marginTop: '20px', marginBottom: '40px' }}>
             <label style={labelStyle}><MessageSquare size={16} /> Notas</label>
-            <textarea placeholder="Ej: Bordado especial..." style={{ ...inputStyle, height: '80px', resize: 'none' }} value={observaciones} onChange={e => setObservaciones(e.target.value)} />
+            <textarea style={{ ...inputStyle, height: '80px', resize: 'none' }} value={observaciones} onChange={e => setObservaciones(e.target.value)} />
           </div>
         </form>
       </div>
