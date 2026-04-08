@@ -73,8 +73,16 @@ export default function RegistroPedido() {
     return Array.from(new Set(filtrados.map(i => i.nombre)))
   }, [inventario, colegio])
 
+  // MODIFICACIÓN: Ordenamiento lógico de tallas
   const tallasDeInventario = useMemo(() => {
-    return inventario.filter(i => i.colegio === colegio && i.nombre === nombreSeleccionado)
+    const ordenPrioridad: { [key: string]: number } = {
+      '4': 1, '5': 2, '6': 3, '8': 4, '10': 5, '12': 6, '14': 7, '16': 8,
+      'S': 9, 'M': 10, 'L': 11, 'XL': 12, '2XL': 13, '3XL': 14
+    }
+
+    return inventario
+      .filter(i => i.colegio === colegio && i.nombre === nombreSeleccionado)
+      .sort((a, b) => (ordenPrioridad[a.talla] || 99) - (ordenPrioridad[b.talla] || 99))
   }, [colegio, nombreSeleccionado, inventario])
 
   // EFECTO: Sincronizar selectores cuando cambia el colegio o producto
@@ -288,7 +296,6 @@ export default function RegistroPedido() {
               <ShoppingBag size={20} color="#f472b6" /> PRENDAS
             </h2>
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '12px', marginBottom: '16px' }}>
-              {/* MODIFICACIÓN: Usar productos filtrados por colegio */}
               <select style={inputStyle} value={nombreSeleccionado} onChange={e => setNombreSeleccionado(e.target.value)}>
                 {productosUnicos.length > 0 ? (
                   productosUnicos.map(n => <option key={n} value={n}>{n}</option>)
@@ -305,8 +312,8 @@ export default function RegistroPedido() {
               />
             </div>
             <div style={{ marginBottom: '20px' }}>
-              {/* MODIFICACIÓN: Usar tallas filtradas por colegio y producto */}
               <select style={inputStyle} value={tallaSeleccionada} onChange={e => setTallaSeleccionada(e.target.value)}>
+                {/* Tallas ahora aparecen ordenadas lógicamente */}
                 {tallasDeInventario.map(t => <option key={t.id} value={t.talla}>{t.talla} (${Number(t.precio_base).toLocaleString()})</option>)}
                 <option value="ESPECIAL">✨ TALLA ESPECIAL</option>
               </select>
@@ -383,7 +390,6 @@ export default function RegistroPedido() {
             <div style={{ display: 'grid', gap: '20px' }}>
               <div>
                 <label style={{ color: '#fff', fontSize: '11px', fontWeight: '950', marginBottom: '5px', display: 'block' }}>ABONO RECIBIDO ($)</label>
-                {/* FIX: Formateo de moneda y seguridad en abono */}
                 <input 
                   type="text" 
                   style={{ ...inputStyle, textAlign: 'center' }} 
