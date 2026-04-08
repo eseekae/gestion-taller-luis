@@ -8,7 +8,8 @@ import * as XLSX from 'xlsx-js-style'
 import { 
   ArrowLeft, Search, School, Phone, Calendar, Printer, Trash2, 
   MessageCircle, MessageSquare, Bell, Package, CheckCircle, 
-  X, History, User, CreditCard, Plus, Clock, Minus, ChevronDown, ChevronUp, Tag, Boxes, Download, FileText
+  X, History, User, CreditCard, Plus, Clock, Minus, ChevronDown, ChevronUp, Tag, Boxes, Download, FileText, Ban, AlertOctagon,
+  Edit3, AlertCircle // Añadido AlertCircle para la advertencia
 } from 'lucide-react'
 
 export default function VerPedidos() {
@@ -31,8 +32,20 @@ export default function VerPedidos() {
     deudaMaxima: 0 as number 
   })
 
+  const [modalEditarCliente, setModalEditarCliente] = useState({
+    open: false,
+    clienteId: null as number | null,
+    nombre: '',
+    telefono: '',
+    rut: ''
+  })
+
   const cargar = useCallback(async () => {
-    if (!localStorage.getItem('user_role')) return router.push('/login')
+    if (!localStorage.getItem('user_role')) {
+      router.push('/login')
+      return
+    }
+
     setLoading(true)
 
     const [pRes, cRes, iRes, dRes, pagosRes, aRes] = await Promise.all([
@@ -54,7 +67,6 @@ export default function VerPedidos() {
         return { ...d, p_nombre: prod?.nombre || 'Producto' }
       })
 
-      // NUEVA LÓGICA DE ESTADOS (Pilar 4 de la propuesta)
       const todoEntregado = detalles?.length > 0 && detalles.every(d => (d.cantidad_entregada || 0) >= d.cantidad)
       const algoEntregado = detalles?.some(d => (d.cantidad_entregada || 0) > 0)
       const todoListo = detalles?.length > 0 && detalles.every(d => d.estado === 'Listo para retiro' || d.estado === 'Notificado' || d.estado === 'Entregado')
@@ -64,7 +76,9 @@ export default function VerPedidos() {
       let colorBg = ''
       let colorText = '#000'
 
-      if (todoEntregado && pagoCompleto) {
+      if (p.estado === 'Anulado') {
+        estadoMacro = 'ANULADO'; colorBg = '#f1f5f9'; colorText = '#475569'
+      } else if (todoEntregado && pagoCompleto) {
         estadoMacro = 'FINALIZADO'; colorBg = '#4ade80'
       } else if (todoEntregado && !pagoCompleto) {
         estadoMacro = 'ENTREGADO (DEUDA)'; colorBg = '#fbbf24'
@@ -77,7 +91,11 @@ export default function VerPedidos() {
       }
 
       return { 
-        ...p, c_nombre: cliente?.nombre || 'S/N', c_telefono: cliente?.telefono || '', 
+        ...p, 
+        c_nombre: cliente?.nombre || 'S/N', 
+        c_telefono: cliente?.telefono || '', 
+        c_rut: cliente?.rut || '', 
+        cliente_ref_id: cliente?.id, 
         detalles, pagos, total_pagado: totalPagado, estado_macro: estadoMacro, color_bg: colorBg, color_text: colorText,
         pagoCompleto, todoEntregado
       }
@@ -88,12 +106,41 @@ export default function VerPedidos() {
 
   useEffect(() => { cargar() }, [cargar])
 
+  const guardarEdicionCliente = async () => {
+    const { clienteId, nombre, telefono, rut } = modalEditarCliente
+    
+    if (!nombre.trim()) return alert("El nombre no puede estar vacío.")
+    
+    // MODIFICACIÓN: Validación estricta de 8 dígitos
+    if (telefono.length !== 8) return alert("El teléfono debe tener exactamente 8 números.")
+    
+    try {
+      // MODIFICACIÓN: Inyección de +569 automático al guardar
+      const telefonoCompleto = `+569${telefono}`
+
+      const { error } = await supabase
+        .from('clientes')
+        .update({ nombre: nombre.trim(), telefono: telefonoCompleto, rut: rut.trim() })
+        .eq('id', clienteId)
+
+      if (error) throw error
+
+      await registrarLog(`Editó datos del cliente: ${nombre}`, `ID Cliente: ${clienteId}`)
+      
+      setModalEditarCliente({ open: false, clienteId: null, nombre: '', telefono: '', rut: '' })
+      await cargar() 
+      alert("✅ Datos del cliente actualizados.")
+    } catch (err: any) { 
+      alert("Error al actualizar cliente: " + err.message) 
+    }
+  }
+
   const exportarExcel = () => {
     const dataFilas: any[] = []
     const headers = [
       'ID PEDIDO', 'FECHA REG.', 'HORA REG.', 'CLIENTE', 'TELEFONO', 'COLEGIO',
       'PRODUCTO', 'TALLA', 'CANT.', 'ENTREGADO', 'VALOR UNIT.', 'SUBTOTAL',
-      'TOTAL ORDEN', 'TOTAL ABONADO', 'SALDO PENDIENTE', 'ESTADO', 'DETALLE PAGOS', 'OBSERVACIONES'
+      'TOTAL ORDEN', 'TOTAL ABONADO', 'SALDO PENDIENTE', 'ESTADO', 'DETALLE PAGOS', 'OBSERVACIONES', 'MOTIVO ANULACIÓN'
     ]
 
     datos.forEach(p => {
@@ -125,7 +172,8 @@ export default function VerPedidos() {
           'SALDO PENDIENTE': index === 0 ? deuda : '',
           'ESTADO': p.estado_macro,
           'DETALLE PAGOS': index === 0 ? historialPagos : '',
-          'OBSERVACIONES': index === 0 ? p.observaciones || '' : ''
+          'OBSERVACIONES': index === 0 ? p.observaciones || '' : '',
+          'MOTIVO ANULACIÓN': index === 0 ? (p.motivo_anulacion || '') : ''
         })
       })
       dataFilas.push(Object.fromEntries(headers.map(h => [h, '---'])))
@@ -222,15 +270,29 @@ export default function VerPedidos() {
     return `$${Number(raw).toLocaleString('es-CL')}`
   }
 
-  const borrarPedido = async (id: number, nombre: string) => {
-    if(!confirm('⚠️ ¿Borrar pedido?')) return
+  const anularPedido = async (p: any) => {
+    if (p.estado === 'Anulado') return alert('Este pedido ya se encuentra anulado.')
+    const motivo = prompt(`¿Por qué deseas ANULAR el pedido #${p.id} de ${p.c_nombre}?`)
+    if (!motivo) return alert('Debes ingresar un motivo para anular el pedido.')
+
+    if(!confirm('⚠️ ¿Estás seguro? El stock se devolverá automáticamente y el pedido quedará NULO.')) return
+    
     try {
-      await supabase.from('pagos').delete().eq('pedido_id', id)
-      await supabase.from('detalles_pedido').delete().eq('pedido_id', id)
-      await supabase.from('pedidos').delete().eq('id', id)
-      await registrarLog(`Eliminó pedido de ${nombre}`, `ID: ${id}`)
+      await supabase.from('pedidos').update({ estado: 'Anulado', motivo_anulacion: motivo }).eq('id', p.id)
+      
+      if (p.detalles) {
+        for (const det of p.detalles) {
+           await supabase.rpc('devolver_stock_anulacion', { 
+             prod_id: det.producto_id, 
+             cant: det.cantidad,
+             estado_item: det.estado 
+           })
+        }
+      }
+      
+      await registrarLog(`Anuló pedido #${p.id} de ${p.c_nombre}. Motivo: ${motivo}`, `ID: ${p.id}`)
       cargar()
-    } catch (err) { alert('❌ Error.') }
+    } catch (err) { alert('❌ Error al anular el pedido.') }
   }
 
   const toggleExpandir = (id: string) => {
@@ -277,11 +339,10 @@ export default function VerPedidos() {
             const expandido = !!expandidos[p.id]
             const idFormateado = p.id.toString().padStart(4, '0')
             
-            // FIX: Candado inteligente para bloquear modificaciones
-            const esFinalizado = p.estado_macro === 'FINALIZADO'
+            const esFinalizado = p.estado_macro === 'FINALIZADO' || p.estado_macro === 'ANULADO'
 
             return (
-              <motion.div key={p.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.05 }} style={cardStyle}>
+              <motion.div key={p.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.05 }} style={{...cardStyle, opacity: p.estado === 'Anulado' ? 0.6 : 1}}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', alignItems: 'flex-start' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <div style={{ display: 'flex', gap: '8px' }}>
@@ -291,17 +352,46 @@ export default function VerPedidos() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#000', fontWeight: '900', fontSize: '12px' }}><Calendar size={14} /> ENTREGA: {fechaEntrega}</div>
                   </div>
                   <div style={{ display: 'flex', gap: '8px' }}>
-                     <button onClick={() => window.open(`/ticket/${p.id}`, '_blank')} title="Imprimir Ticket" style={{ background: '#fff', border: '2px solid #000', borderRadius: '10px', padding: '5px', cursor: 'pointer' }}><Printer size={18} color="#000" /></button>
-                     <button onClick={() => window.open(`/vale-entrega/${p.id}`, '_blank')} title="Generar Vale de Entrega" style={{ background: '#000', color: '#fff', border: '2px solid #000', borderRadius: '10px', padding: '5px', cursor: 'pointer' }}>
+                     <button disabled={p.estado === 'Anulado'} onClick={() => window.open(`/ticket/${p.id}`, '_blank')} title="Imprimir Ticket" style={{ background: '#fff', border: '2px solid #000', borderRadius: '10px', padding: '5px', cursor: p.estado === 'Anulado' ? 'not-allowed' : 'pointer', opacity: p.estado === 'Anulado' ? 0.3 : 1 }}><Printer size={18} color="#000" /></button>
+                     <button disabled={p.estado === 'Anulado'} onClick={() => window.open(`/vale-entrega/${p.id}`, '_blank')} title="Generar Vale de Entrega" style={{ background: '#000', color: '#fff', border: '2px solid #000', borderRadius: '10px', padding: '5px', cursor: p.estado === 'Anulado' ? 'not-allowed' : 'pointer', opacity: p.estado === 'Anulado' ? 0.3 : 1 }}>
                         <FileText size={18} />
                      </button>
                   </div>
                 </div>
 
                 <div style={{ marginBottom: '16px' }}>
-                  <h2 style={{ fontWeight: '950', fontSize: '26px', color: '#000', margin: '0 0 4px 0', letterSpacing: '-0.5px' }}>{p.c_nombre}</h2>
-                  <span style={{ fontSize: '14px', fontWeight: '800', color: '#000', display: 'flex', alignItems: 'center', gap: '6px' }}><Phone size={14} /> {p.c_telefono}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '4px' }}>
+                    <h2 style={{ fontWeight: '950', fontSize: '26px', color: '#000', margin: 0, letterSpacing: '-0.5px', textDecoration: p.estado === 'Anulado' ? 'line-through' : 'none' }}>{p.c_nombre}</h2>
+                    <button 
+                      disabled={p.estado === 'Anulado'}
+                      onClick={() => setModalEditarCliente({
+                        open: true,
+                        clienteId: p.cliente_ref_id,
+                        nombre: p.c_nombre,
+                        telefono: p.c_telefono.replace('+569', ''),
+                        rut: p.c_rut
+                      })}
+                      style={{ background: 'none', border: 'none', cursor: p.estado === 'Anulado' ? 'not-allowed' : 'pointer', padding: '4px', display: 'flex', alignItems: 'center', color: '#3b82f6', opacity: p.estado === 'Anulado' ? 0.3 : 1 }}
+                      title="Editar datos del cliente"
+                    >
+                      <Edit3 size={20} />
+                    </button>
+                  </div>
+                  
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <span style={{ fontSize: '14px', fontWeight: '800', color: '#000', display: 'flex', alignItems: 'center', gap: '6px' }}><Phone size={14} /> {p.c_telefono}</span>
+                    <span style={{ fontSize: '14px', fontWeight: '800', color: '#3b82f6', display: 'flex', alignItems: 'center', gap: '6px' }}><School size={14} /> {p.colegio || 'Particular'}</span>
+                  </div>
                 </div>
+
+                {p.estado === 'Anulado' && p.motivo_anulacion && (
+                  <div style={{ backgroundColor: '#fee2e2', border: '2px solid #ef4444', padding: '12px', borderRadius: '12px', marginBottom: '16px' }}>
+                    <p style={{ margin: 0, fontSize: '11px', fontWeight: '950', color: '#b91c1c', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      <AlertOctagon size={14} /> MOTIVO DE ANULACIÓN:
+                    </p>
+                    <p style={{ margin: '4px 0 0 0', fontSize: '13px', fontWeight: '800', color: '#000' }}>{p.motivo_anulacion}</p>
+                  </div>
+                )}
 
                 <motion.button onClick={() => toggleExpandir(p.id)} style={{ width: '100%', padding: '12px', border: '3px solid #000', borderRadius: '14px', marginBottom: '16px', backgroundColor: '#f1f5f9', fontWeight: '950', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', color: '#000' }}>
                   {expandido ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
@@ -325,7 +415,6 @@ export default function VerPedidos() {
                               </div>
                             </div>
                             <div style={{ display: 'flex', gap: '6px' }}>
-                              {/* FIX: Deshabilitar botones de entrega si está FINALIZADO */}
                               <button disabled={esFinalizado} onClick={() => actualizarEntregaItem(det, -1)} style={{ background: '#ef4444', color: '#fff', border: '2px solid #000', borderRadius: '8px', width: '30px', height: '30px', fontWeight: '950', cursor: esFinalizado ? 'not-allowed' : 'pointer', opacity: esFinalizado ? 0.4 : 1 }}>-</button>
                               <button disabled={esFinalizado} onClick={() => actualizarEntregaItem(det, 1)} style={{ background: '#4ade80', color: '#000', border: '2px solid #000', borderRadius: '8px', width: '30px', height: '30px', fontWeight: '950', cursor: esFinalizado ? 'not-allowed' : 'pointer', opacity: esFinalizado ? 0.4 : 1 }}>+</button>
                             </div>
@@ -343,7 +432,6 @@ export default function VerPedidos() {
                 </AnimatePresence>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '24px' }}>
-                  {/* FIX: Deshabilitar botones de acción si está FINALIZADO */}
                   <motion.button 
                     disabled={esFinalizado}
                     onClick={() => notificarCliente(p)} 
@@ -370,7 +458,6 @@ export default function VerPedidos() {
                     <p style={labelStyle}>PAGADO</p>
                     <p style={{ fontSize: '16px', fontWeight: '950', color: '#166534', margin: 0 }}>${Number(p.total_pagado || 0).toLocaleString('es-CL')}</p>
                     <div style={{ position: 'absolute', right: '5px', top: '15px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                       {/* FIX: Deshabilitar botones de pago si está FINALIZADO */}
                        <button disabled={esFinalizado} onClick={() => setModalPago({ ...modalPago, open: true, pedidoId: p.id, nombreCliente: p.c_nombre, esCorreccion: false, deudaMaxima: deuda })} style={{ background: '#000', color: '#fff', border: 'none', borderRadius: '4px', cursor: esFinalizado ? 'not-allowed' : 'pointer', opacity: esFinalizado ? 0.3 : 1 }}><Plus size={12} /></button>
                        <button disabled={esFinalizado} onClick={() => setModalPago({ ...modalPago, open: true, pedidoId: p.id, nombreCliente: p.c_nombre, esCorreccion: true, deudaMaxima: p.total_pagado })} style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: esFinalizado ? 'not-allowed' : 'pointer', opacity: esFinalizado ? 0.3 : 1 }}><Minus size={12} /></button>
                     </div>
@@ -382,7 +469,10 @@ export default function VerPedidos() {
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid #f1f5f9', paddingTop: '16px' }}>
-                  <button onClick={() => borrarPedido(p.id, p.c_nombre)} style={{ color: '#ef4444', fontWeight: '900', border: 'none', background: 'none', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px' }}><Trash2 size={16} /> ELIMINAR</button>
+                  <button disabled={p.estado === 'Anulado'} onClick={() => anularPedido(p)} style={{ color: p.estado === 'Anulado' ? '#94a3b8' : '#ef4444', fontWeight: '900', border: 'none', background: 'none', display: 'flex', alignItems: 'center', gap: '6px', cursor: p.estado === 'Anulado' ? 'not-allowed' : 'pointer', fontSize: '12px' }}>
+                    <Ban size={16} /> 
+                    {p.estado === 'Anulado' ? 'PEDIDO ANULADO' : 'ANULAR PEDIDO'}
+                  </button>
                   <div style={{ display: 'flex', gap: '12px' }}>
                     <button onClick={() => window.open(`https://wa.me/${p.c_telefono}`, '_blank')} style={{ background: '#22c55e', color: '#fff', padding: '10px', borderRadius: '14px', border: '2px solid #000', cursor: 'pointer' }}><MessageCircle size={20} /></button>
                   </div>
@@ -411,7 +501,6 @@ export default function VerPedidos() {
           </div>
         </div>
 
-        {/* MODAL DE PAGO / CORRECCIÓN */}
         <AnimatePresence>
           {modalPago.open && (
             <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
@@ -443,6 +532,66 @@ export default function VerPedidos() {
                   </div>
                   <button onClick={guardarPago} style={{ width: '100%', backgroundColor: modalPago.esCorreccion ? '#ef4444' : '#4ade80', color: modalPago.esCorreccion ? '#fff' : '#000', padding: '20px', borderRadius: '20px', border: '4px solid #000', fontWeight: '950', fontSize: '18px', cursor: 'pointer' }}>
                     {modalPago.esCorreccion ? 'CONFIRMAR CORRECCIÓN' : 'CONFIRMAR PAGO'}
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* NUEVO MODAL: EDICIÓN DE CLIENTE */}
+        <AnimatePresence>
+          {modalEditarCliente.open && (
+            <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+              <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} style={{ backgroundColor: '#fff', border: '5px solid #000', borderRadius: '32px', padding: '35px', width: '100%', maxWidth: '420px', boxShadow: '15px 15px 0px #3b82f6' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '25px' }}>
+                  <h3 style={{ fontWeight: '950', fontSize: '24px', color: '#000' }}>EDITAR CLIENTE</h3>
+                  <button onClick={() => setModalEditarCliente({...modalEditarCliente, open: false})} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={28} /></button>
+                </div>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  <div>
+                    <label style={labelStyle}>Nombre Completo</label>
+                    <input 
+                      type="text" 
+                      style={inputStyle} 
+                      value={modalEditarCliente.nombre} 
+                      onChange={e => setModalEditarCliente({...modalEditarCliente, nombre: e.target.value})} 
+                    />
+                  </div>
+                  
+                  <div>
+                    <label style={labelStyle}>R.U.T</label>
+                    <input 
+                      type="text" 
+                      style={inputStyle} 
+                      value={modalEditarCliente.rut} 
+                      onChange={e => setModalEditarCliente({...modalEditarCliente, rut: e.target.value})} 
+                    />
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>Teléfono Móvil</label>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <div style={{ padding: '16px 10px', border: '3px solid #000', borderRadius: '16px', fontSize: '14px', fontWeight: '950', backgroundColor: '#e2e8f0', color: '#000', display: 'flex', alignItems: 'center' }}>+569</div>
+                      <input 
+                        type="tel" 
+                        maxLength={8} 
+                        style={inputStyle} 
+                        value={modalEditarCliente.telefono} 
+                        onChange={e => setModalEditarCliente({...modalEditarCliente, telefono: e.target.value.replace(/\D/g, '').slice(0, 8)})} 
+                      />
+                    </div>
+                    {/* MODIFICACIÓN: Alerta de faltan números */}
+                    {modalEditarCliente.telefono.length > 0 && modalEditarCliente.telefono.length < 8 && (
+                      <p style={{ color: '#ef4444', fontSize: '11px', fontWeight: '900', marginTop: '5px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <AlertCircle size={12} /> FALTAN {8 - modalEditarCliente.telefono.length} NÚMEROS
+                      </p>
+                    )}
+                  </div>
+
+                  <button onClick={guardarEdicionCliente} style={{ width: '100%', backgroundColor: '#000', color: '#fff', padding: '20px', borderRadius: '20px', border: 'none', fontWeight: '950', fontSize: '18px', cursor: 'pointer', marginTop: '10px' }}>
+                    GUARDAR CAMBIOS
                   </button>
                 </div>
               </motion.div>

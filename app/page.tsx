@@ -9,15 +9,15 @@ export default function Home() {
   const [user, setUser] = useState<any>(null)
 
   useEffect(() => {
-    // FIX: Cambiamos sessionStorage por localStorage para romper el círculo vicioso
+    // 🛡️ BLOQUEO DE SEGURIDAD ESTANDARIZADO
+    if (!localStorage.getItem('user_role')) {
+      router.push('/login')
+      return
+    }
+
     const session = localStorage.getItem('user_role')
     const userName = localStorage.getItem('user_name')
-    
-    if (!session) {
-      router.push('/login') 
-    } else {
-      setUser({ role: session, nombre: userName || 'Usuario' })
-    }
+    setUser({ role: session, nombre: userName || 'Usuario' })
   }, [router])
 
   const logout = () => {
