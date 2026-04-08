@@ -8,7 +8,7 @@ import * as XLSX from 'xlsx-js-style'
 import { 
   ArrowLeft, Search, School, Phone, Calendar, Printer, Trash2, 
   MessageCircle, MessageSquare, Bell, Package, CheckCircle, 
-  X, History, User, CreditCard, Plus, Clock, Minus, ChevronDown, ChevronUp, Tag, Boxes, Download, FileText
+  X, History, User, CreditCard, Plus, Clock, Minus, ChevronDown, ChevronUp, Tag, Boxes, Download, FileText, Ban, AlertOctagon
 } from 'lucide-react'
 
 export default function VerPedidos() {
@@ -64,7 +64,9 @@ export default function VerPedidos() {
       let colorBg = ''
       let colorText = '#000'
 
-      if (todoEntregado && pagoCompleto) {
+      if (p.estado === 'Anulado') {
+        estadoMacro = 'ANULADO'; colorBg = '#f1f5f9'; colorText = '#475569'
+      } else if (todoEntregado && pagoCompleto) {
         estadoMacro = 'FINALIZADO'; colorBg = '#4ade80'
       } else if (todoEntregado && !pagoCompleto) {
         estadoMacro = 'ENTREGADO (DEUDA)'; colorBg = '#fbbf24'
@@ -222,15 +224,32 @@ export default function VerPedidos() {
     return `$${Number(raw).toLocaleString('es-CL')}`
   }
 
-  const borrarPedido = async (id: number, nombre: string) => {
-    if(!confirm('⚠️ ¿Borrar pedido?')) return
+  // MODIFICACIÓN: Se reemplazó borrarPedido por anularPedido (Pilar 1: Modificar lo estrictamente necesario)
+  const anularPedido = async (p: any) => {
+    if (p.estado === 'Anulado') return alert('Este pedido ya se encuentra anulado.')
+    const motivo = prompt(`¿Por qué deseas ANULAR el pedido #${p.id} de ${p.c_nombre}?`)
+    if (!motivo) return alert('Debes ingresar un motivo para anular el pedido.')
+
+    if(!confirm('⚠️ ¿Estás seguro? El stock se devolverá automáticamente y el pedido quedará NULO.')) return
+    
     try {
-      await supabase.from('pagos').delete().eq('pedido_id', id)
-      await supabase.from('detalles_pedido').delete().eq('pedido_id', id)
-      await supabase.from('pedidos').delete().eq('id', id)
-      await registrarLog(`Eliminó pedido de ${nombre}`, `ID: ${id}`)
+      // 1. Marcar como anulado y guardar el motivo
+      await supabase.from('pedidos').update({ estado: 'Anulado', motivo_anulacion: motivo }).eq('id', p.id)
+      
+      // 2. Devolver stock (Solo si tu base de datos tiene la función RPC creada)
+      if (p.detalles) {
+        for (const det of p.detalles) {
+           await supabase.rpc('devolver_stock_anulacion', { 
+             prod_id: det.producto_id, 
+             cant: det.cantidad,
+             estado_item: det.estado 
+           })
+        }
+      }
+      
+      await registrarLog(`Anuló pedido #${p.id} de ${p.c_nombre}. Motivo: ${motivo}`, `ID: ${p.id}`)
       cargar()
-    } catch (err) { alert('❌ Error.') }
+    } catch (err) { alert('❌ Error al anular el pedido.') }
   }
 
   const toggleExpandir = (id: string) => {
@@ -278,10 +297,10 @@ export default function VerPedidos() {
             const idFormateado = p.id.toString().padStart(4, '0')
             
             // FIX: Candado inteligente para bloquear modificaciones
-            const esFinalizado = p.estado_macro === 'FINALIZADO'
+            const esFinalizado = p.estado_macro === 'FINALIZADO' || p.estado_macro === 'ANULADO'
 
             return (
-              <motion.div key={p.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.05 }} style={cardStyle}>
+              <motion.div key={p.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.05 }} style={{...cardStyle, opacity: p.estado === 'Anulado' ? 0.6 : 1}}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', alignItems: 'flex-start' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <div style={{ display: 'flex', gap: '8px' }}>
@@ -291,17 +310,27 @@ export default function VerPedidos() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#000', fontWeight: '900', fontSize: '12px' }}><Calendar size={14} /> ENTREGA: {fechaEntrega}</div>
                   </div>
                   <div style={{ display: 'flex', gap: '8px' }}>
-                     <button onClick={() => window.open(`/ticket/${p.id}`, '_blank')} title="Imprimir Ticket" style={{ background: '#fff', border: '2px solid #000', borderRadius: '10px', padding: '5px', cursor: 'pointer' }}><Printer size={18} color="#000" /></button>
-                     <button onClick={() => window.open(`/vale-entrega/${p.id}`, '_blank')} title="Generar Vale de Entrega" style={{ background: '#000', color: '#fff', border: '2px solid #000', borderRadius: '10px', padding: '5px', cursor: 'pointer' }}>
+                     <button disabled={p.estado === 'Anulado'} onClick={() => window.open(`/ticket/${p.id}`, '_blank')} title="Imprimir Ticket" style={{ background: '#fff', border: '2px solid #000', borderRadius: '10px', padding: '5px', cursor: p.estado === 'Anulado' ? 'not-allowed' : 'pointer', opacity: p.estado === 'Anulado' ? 0.3 : 1 }}><Printer size={18} color="#000" /></button>
+                     <button disabled={p.estado === 'Anulado'} onClick={() => window.open(`/vale-entrega/${p.id}`, '_blank')} title="Generar Vale de Entrega" style={{ background: '#000', color: '#fff', border: '2px solid #000', borderRadius: '10px', padding: '5px', cursor: p.estado === 'Anulado' ? 'not-allowed' : 'pointer', opacity: p.estado === 'Anulado' ? 0.3 : 1 }}>
                         <FileText size={18} />
                      </button>
                   </div>
                 </div>
 
                 <div style={{ marginBottom: '16px' }}>
-                  <h2 style={{ fontWeight: '950', fontSize: '26px', color: '#000', margin: '0 0 4px 0', letterSpacing: '-0.5px' }}>{p.c_nombre}</h2>
+                  <h2 style={{ fontWeight: '950', fontSize: '26px', color: '#000', margin: '0 0 4px 0', letterSpacing: '-0.5px', textDecoration: p.estado === 'Anulado' ? 'line-through' : 'none' }}>{p.c_nombre}</h2>
                   <span style={{ fontSize: '14px', fontWeight: '800', color: '#000', display: 'flex', alignItems: 'center', gap: '6px' }}><Phone size={14} /> {p.c_telefono}</span>
                 </div>
+
+                {/* MODIFICACIÓN: Alerta visual del motivo si está anulado */}
+                {p.estado === 'Anulado' && p.motivo_anulacion && (
+                  <div style={{ backgroundColor: '#fee2e2', border: '2px solid #ef4444', padding: '12px', borderRadius: '12px', marginBottom: '16px' }}>
+                    <p style={{ margin: 0, fontSize: '11px', fontWeight: '950', color: '#b91c1c', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      <AlertOctagon size={14} /> MOTIVO DE ANULACIÓN:
+                    </p>
+                    <p style={{ margin: '4px 0 0 0', fontSize: '13px', fontWeight: '800', color: '#000' }}>{p.motivo_anulacion}</p>
+                  </div>
+                )}
 
                 <motion.button onClick={() => toggleExpandir(p.id)} style={{ width: '100%', padding: '12px', border: '3px solid #000', borderRadius: '14px', marginBottom: '16px', backgroundColor: '#f1f5f9', fontWeight: '950', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', color: '#000' }}>
                   {expandido ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
@@ -382,7 +411,11 @@ export default function VerPedidos() {
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid #f1f5f9', paddingTop: '16px' }}>
-                  <button onClick={() => borrarPedido(p.id, p.c_nombre)} style={{ color: '#ef4444', fontWeight: '900', border: 'none', background: 'none', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px' }}><Trash2 size={16} /> ELIMINAR</button>
+                  {/* MODIFICACIÓN: Botón ahora llama a anularPedido y tiene ícono de Ban (Pilar 1: Modificar solo lo necesario) */}
+                  <button disabled={p.estado === 'Anulado'} onClick={() => anularPedido(p)} style={{ color: p.estado === 'Anulado' ? '#94a3b8' : '#ef4444', fontWeight: '900', border: 'none', background: 'none', display: 'flex', alignItems: 'center', gap: '6px', cursor: p.estado === 'Anulado' ? 'not-allowed' : 'pointer', fontSize: '12px' }}>
+                    {p.estado === 'Anulado' ? <Ban size={16} /> : <Ban size={16} />} 
+                    {p.estado === 'Anulado' ? 'PEDIDO ANULADO' : 'ANULAR PEDIDO'}
+                  </button>
                   <div style={{ display: 'flex', gap: '12px' }}>
                     <button onClick={() => window.open(`https://wa.me/${p.c_telefono}`, '_blank')} style={{ background: '#22c55e', color: '#fff', padding: '10px', borderRadius: '14px', border: '2px solid #000', cursor: 'pointer' }}><MessageCircle size={20} /></button>
                   </div>
