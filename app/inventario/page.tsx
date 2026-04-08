@@ -2,11 +2,12 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
+import { registrarLog } from '../../lib/auditoria'
 import { motion, AnimatePresence } from 'framer-motion'
 import * as XLSX from 'xlsx-js-style'
 import { 
   ArrowLeft, PackagePlus, Trash2, ChevronDown, ChevronUp, Plus, 
-  Minus, PackageOpen, School, Search, Download, Settings2, X, Boxes, Tag, AlertCircle 
+  Minus, PackageOpen, School, Search, Download, Settings2, X, Boxes, Tag, AlertCircle, Edit3, DollarSign, UploadCloud
 } from 'lucide-react'
 
 export default function Inventario() {
@@ -14,6 +15,7 @@ export default function Inventario() {
   const [items, setItems] = useState<any[]>([])
   const [listaColegios, setListaColegios] = useState<any[]>([])
   const [mostrarGestionColegios, setMostrarGestionColegios] = useState(false)
+  const [mostrarNuevoArticulo, setMostrarNuevoArticulo] = useState(false)
   const [nuevoNombreColegio, setNuevoNombreColegio] = useState('')
 
   const [nombre, setNombre] = useState('')
@@ -44,12 +46,40 @@ export default function Inventario() {
 
   useEffect(() => { cargar() }, [cargar])
 
+  // MODIFICACIÓN: Gestión de Colegios ampliada
   const agregarColegioMaestro = async () => {
     if (!nuevoNombreColegio) return
     const nombreUpper = nuevoNombreColegio.toUpperCase().trim()
     const { error } = await supabase.from('colegios').insert([{ nombre: nombreUpper }])
     if (error) alert("❌ Error")
-    else { setNuevoNombreColegio(''); cargar() }
+    else { 
+      setNuevoNombreColegio('')
+      await registrarLog(`Agregó nuevo colegio: ${nombreUpper}`, 'Inventario')
+      cargar() 
+    }
+  }
+
+  // MODIFICACIÓN: Función para Crear Nuevos Artículos
+  const guardarNuevoArticulo = async () => {
+    if (!nombre || !colegioSeleccionado || !talla || !precio) return alert("Completa todos los campos obligatorios.")
+    const nombreFormateado = nombre.toUpperCase().trim()
+    const tallaFormateada = talla.toUpperCase().trim()
+    
+    try {
+      const { error } = await supabase.from('inventario').insert([{
+        nombre: nombreFormateado,
+        colegio: colegioSeleccionado,
+        talla: tallaFormateada,
+        precio_base: Number(precio.replace(/\D/g, '')),
+        stock: stock ? Number(stock) : 0
+      }])
+      if (error) throw error
+      await registrarLog(`Creó artículo: ${nombreFormateado} (T${tallaFormateada}) para ${colegioSeleccionado}`, 'Inventario')
+      alert("Artículo creado con éxito")
+      setMostrarNuevoArticulo(false)
+      setNombre(''); setPrecio(''); setStock('')
+      cargar()
+    } catch (err: any) { alert("Error al crear artículo: " + err.message) }
   }
 
   const itemsFiltrados = useMemo(() => {
@@ -78,13 +108,44 @@ export default function Inventario() {
     setColegiosAbiertos(prev => prev.includes(idUnico) ? prev.filter(n => n !== idUnico) : [...prev, idUnico])
   }
 
-  const ajustarStock = (id: string, delta: number) => {
-    const itemActual = items.find(i => i.id === id);
-    if (!itemActual) return;
-    const nuevoStock = itemActual.stock + delta;
-    if (nuevoStock < 0) return;
-    setItems(prev => prev.map(item => item.id === id ? { ...item, stock: nuevoStock } : item));
-    supabase.from('inventario').update({ stock: nuevoStock }).eq('id', id);
+  // MODIFICACIÓN: Añadir Stock Positivo e Ingreso al Log (Plan Pilar 3 y 4)
+  const anadirStock = async (id: string, nombreItem: string, tallaItem: string) => {
+    const valor = prompt(`¿Cuántas unidades nuevas ingresarán de ${nombreItem} Talla ${tallaItem}? (Solo números positivos)`)
+    if (!valor) return
+    const cantidadIngreso = parseInt(valor.replace(/\D/g, ''), 10)
+    
+    if (isNaN(cantidadIngreso) || cantidadIngreso <= 0) {
+      return alert("Debes ingresar un número válido mayor a 0.")
+    }
+
+    const itemActual = items.find(i => i.id === id)
+    if (!itemActual) return
+    
+    const nuevoStock = itemActual.stock + cantidadIngreso
+    
+    try {
+      setItems(prev => prev.map(item => item.id === id ? { ...item, stock: nuevoStock } : item))
+      await supabase.from('inventario').update({ stock: nuevoStock }).eq('id', id)
+      
+      const user = localStorage.getItem('user_name') || 'Don Luis'
+      await registrarLog(`${user} INGRESÓ ${cantidadIngreso} unid. a ${nombreItem} (Talla ${tallaItem}). Stock anterior: ${itemActual.stock}, Nuevo: ${nuevoStock}`, `Entrada Inventario`)
+      alert(`✅ Ingreso registrado con éxito.`)
+    } catch (err) { alert("Error al ingresar stock.") }
+  }
+
+  // MODIFICACIÓN: Modificar Precio del Maestro (Plan Pilar 2)
+  const editarPrecioBase = async (id: string, precioActual: number, nombreItem: string) => {
+    const nuevo = prompt(`Nuevo precio base para ${nombreItem}:`, precioActual.toString())
+    if (!nuevo) return
+    const precioLimpio = Number(nuevo.replace(/\D/g, ''))
+    
+    if (precioLimpio >= 0) {
+      try {
+        setItems(prev => prev.map(item => item.id === id ? { ...item, precio_base: precioLimpio } : item))
+        await supabase.from('inventario').update({ precio_base: precioLimpio }).eq('id', id)
+        await registrarLog(`Modificó precio de ${nombreItem} de $${precioActual} a $${precioLimpio}`, 'Configuración Precios')
+      } catch (err) { alert("Error al actualizar precio.") }
+    }
   }
 
   const ajustarReserva = (id: string, delta: number) => {
@@ -96,7 +157,6 @@ export default function Inventario() {
     supabase.from('inventario').update({ stock_reservado: nuevaReserva }).eq('id', id);
   }
 
-  // ESTILOS
   const cardStyle = { backgroundColor: '#fff', padding: '24px', borderRadius: '32px', border: '4px solid #000', boxShadow: '8px 8px 0px #000', marginBottom: '25px' }
   const inputStyle = { width: '100%', padding: '14px', border: '3px solid #000', borderRadius: '16px', fontSize: '15px', fontWeight: '900', color: '#000', backgroundColor: '#fff' }
   const labelStyle = { fontSize: '11px', fontWeight: '950', color: '#000', marginBottom: '8px', display: 'block', textTransform: 'uppercase' as const }
@@ -107,16 +167,8 @@ export default function Inventario() {
       {/* 💣 CSS DE ALTO CONTRASTE CORREGIDO */}
       <style jsx global>{`
         :root { color-scheme: light !important; }
-        /* Forzamos negro en casi todo, MENOS donde el fondo sea negro */
-        span, p, h1, h2, input, select, option {
-          color: #000000 !important;
-          -webkit-text-fill-color: #000000 !important;
-        }
-        /* Excepciones para texto blanco en fondos negros */
-        .texto-blanco-fuerza, .texto-blanco-fuerza * {
-          color: #ffffff !important;
-          -webkit-text-fill-color: #ffffff !important;
-        }
+        .texto-blanco-fuerza { color: #ffffff !important; }
+        .texto-blanco-fuerza * { color: #ffffff !important; }
       `}</style>
 
       <div style={{ maxWidth: '650px', margin: '0 auto' }}>
@@ -129,10 +181,82 @@ export default function Inventario() {
             </button>
             <h1 style={{ margin: 0, fontSize: '28px', fontWeight: '950', color: '#000' }}>INVENTARIO</h1>
           </div>
-          <button onClick={() => setMostrarGestionColegios(true)} style={{ backgroundColor: '#fff', border: '3px solid #000', padding: '10px', borderRadius: '12px', boxShadow: '4px 4px 0px #000' }}>
-            <Settings2 size={20} />
-          </button>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            {/* MODIFICACIÓN: Botón para crear artículo */}
+            <button onClick={() => setMostrarNuevoArticulo(true)} style={{ backgroundColor: '#4ade80', border: '3px solid #000', padding: '10px', borderRadius: '12px', boxShadow: '4px 4px 0px #000', fontWeight: '900', display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <PackagePlus size={20} /> <span style={{fontSize: '12px', display: 'none'}} className="sm:block">NUEVO</span>
+            </button>
+            <button onClick={() => setMostrarGestionColegios(true)} style={{ backgroundColor: '#fff', border: '3px solid #000', padding: '10px', borderRadius: '12px', boxShadow: '4px 4px 0px #000' }}>
+              <Settings2 size={20} />
+            </button>
+          </div>
         </div>
+
+        {/* MODAL GESTIÓN COLEGIOS */}
+        <AnimatePresence>
+          {mostrarGestionColegios && (
+            <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+              <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} style={{ backgroundColor: '#fff', border: '4px solid #000', borderRadius: '24px', padding: '30px', width: '100%', maxWidth: '400px', boxShadow: '10px 10px 0px #000' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
+                  <h3 style={{ margin: 0, fontWeight: '950', fontSize: '20px' }}>GESTIÓN DE COLEGIOS</h3>
+                  <button onClick={() => setMostrarGestionColegios(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={24} /></button>
+                </div>
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={labelStyle}>Agregar Nuevo Colegio</label>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <input style={inputStyle} value={nuevoNombreColegio} onChange={e => setNuevoNombreColegio(e.target.value)} placeholder="Ej: Instituto Nacional" />
+                    <button onClick={agregarColegioMaestro} style={{ background: '#000', color: '#fff', padding: '0 20px', borderRadius: '12px', fontWeight: '900', border: 'none' }}><Plus size={20}/></button>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* MODIFICACIÓN: MODAL NUEVO ARTÍCULO */}
+        <AnimatePresence>
+          {mostrarNuevoArticulo && (
+            <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+              <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} style={{ backgroundColor: '#fff', border: '4px solid #000', borderRadius: '24px', padding: '30px', width: '100%', maxWidth: '400px', boxShadow: '10px 10px 0px #000', maxHeight: '90vh', overflowY: 'auto' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
+                  <h3 style={{ margin: 0, fontWeight: '950', fontSize: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}><PackagePlus size={20}/> CREAR PRENDA</h3>
+                  <button onClick={() => setMostrarNuevoArticulo(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={24} /></button>
+                </div>
+                
+                <div style={{ display: 'grid', gap: '15px' }}>
+                  <div>
+                    <label style={labelStyle}>Colegio</label>
+                    <select style={inputStyle} value={colegioSeleccionado} onChange={e => setColegioSeleccionado(e.target.value)}>
+                      {listaColegios.map(c => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Nombre de la Prenda</label>
+                    <input style={inputStyle} value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Ej: POLERON DE POLAR" />
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <div>
+                      <label style={labelStyle}>Talla</label>
+                      <input style={inputStyle} value={talla} onChange={e => setTalla(e.target.value)} placeholder="Ej: 14 o M" />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Precio Base ($)</label>
+                      <input type="number" style={inputStyle} value={precio} onChange={e => setPrecio(e.target.value)} placeholder="Ej: 12500" />
+                    </div>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Stock Inicial (Físico)</label>
+                    <input type="number" style={inputStyle} value={stock} onChange={e => setStock(e.target.value)} placeholder="0" />
+                  </div>
+                  
+                  <button onClick={guardarNuevoArticulo} style={{ width: '100%', padding: '16px', background: '#000', color: '#fff', border: 'none', borderRadius: '16px', fontWeight: '950', fontSize: '16px', marginTop: '10px', cursor: 'pointer' }}>
+                    GUARDAR ARTÍCULO
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
 
         {/* BUSCADOR */}
         <div style={{ position: 'relative', marginBottom: '30px' }}>
@@ -180,22 +304,34 @@ export default function Inventario() {
                                   const disponible = i.stock - (i.stock_reservado || 0)
                                   return (
                                     <div key={i.id} style={{ border: '3px solid #000', padding: '15px', borderRadius: '20px', backgroundColor: '#fff' }}>
-                                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', alignItems: 'center' }}>
                                         <span style={{ fontWeight: '1000', fontSize: '18px' }}>TALLA {i.talla}</span>
-                                        <span style={{ fontWeight: '950', color: '#166534' }}>${Number(i.precio_base).toLocaleString()}</span>
+                                        {/* MODIFICACIÓN: Botón interactivo para cambiar precio (Plan Pilar 2) */}
+                                        <button 
+                                          onClick={() => editarPrecioBase(i.id, i.precio_base, `${nombrePrenda} T${i.talla}`)}
+                                          style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                        >
+                                          <span style={{ fontWeight: '950', color: '#166534', fontSize: '16px' }}>${Number(i.precio_base).toLocaleString()}</span>
+                                          <Edit3 size={14} color="#64748b" />
+                                        </button>
                                       </div>
                                       
                                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                                        {/* STOCK FÍSICO (NEGRO) */}
-                                        <div style={{ border: '2px solid #000', padding: '10px', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                          <span style={{ fontSize: '10px', fontWeight: '950' }}>FÍSICO</span>
-                                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                                            <button onClick={() => ajustarStock(i.id, -1)} style={{ background: '#ef4444', color: '#fff', border: '2px solid #000', borderRadius: '6px', width: '25px', fontWeight: '900' }}>-</button>
-                                            <span style={{ fontWeight: '1000', minWidth: '20px', textAlign: 'center' }}>{i.stock}</span>
-                                            <button onClick={() => ajustarStock(i.id, 1)} style={{ background: '#4ade80', color: '#000', border: '2px solid #000', borderRadius: '6px', width: '25px', fontWeight: '900' }}>+</button>
+                                        {/* MODIFICACIÓN: Botón unificado de Ingreso de Stock (Plan Pilar 3) */}
+                                        <div style={{ border: '2px solid #000', padding: '10px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'center' }}>
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                                            <span style={{ fontSize: '10px', fontWeight: '950' }}>FÍSICO</span>
+                                            <span style={{ fontWeight: '1000', fontSize: '16px', color: '#000' }}>{i.stock}</span>
                                           </div>
+                                          <button 
+                                            onClick={() => anadirStock(i.id, nombrePrenda, i.talla)}
+                                            style={{ width: '100%', background: '#000', color: '#fff', border: '2px solid #000', borderRadius: '8px', padding: '6px', fontWeight: '900', fontSize: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+                                          >
+                                            <UploadCloud size={12} /> AÑADIR STOCK
+                                          </button>
                                         </div>
-                                        {/* RESERVADO (NEGRO) */}
+
+                                        {/* RESERVADO (NEGRO) - Este se queda igual porque Don Luis necesita ajustar manual si alguien cancela un retiro  */}
                                         <div style={{ border: '2px solid #000', padding: '10px', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                           <span style={{ fontSize: '10px', fontWeight: '950' }}>RESERV.</span>
                                           <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
