@@ -9,7 +9,7 @@ import {
   ArrowLeft, Search, School, Phone, Calendar, Printer, Trash2, 
   MessageCircle, MessageSquare, Bell, Package, CheckCircle, 
   X, History, User, CreditCard, Plus, Clock, Minus, ChevronDown, ChevronUp, Tag, Boxes, Download, FileText, Ban, AlertOctagon,
-  Edit3 // NUEVO ICONO IMPORTADO
+  Edit3, AlertCircle // Añadido AlertCircle para la advertencia
 } from 'lucide-react'
 
 export default function VerPedidos() {
@@ -32,7 +32,6 @@ export default function VerPedidos() {
     deudaMaxima: 0 as number 
   })
 
-  // NUEVO ESTADO: Controla el modal de edición de cliente
   const [modalEditarCliente, setModalEditarCliente] = useState({
     open: false,
     clienteId: null as number | null,
@@ -42,7 +41,6 @@ export default function VerPedidos() {
   })
 
   const cargar = useCallback(async () => {
-    // 🛡️ BLOQUEO DE SEGURIDAD ESTANDARIZADO
     if (!localStorage.getItem('user_role')) {
       router.push('/login')
       return
@@ -96,8 +94,8 @@ export default function VerPedidos() {
         ...p, 
         c_nombre: cliente?.nombre || 'S/N', 
         c_telefono: cliente?.telefono || '', 
-        c_rut: cliente?.rut || '', // Guardamos el RUT para poder editarlo
-        cliente_ref_id: cliente?.id, // ID real del cliente en la DB
+        c_rut: cliente?.rut || '', 
+        cliente_ref_id: cliente?.id, 
         detalles, pagos, total_pagado: totalPagado, estado_macro: estadoMacro, color_bg: colorBg, color_text: colorText,
         pagoCompleto, todoEntregado
       }
@@ -108,16 +106,21 @@ export default function VerPedidos() {
 
   useEffect(() => { cargar() }, [cargar])
 
-  // NUEVA FUNCIÓN: Guarda los cambios editados del cliente
   const guardarEdicionCliente = async () => {
     const { clienteId, nombre, telefono, rut } = modalEditarCliente
     
     if (!nombre.trim()) return alert("El nombre no puede estar vacío.")
     
+    // MODIFICACIÓN: Validación estricta de 8 dígitos
+    if (telefono.length !== 8) return alert("El teléfono debe tener exactamente 8 números.")
+    
     try {
+      // MODIFICACIÓN: Inyección de +569 automático al guardar
+      const telefonoCompleto = `+569${telefono}`
+
       const { error } = await supabase
         .from('clientes')
-        .update({ nombre: nombre.trim(), telefono: telefono.trim(), rut: rut.trim() })
+        .update({ nombre: nombre.trim(), telefono: telefonoCompleto, rut: rut.trim() })
         .eq('id', clienteId)
 
       if (error) throw error
@@ -357,7 +360,6 @@ export default function VerPedidos() {
                 </div>
 
                 <div style={{ marginBottom: '16px' }}>
-                  {/* MODIFICACIÓN: Contenedor con botón de edición */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '4px' }}>
                     <h2 style={{ fontWeight: '950', fontSize: '26px', color: '#000', margin: 0, letterSpacing: '-0.5px', textDecoration: p.estado === 'Anulado' ? 'line-through' : 'none' }}>{p.c_nombre}</h2>
                     <button 
@@ -366,7 +368,7 @@ export default function VerPedidos() {
                         open: true,
                         clienteId: p.cliente_ref_id,
                         nombre: p.c_nombre,
-                        telefono: p.c_telefono.replace('+569', ''), // Mostramos solo el número
+                        telefono: p.c_telefono.replace('+569', ''),
                         rut: p.c_rut
                       })}
                       style={{ background: 'none', border: 'none', cursor: p.estado === 'Anulado' ? 'not-allowed' : 'pointer', padding: '4px', display: 'flex', alignItems: 'center', color: '#3b82f6', opacity: p.estado === 'Anulado' ? 0.3 : 1 }}
@@ -499,7 +501,6 @@ export default function VerPedidos() {
           </div>
         </div>
 
-        {/* MODAL DE PAGO / CORRECCIÓN */}
         <AnimatePresence>
           {modalPago.open && (
             <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
@@ -581,6 +582,12 @@ export default function VerPedidos() {
                         onChange={e => setModalEditarCliente({...modalEditarCliente, telefono: e.target.value.replace(/\D/g, '').slice(0, 8)})} 
                       />
                     </div>
+                    {/* MODIFICACIÓN: Alerta de faltan números */}
+                    {modalEditarCliente.telefono.length > 0 && modalEditarCliente.telefono.length < 8 && (
+                      <p style={{ color: '#ef4444', fontSize: '11px', fontWeight: '900', marginTop: '5px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <AlertCircle size={12} /> FALTAN {8 - modalEditarCliente.telefono.length} NÚMEROS
+                      </p>
+                    )}
                   </div>
 
                   <button onClick={guardarEdicionCliente} style={{ width: '100%', backgroundColor: '#000', color: '#fff', padding: '20px', borderRadius: '20px', border: 'none', fontWeight: '950', fontSize: '18px', cursor: 'pointer', marginTop: '10px' }}>
