@@ -50,10 +50,6 @@ export default function RegistroPedido() {
       const { data: inv } = await supabase.from('inventario').select('*').order('nombre')
       if (inv) {
         setInventario(inv)
-        if (inv.length > 0) {
-          setNombreSeleccionado(inv[0].nombre)
-          setTallaSeleccionada(inv[0].talla)
-        }
       }
       const { data: col } = await supabase.from('colegios').select('*').order('nombre')
       if (col) {
@@ -71,8 +67,36 @@ export default function RegistroPedido() {
     return `$${Number(raw).toLocaleString('es-CL')}`
   }
 
-  const productosUnicos = useMemo(() => Array.from(new Set(inventario.map(i => i.nombre))), [inventario])
-  const tallasDeInventario = useMemo(() => inventario.filter(i => i.nombre === nombreSeleccionado), [nombreSeleccionado, inventario])
+  // MODIFICACIÓN: Filtrado dinámico por colegio
+  const productosUnicos = useMemo(() => {
+    const filtrados = inventario.filter(i => i.colegio === colegio)
+    return Array.from(new Set(filtrados.map(i => i.nombre)))
+  }, [inventario, colegio])
+
+  const tallasDeInventario = useMemo(() => {
+    return inventario.filter(i => i.colegio === colegio && i.nombre === nombreSeleccionado)
+  }, [colegio, nombreSeleccionado, inventario])
+
+  // EFECTO: Sincronizar selectores cuando cambia el colegio o producto
+  useEffect(() => {
+    if (productosUnicos.length > 0) {
+      if (!productosUnicos.includes(nombreSeleccionado)) {
+        setNombreSeleccionado(productosUnicos[0])
+      }
+    } else {
+      setNombreSeleccionado('')
+    }
+  }, [colegio, productosUnicos])
+
+  useEffect(() => {
+    if (tallasDeInventario.length > 0) {
+      if (!tallasDeInventario.find(t => t.talla === tallaSeleccionada)) {
+        setTallaSeleccionada(tallasDeInventario[0].talla)
+      }
+    } else {
+      setTallaSeleccionada('')
+    }
+  }, [nombreSeleccionado, tallasDeInventario])
 
   const agregarAlCarrito = () => {
     // FIX: Aseguramos que la cantidad no sea negativa
@@ -88,10 +112,14 @@ export default function RegistroPedido() {
       precio = Number(rawPrecio)
       item = { id_inv: tallasDeInventario[0]?.id, nombre: nombreSeleccionado, talla: 'ESPECIAL', precio, cantidad: Number(cantLimpia) }
     } else {
-      const invItem = inventario.find(i => i.nombre === nombreSeleccionado && i.talla === tallaSeleccionada)
+      // MODIFICACIÓN: Buscar ítem asegurando que sea del colegio correcto
+      const invItem = inventario.find(i => i.colegio === colegio && i.nombre === nombreSeleccionado && i.talla === tallaSeleccionada)
       precio = Number(invItem?.precio_base || 0)
-      item = { id_inv: invItem.id, nombre: nombreSeleccionado, talla: tallaSeleccionada, precio, cantidad: Number(cantLimpia) }
+      item = { id_inv: invItem?.id, nombre: nombreSeleccionado, talla: tallaSeleccionada, precio, cantidad: Number(cantLimpia) }
     }
+    
+    if (!item.id_inv && tallaSeleccionada !== 'ESPECIAL') return alert("Error al identificar el producto.")
+    
     setCarrito([...carrito, { ...item, tempId: Date.now() }])
     setPrecioManualEspecial('')
     setCantidad('')
@@ -260,8 +288,13 @@ export default function RegistroPedido() {
               <ShoppingBag size={20} color="#f472b6" /> PRENDAS
             </h2>
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '12px', marginBottom: '16px' }}>
+              {/* MODIFICACIÓN: Usar productos filtrados por colegio */}
               <select style={inputStyle} value={nombreSeleccionado} onChange={e => setNombreSeleccionado(e.target.value)}>
-                {productosUnicos.map(n => <option key={n} value={n}>{n}</option>)}
+                {productosUnicos.length > 0 ? (
+                  productosUnicos.map(n => <option key={n} value={n}>{n}</option>)
+                ) : (
+                  <option disabled>Selecciona un colegio con inventario</option>
+                )}
               </select>
               <input 
                 type="number" 
@@ -272,6 +305,7 @@ export default function RegistroPedido() {
               />
             </div>
             <div style={{ marginBottom: '20px' }}>
+              {/* MODIFICACIÓN: Usar tallas filtradas por colegio y producto */}
               <select style={inputStyle} value={tallaSeleccionada} onChange={e => setTallaSeleccionada(e.target.value)}>
                 {tallasDeInventario.map(t => <option key={t.id} value={t.talla}>{t.talla} (${Number(t.precio_base).toLocaleString()})</option>)}
                 <option value="ESPECIAL">✨ TALLA ESPECIAL</option>
