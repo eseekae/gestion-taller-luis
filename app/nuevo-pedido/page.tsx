@@ -44,7 +44,6 @@ export default function RegistroPedido() {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    // Restauramos el fallback para que los logs no salgan vacíos
     setUsuarioActivo(localStorage.getItem('user_name') || 'Don Luis')
     const fetch = async () => {
       const { data: inv } = await supabase.from('inventario').select('*').order('nombre')
@@ -60,20 +59,17 @@ export default function RegistroPedido() {
     fetch()
   }, [])
 
-  // FIX: Función para separadores de mil y símbolo $
   const formatMontoInput = (val: string | number) => {
     const raw = val.toString().replace(/\D/g, '')
     if (!raw) return ''
     return `$${Number(raw).toLocaleString('es-CL')}`
   }
 
-  // MODIFICACIÓN: Filtrado dinámico por colegio
   const productosUnicos = useMemo(() => {
     const filtrados = inventario.filter(i => i.colegio === colegio)
     return Array.from(new Set(filtrados.map(i => i.nombre)))
   }, [inventario, colegio])
 
-  // MODIFICACIÓN: Ordenamiento lógico de tallas
   const tallasDeInventario = useMemo(() => {
     const ordenPrioridad: { [key: string]: number } = {
       '4': 1, '5': 2, '6': 3, '8': 4, '10': 5, '12': 6, '14': 7, '16': 8,
@@ -85,7 +81,6 @@ export default function RegistroPedido() {
       .sort((a, b) => (ordenPrioridad[a.talla] || 99) - (ordenPrioridad[b.talla] || 99))
   }, [colegio, nombreSeleccionado, inventario])
 
-  // EFECTO: Sincronizar selectores cuando cambia el colegio o producto
   useEffect(() => {
     if (productosUnicos.length > 0) {
       if (!productosUnicos.includes(nombreSeleccionado)) {
@@ -107,7 +102,6 @@ export default function RegistroPedido() {
   }, [nombreSeleccionado, tallasDeInventario])
 
   const agregarAlCarrito = () => {
-    // FIX: Aseguramos que la cantidad no sea negativa
     const cantLimpia = cantidad.toString().replace(/\D/g, '')
     if (cantLimpia === '' || Number(cantLimpia) <= 0) {
       return alert("Tienes que ingresar una cantidad válida antes de añadir al pedido.")
@@ -120,7 +114,6 @@ export default function RegistroPedido() {
       precio = Number(rawPrecio)
       item = { id_inv: tallasDeInventario[0]?.id, nombre: nombreSeleccionado, talla: 'ESPECIAL', precio, cantidad: Number(cantLimpia) }
     } else {
-      // MODIFICACIÓN: Buscar ítem asegurando que sea del colegio correcto
       const invItem = inventario.find(i => i.colegio === colegio && i.nombre === nombreSeleccionado && i.talla === tallaSeleccionada)
       precio = Number(invItem?.precio_base || 0)
       item = { id_inv: invItem?.id, nombre: nombreSeleccionado, talla: tallaSeleccionada, precio, cantidad: Number(cantLimpia) }
@@ -134,6 +127,16 @@ export default function RegistroPedido() {
   }
 
   const quitarDelCarrito = (id: number) => setCarrito(carrito.filter(c => c.tempId !== id))
+  
+  // MODIFICACIÓN: Función para editar precio histórico directamente en el carrito
+  const editarPrecioCarrito = (id: number, precioActual: number) => {
+    const nuevo = prompt('Ingresa el precio unitario histórico para este artículo:', precioActual.toString())
+    if (nuevo === null) return // Si el usuario cancela
+    const precioLimpio = Number(nuevo.replace(/\D/g, ''))
+    if (precioLimpio >= 0) {
+      setCarrito(carrito.map(c => c.tempId === id ? { ...c, precio: precioLimpio } : c))
+    }
+  }
   
   const totalOriginal = useMemo(() => carrito.reduce((acc, curr) => acc + (curr.precio * curr.cantidad), 0), [carrito])
   const descuentoFinal = useMemo(() => {
@@ -149,10 +152,8 @@ export default function RegistroPedido() {
     if (telefono.length !== 8) return alert("El teléfono debe tener exactamente 8 números.")
     if (tipoEntrega === 'agendada' && !fechaEntrega) return alert("Selecciona una fecha de entrega")
     
-    // FIX: Limpiamos el abono antes de validar
     const pagoFinal = Number(montoPagado.toString().replace(/\D/g, ''))
     
-    // VALIDACIÓN: No permitir pagar más del total
     if (pagoFinal > totalConDescuento) {
       return alert(`No puedes abonar más del total de la venta ($${totalConDescuento.toLocaleString('es-CL')})`)
     }
@@ -191,13 +192,11 @@ export default function RegistroPedido() {
       
       for (const item of carrito) {
         if (item.id_inv) {
-          // Lógica de stock según tipo de entrega
           const rpcFunc = tipoEntrega === 'inmediata' ? 'entregar_stock' : 'reservar_stock'
           await supabase.rpc(rpcFunc, { prod_id: item.id_inv, cant: item.cantidad })
         }
       }
       
-      // Log detallado para Don Luis
       await registrarLog(`${usuarioActivo} creó venta ${tipoEntrega.toUpperCase()} de $${totalConDescuento}`, `Pedido #${ped.id}`)
       alert(`✅ Venta registrada correctamente como Pedido #${ped.id}`); 
       router.push('/pedidos')
@@ -313,7 +312,6 @@ export default function RegistroPedido() {
             </div>
             <div style={{ marginBottom: '20px' }}>
               <select style={inputStyle} value={tallaSeleccionada} onChange={e => setTallaSeleccionada(e.target.value)}>
-                {/* Tallas ahora aparecen ordenadas lógicamente */}
                 {tallasDeInventario.map(t => <option key={t.id} value={t.talla}>{t.talla} (${Number(t.precio_base).toLocaleString()})</option>)}
                 <option value="ESPECIAL">✨ TALLA ESPECIAL</option>
               </select>
@@ -342,7 +340,14 @@ export default function RegistroPedido() {
                 {carrito.map((item) => (
                   <div key={item.tempId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
                     <div style={{ flex: 1 }}><p style={{ margin: 0, fontWeight: '900', color: '#000', fontSize: '15px' }}>{item.nombre}</p><p style={{ margin: 0, fontSize: '12px', fontWeight: '800', color: '#64748b' }}>{item.cantidad}x Talla {item.talla}</p></div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}><span style={{ fontWeight: '950', color: '#000', fontSize: '16px' }}>${(item.precio * item.cantidad).toLocaleString()}</span><button onClick={() => quitarDelCarrito(item.tempId)} style={{ color: '#ef4444', border: 'none', background: 'none', cursor: 'pointer' }}><X size={22} /></button></div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      {/* MODIFICACIÓN: Botón inyectado para editar precio */}
+                      <div style={{ textAlign: 'right' }}>
+                        <span style={{ fontWeight: '950', color: '#000', fontSize: '16px', display: 'block' }}>${(item.precio * item.cantidad).toLocaleString()}</span>
+                        <button type="button" onClick={() => editarPrecioCarrito(item.tempId, item.precio)} style={{ color: '#3b82f6', border: 'none', background: 'none', cursor: 'pointer', fontSize: '10px', fontWeight: '900', padding: 0, display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', marginTop: '2px' }}><Edit3 size={12} /> MODIFICAR</button>
+                      </div>
+                      <button type="button" onClick={() => quitarDelCarrito(item.tempId)} style={{ color: '#ef4444', border: 'none', background: 'none', cursor: 'pointer' }}><X size={22} /></button>
+                    </div>
                   </div>
                 ))}
                 
