@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { 
   ArrowLeft, User, Phone, IdCard, School, Calendar, 
   ShoppingBag, Plus, X, CheckCircle, MessageSquare, 
-  Rocket, Clock, AlertCircle, Tag, Percent, Minus, Banknote, Edit3
+  Rocket, Clock, AlertCircle, Tag, Percent, Minus, Banknote, Edit3, History
 } from 'lucide-react'
 
 export default function RegistroPedido() {
@@ -17,7 +17,9 @@ export default function RegistroPedido() {
   const [listaColegios, setListaColegios] = useState<any[]>([])
   const [carrito, setCarrito] = useState<any[]>([])
   
-  const [tipoEntrega, setTipoEntrega] = useState<'agendada' | 'inmediata'>('agendada')
+  // MODIFICACIÓN: Agregado el estado 'antiguo' y fechaIngreso
+  const [tipoEntrega, setTipoEntrega] = useState<'agendada' | 'inmediata' | 'antiguo'>('agendada')
+  const [fechaIngreso, setFechaIngreso] = useState(new Date().toISOString().split('T')[0])
 
   const [nombreSeleccionado, setNombreSeleccionado] = useState('')
   const [tallaSeleccionada, setTallaSeleccionada] = useState('')
@@ -150,7 +152,9 @@ export default function RegistroPedido() {
     e.preventDefault()
     if (carrito.length === 0) return alert("Añade productos al pedido")
     if (telefono.length !== 8) return alert("El teléfono debe tener exactamente 8 números.")
-    if (tipoEntrega === 'agendada' && !fechaEntrega) return alert("Selecciona una fecha de entrega")
+    
+    // MODIFICACIÓN: Validar fecha de entrega también para pedidos antiguos
+    if ((tipoEntrega === 'agendada' || tipoEntrega === 'antiguo') && !fechaEntrega) return alert("Selecciona una fecha de entrega")
     
     const pagoFinal = Number(montoPagado.toString().replace(/\D/g, ''))
     
@@ -164,34 +168,48 @@ export default function RegistroPedido() {
       const { data: cli, error: cliError } = await supabase.from('clientes').insert([{ nombre: nombreCliente, telefono: telefonoCompleto, rut }]).select().single()
       if (cliError || !cli) throw new Error(`Error cliente: ${cliError?.message}`)
       
-      const estadoPedido = tipoEntrega === 'inmediata' ? 'Completado' : 'Pendiente'
+      // MODIFICACIÓN: Lógica de estados y notas para pedidos antiguos
+      const estadoPedido = (tipoEntrega === 'inmediata' || tipoEntrega === 'antiguo') ? 'Completado' : 'Pendiente'
       const fechaFinalEntrega = tipoEntrega === 'inmediata' ? new Date().toISOString().split('T')[0] : (fechaEntrega || null)
       
-      const { data: ped, error: pedError } = await supabase.from('pedidos').insert([{
+      let obsFinal = observaciones + (descuentoFinal > 0 ? ` [Dscto: $${descuentoFinal.toLocaleString()}]` : '') + (valorAjuste !== 0 ? ` [Ajuste: $${valorAjuste.toLocaleString()}]` : '')
+      if (tipoEntrega === 'antiguo') {
+        obsFinal = `[PEDIDO ANTIGUO] ` + obsFinal
+      }
+
+      const payloadPedido: any = {
         cliente_id: cli.id, total_final: totalConDescuento, estado: estadoPedido,
         colegio: colegio || 'Particular', fecha_entrega: fechaFinalEntrega,
-        observaciones: observaciones + (descuentoFinal > 0 ? ` [Dscto: $${descuentoFinal.toLocaleString()}]` : '') + (valorAjuste !== 0 ? ` [Ajuste: $${valorAjuste.toLocaleString()}]` : ''),
+        observaciones: obsFinal,
         creado_por: usuarioActivo
-      }]).select().single()
+      }
+      
+      if (tipoEntrega === 'antiguo' && fechaIngreso) {
+        payloadPedido.created_at = `${fechaIngreso}T12:00:00Z`
+      }
+
+      const { data: ped, error: pedError } = await supabase.from('pedidos').insert([payloadPedido]).select().single()
       
       if (pedError || !ped) throw new Error(`Error pedido: ${pedError?.message}`)
       
       const detalles = carrito.map(item => ({
         pedido_id: ped.id, producto_id: item.id_inv, cantidad: item.cantidad, 
-        cantidad_entregada: tipoEntrega === 'inmediata' ? item.cantidad : 0, 
-        talla: item.talla, precio_unitario: item.precio, estado: tipoEntrega === 'inmediata' ? 'Entregado' : 'Pendiente'
+        cantidad_entregada: (tipoEntrega === 'inmediata' || tipoEntrega === 'antiguo') ? item.cantidad : 0, 
+        talla: item.talla, precio_unitario: item.precio, estado: (tipoEntrega === 'inmediata' || tipoEntrega === 'antiguo') ? 'Entregado' : 'Pendiente'
       }))
       await supabase.from('detalles_pedido').insert(detalles)
       
       if (pagoFinal > 0) {
         await supabase.from('pagos').insert([{
-          pedido_id: ped.id, monto: pagoFinal, fecha_pago: new Date().toISOString().split('T')[0], 
+          pedido_id: ped.id, monto: pagoFinal, 
+          fecha_pago: tipoEntrega === 'antiguo' ? fechaIngreso : new Date().toISOString().split('T')[0], 
           metodo_pago: metodoPago, creado_por: usuarioActivo
         }])
       }
       
       for (const item of carrito) {
-        if (item.id_inv) {
+        // MODIFICACIÓN: Ignorar inventario si es pedido antiguo
+        if (item.id_inv && tipoEntrega !== 'antiguo') {
           const rpcFunc = tipoEntrega === 'inmediata' ? 'entregar_stock' : 'reservar_stock'
           await supabase.rpc(rpcFunc, { prod_id: item.id_inv, cant: item.cantidad })
         }
@@ -230,12 +248,16 @@ export default function RegistroPedido() {
           
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} style={cardStyle}>
             <label style={labelStyle}><Rocket size={16} /> Prioridad de Pedido</label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '10px', marginBottom: tipoEntrega === 'agendada' ? '15px' : '0' }}>
-              <motion.button type="button" onClick={() => setTipoEntrega('agendada')} style={{ padding: '14px', borderRadius: '18px', border: '4px solid #000', fontWeight: '900', color: '#000', fontSize: '13px', backgroundColor: tipoEntrega === 'agendada' ? '#fbbf24' : '#fff', boxShadow: tipoEntrega === 'agendada' ? 'inset 3px 3px 0px rgba(0,0,0,0.1)' : '3px 3px 0px #000', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' }}>
-                <Clock size={18} /> AGENDAR
+            {/* MODIFICACIÓN: Actualizado el grid a 3 columnas */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginTop: '10px', marginBottom: (tipoEntrega === 'agendada' || tipoEntrega === 'antiguo') ? '15px' : '0' }}>
+              <motion.button type="button" onClick={() => setTipoEntrega('agendada')} style={{ padding: '12px', borderRadius: '16px', border: '4px solid #000', fontWeight: '900', color: '#000', fontSize: '11px', backgroundColor: tipoEntrega === 'agendada' ? '#fbbf24' : '#fff', boxShadow: tipoEntrega === 'agendada' ? 'inset 3px 3px 0px rgba(0,0,0,0.1)' : '3px 3px 0px #000', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: 'pointer' }}>
+                <Clock size={16} /> AGENDAR
               </motion.button>
-              <motion.button type="button" onClick={() => setTipoEntrega('inmediata')} style={{ padding: '14px', borderRadius: '18px', border: '4px solid #000', fontWeight: '900', color: '#000', fontSize: '13px', backgroundColor: tipoEntrega === 'inmediata' ? '#4ade80' : '#fff', boxShadow: tipoEntrega === 'inmediata' ? 'inset 3px 3px 0px rgba(0,0,0,0.1)' : '3px 3px 0px #000', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' }}>
-                <CheckCircle size={18} /> INMEDIATA
+              <motion.button type="button" onClick={() => setTipoEntrega('inmediata')} style={{ padding: '12px', borderRadius: '16px', border: '4px solid #000', fontWeight: '900', color: '#000', fontSize: '11px', backgroundColor: tipoEntrega === 'inmediata' ? '#4ade80' : '#fff', boxShadow: tipoEntrega === 'inmediata' ? 'inset 3px 3px 0px rgba(0,0,0,0.1)' : '3px 3px 0px #000', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: 'pointer' }}>
+                <CheckCircle size={16} /> INMEDIATA
+              </motion.button>
+              <motion.button type="button" onClick={() => setTipoEntrega('antiguo')} style={{ padding: '12px', borderRadius: '16px', border: '4px solid #000', fontWeight: '900', color: '#000', fontSize: '11px', backgroundColor: tipoEntrega === 'antiguo' ? '#cbd5e1' : '#fff', boxShadow: tipoEntrega === 'antiguo' ? 'inset 3px 3px 0px rgba(0,0,0,0.1)' : '3px 3px 0px #000', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: 'pointer' }}>
+                <History size={16} /> ANTIGUO
               </motion.button>
             </div>
             <AnimatePresence>
@@ -243,6 +265,22 @@ export default function RegistroPedido() {
                 <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}>
                   <label style={labelStyle}><Calendar size={16} /> Fecha de Entrega Prometida</label>
                   <input type="date" style={inputStyle} value={fechaEntrega} onChange={e => setFechaEntrega(e.target.value)} required={tipoEntrega === 'agendada'} />
+                </motion.div>
+              )}
+              {/* MODIFICACIÓN: Formulario para pedido antiguo */}
+              {tipoEntrega === 'antiguo' && (
+                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                    <div>
+                      <label style={labelStyle}><Calendar size={16} /> F. Ingreso</label>
+                      <input type="date" style={inputStyle} value={fechaIngreso} onChange={e => setFechaIngreso(e.target.value)} required={tipoEntrega === 'antiguo'} />
+                    </div>
+                    <div>
+                      <label style={labelStyle}><CheckCircle size={16} /> F. Entregado</label>
+                      <input type="date" style={inputStyle} value={fechaEntrega} onChange={e => setFechaEntrega(e.target.value)} required={tipoEntrega === 'antiguo'} />
+                    </div>
+                  </div>
+                  <p style={{ fontSize: '11px', color: '#64748b', fontWeight: '900', marginTop: '10px', display: 'flex', alignItems: 'center', gap: '4px' }}><AlertCircle size={12} /> ESTE PEDIDO NO AFECTARÁ EL INVENTARIO</p>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -341,7 +379,6 @@ export default function RegistroPedido() {
                   <div key={item.tempId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
                     <div style={{ flex: 1 }}><p style={{ margin: 0, fontWeight: '900', color: '#000', fontSize: '15px' }}>{item.nombre}</p><p style={{ margin: 0, fontSize: '12px', fontWeight: '800', color: '#64748b' }}>{item.cantidad}x Talla {item.talla}</p></div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      {/* MODIFICACIÓN: Botón inyectado para editar precio */}
                       <div style={{ textAlign: 'right' }}>
                         <span style={{ fontWeight: '950', color: '#000', fontSize: '16px', display: 'block' }}>${(item.precio * item.cantidad).toLocaleString()}</span>
                         <button type="button" onClick={() => editarPrecioCarrito(item.tempId, item.precio)} style={{ color: '#3b82f6', border: 'none', background: 'none', cursor: 'pointer', fontSize: '10px', fontWeight: '900', padding: 0, display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', marginTop: '2px' }}><Edit3 size={12} /> MODIFICAR</button>
