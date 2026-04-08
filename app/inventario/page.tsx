@@ -46,7 +46,6 @@ export default function Inventario() {
 
   useEffect(() => { cargar() }, [cargar])
 
-  // MODIFICACIÓN: Gestión de Colegios ampliada
   const agregarColegioMaestro = async () => {
     if (!nuevoNombreColegio) return
     const nombreUpper = nuevoNombreColegio.toUpperCase().trim()
@@ -59,7 +58,6 @@ export default function Inventario() {
     }
   }
 
-  // MODIFICACIÓN: Función para Crear Nuevos Artículos
   const guardarNuevoArticulo = async () => {
     if (!nombre || !colegioSeleccionado || !talla || !precio) return alert("Completa todos los campos obligatorios.")
     const nombreFormateado = nombre.toUpperCase().trim()
@@ -108,7 +106,6 @@ export default function Inventario() {
     setColegiosAbiertos(prev => prev.includes(idUnico) ? prev.filter(n => n !== idUnico) : [...prev, idUnico])
   }
 
-  // MODIFICACIÓN: Añadir Stock Positivo e Ingreso al Log (Plan Pilar 3 y 4)
   const anadirStock = async (id: string, nombreItem: string, tallaItem: string) => {
     const valor = prompt(`¿Cuántas unidades nuevas ingresarán de ${nombreItem} Talla ${tallaItem}? (Solo números positivos)`)
     if (!valor) return
@@ -133,7 +130,6 @@ export default function Inventario() {
     } catch (err) { alert("Error al ingresar stock.") }
   }
 
-  // MODIFICACIÓN: Modificar Precio del Maestro (Plan Pilar 2)
   const editarPrecioBase = async (id: string, precioActual: number, nombreItem: string) => {
     const nuevo = prompt(`Nuevo precio base para ${nombreItem}:`, precioActual.toString())
     if (!nuevo) return
@@ -159,6 +155,7 @@ export default function Inventario() {
 
   const cardStyle = { backgroundColor: '#fff', padding: '24px', borderRadius: '32px', border: '4px solid #000', boxShadow: '8px 8px 0px #000', marginBottom: '25px' }
   const inputStyle = { width: '100%', padding: '14px', border: '3px solid #000', borderRadius: '16px', fontSize: '15px', fontWeight: '900', color: '#000', backgroundColor: '#fff' }
+  // MODIFICACIÓN: Se fuerza color negro #000 en todos los labels
   const labelStyle = { fontSize: '11px', fontWeight: '950', color: '#000', marginBottom: '8px', display: 'block', textTransform: 'uppercase' as const }
 
   return (
@@ -182,12 +179,11 @@ export default function Inventario() {
             <h1 style={{ margin: 0, fontSize: '28px', fontWeight: '950', color: '#000' }}>INVENTARIO</h1>
           </div>
           <div style={{ display: 'flex', gap: '10px' }}>
-            {/* MODIFICACIÓN: Botón para crear artículo */}
-            <button onClick={() => setMostrarNuevoArticulo(true)} style={{ backgroundColor: '#4ade80', border: '3px solid #000', padding: '10px', borderRadius: '12px', boxShadow: '4px 4px 0px #000', fontWeight: '900', display: 'flex', alignItems: 'center', gap: '5px' }}>
-              <PackagePlus size={20} /> <span style={{fontSize: '12px', display: 'none'}} className="sm:block">NUEVO</span>
+            <button onClick={() => setMostrarNuevoArticulo(true)} style={{ backgroundColor: '#4ade80', color: '#000', border: '3px solid #000', padding: '10px', borderRadius: '12px', boxShadow: '4px 4px 0px #000', fontWeight: '900', display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <PackagePlus size={20} color="#000" /> <span style={{fontSize: '12px', display: 'none'}} className="sm:block">NUEVO</span>
             </button>
             <button onClick={() => setMostrarGestionColegios(true)} style={{ backgroundColor: '#fff', border: '3px solid #000', padding: '10px', borderRadius: '12px', boxShadow: '4px 4px 0px #000' }}>
-              <Settings2 size={20} />
+              <Settings2 size={20} color="#000" />
             </button>
           </div>
         </div>
@@ -198,8 +194,9 @@ export default function Inventario() {
             <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
               <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} style={{ backgroundColor: '#fff', border: '4px solid #000', borderRadius: '24px', padding: '30px', width: '100%', maxWidth: '400px', boxShadow: '10px 10px 0px #000' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
-                  <h3 style={{ margin: 0, fontWeight: '950', fontSize: '20px' }}>GESTIÓN DE COLEGIOS</h3>
-                  <button onClick={() => setMostrarGestionColegios(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={24} /></button>
+                  {/* MODIFICACIÓN: Texto forzado a #000 */}
+                  <h3 style={{ margin: 0, fontWeight: '950', fontSize: '20px', color: '#000' }}>GESTIÓN DE COLEGIOS</h3>
+                  <button onClick={() => setMostrarGestionColegios(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={24} color="#000" /></button>
                 </div>
                 <div style={{ marginBottom: '20px' }}>
                   <label style={labelStyle}>Agregar Nuevo Colegio</label>
@@ -213,14 +210,15 @@ export default function Inventario() {
           )}
         </AnimatePresence>
 
-        {/* MODIFICACIÓN: MODAL NUEVO ARTÍCULO */}
+        {/* MODAL NUEVO ARTÍCULO */}
         <AnimatePresence>
           {mostrarNuevoArticulo && (
             <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
               <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} style={{ backgroundColor: '#fff', border: '4px solid #000', borderRadius: '24px', padding: '30px', width: '100%', maxWidth: '400px', boxShadow: '10px 10px 0px #000', maxHeight: '90vh', overflowY: 'auto' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
-                  <h3 style={{ margin: 0, fontWeight: '950', fontSize: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}><PackagePlus size={20}/> CREAR PRENDA</h3>
-                  <button onClick={() => setMostrarNuevoArticulo(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={24} /></button>
+                  {/* MODIFICACIÓN: Texto forzado a #000 */}
+                  <h3 style={{ margin: 0, fontWeight: '950', fontSize: '20px', display: 'flex', alignItems: 'center', gap: '8px', color: '#000' }}><PackagePlus size={20} color="#000"/> CREAR PRENDA</h3>
+                  <button onClick={() => setMostrarNuevoArticulo(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={24} color="#000" /></button>
                 </div>
                 
                 <div style={{ display: 'grid', gap: '15px' }}>
@@ -294,8 +292,9 @@ export default function Inventario() {
                         return (
                           <div key={nombreCol} style={{ borderTop: '2px solid #000' }}>
                             <div onClick={() => toggleColegio(idCol)} style={{ padding: '15px 20px', display: 'flex', justifyContent: 'space-between', background: '#f8fafc', cursor: 'pointer' }}>
-                              <span style={{ fontWeight: '950', fontSize: '14px' }}><School size={16} /> {nombreCol}</span>
-                              {colAbierto ? <Minus size={18} /> : <Plus size={18} />}
+                              {/* MODIFICACIÓN: Color forzado #000 para el nombre del colegio */}
+                              <span style={{ fontWeight: '950', fontSize: '14px', color: '#000', display: 'flex', alignItems: 'center', gap: '6px' }}><School size={16} color="#000" /> {nombreCol}</span>
+                              {colAbierto ? <Minus size={18} color="#000" /> : <Plus size={18} color="#000" />}
                             </div>
                             
                             {colAbierto && (
@@ -305,22 +304,24 @@ export default function Inventario() {
                                   return (
                                     <div key={i.id} style={{ border: '3px solid #000', padding: '15px', borderRadius: '20px', backgroundColor: '#fff' }}>
                                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', alignItems: 'center' }}>
-                                        <span style={{ fontWeight: '1000', fontSize: '18px' }}>TALLA {i.talla}</span>
-                                        {/* MODIFICACIÓN: Botón interactivo para cambiar precio (Plan Pilar 2) */}
+                                        {/* MODIFICACIÓN: Talla forzada a color negro #000 */}
+                                        <span style={{ fontWeight: '1000', fontSize: '18px', color: '#000' }}>TALLA {i.talla}</span>
+                                        
                                         <button 
                                           onClick={() => editarPrecioBase(i.id, i.precio_base, `${nombrePrenda} T${i.talla}`)}
                                           style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
                                         >
-                                          <span style={{ fontWeight: '950', color: '#166534', fontSize: '16px' }}>${Number(i.precio_base).toLocaleString()}</span>
-                                          <Edit3 size={14} color="#64748b" />
+                                          {/* MODIFICACIÓN: Precio forzado a color negro #000 */}
+                                          <span style={{ fontWeight: '950', color: '#000', fontSize: '16px' }}>${Number(i.precio_base).toLocaleString()}</span>
+                                          <Edit3 size={14} color="#000" />
                                         </button>
                                       </div>
                                       
                                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                                        {/* MODIFICACIÓN: Botón unificado de Ingreso de Stock (Plan Pilar 3) */}
                                         <div style={{ border: '2px solid #000', padding: '10px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'center' }}>
                                           <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
-                                            <span style={{ fontSize: '10px', fontWeight: '950' }}>FÍSICO</span>
+                                            {/* MODIFICACIÓN: Texto forzado a color negro #000 */}
+                                            <span style={{ fontSize: '10px', fontWeight: '950', color: '#000' }}>FÍSICO</span>
                                             <span style={{ fontWeight: '1000', fontSize: '16px', color: '#000' }}>{i.stock}</span>
                                           </div>
                                           <button 
@@ -331,18 +332,17 @@ export default function Inventario() {
                                           </button>
                                         </div>
 
-                                        {/* RESERVADO (NEGRO) - Este se queda igual porque Don Luis necesita ajustar manual si alguien cancela un retiro  */}
                                         <div style={{ border: '2px solid #000', padding: '10px', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                          <span style={{ fontSize: '10px', fontWeight: '950' }}>RESERV.</span>
+                                          {/* MODIFICACIÓN: Texto forzado a color negro #000 */}
+                                          <span style={{ fontSize: '10px', fontWeight: '950', color: '#000' }}>RESERV.</span>
                                           <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                                            <button onClick={() => ajustarReserva(i.id, -1)} style={{ background: '#fbbf24', border: '2px solid #000', borderRadius: '6px', width: '25px', fontWeight: '900' }}>-</button>
-                                            <span style={{ fontWeight: '1000', minWidth: '20px', textAlign: 'center' }}>{i.stock_reservado || 0}</span>
-                                            <button onClick={() => ajustarReserva(i.id, 1)} style={{ background: '#fbbf24', border: '2px solid #000', borderRadius: '6px', width: '25px', fontWeight: '900' }}>+</button>
+                                            <button onClick={() => ajustarReserva(i.id, -1)} style={{ background: '#fbbf24', color: '#000', border: '2px solid #000', borderRadius: '6px', width: '25px', fontWeight: '900' }}>-</button>
+                                            <span style={{ fontWeight: '1000', minWidth: '20px', textAlign: 'center', color: '#000' }}>{i.stock_reservado || 0}</span>
+                                            <button onClick={() => ajustarReserva(i.id, 1)} style={{ background: '#fbbf24', color: '#000', border: '2px solid #000', borderRadius: '6px', width: '25px', fontWeight: '900' }}>+</button>
                                           </div>
                                         </div>
                                       </div>
                                       
-                                      {/* DISPONIBLE: TEXTO BLANCO SI ES FONDO NEGRO */}
                                       <div style={{ textAlign: 'right', marginTop: '12px' }}>
                                         <span 
                                           className={disponible <= 0 ? "texto-blanco-fuerza" : ""}
@@ -355,10 +355,12 @@ export default function Inventario() {
                                             border: '2px solid #000',
                                             display: 'inline-flex',
                                             alignItems: 'center',
-                                            gap: '6px'
+                                            gap: '6px',
+                                            // MODIFICACIÓN: Texto forzado a negro si hay stock
+                                            color: disponible <= 0 ? '#fff' : '#000'
                                           }}
                                         >
-                                          {disponible <= 0 && <AlertCircle size={14} />}
+                                          {disponible <= 0 && <AlertCircle size={14} color="#fff" />}
                                           DISPONIBLE: {disponible}
                                         </span>
                                       </div>
