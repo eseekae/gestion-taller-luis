@@ -8,7 +8,8 @@ import * as XLSX from 'xlsx-js-style'
 import { 
   ArrowLeft, Search, School, Phone, Calendar, Printer, Trash2, 
   MessageCircle, MessageSquare, Bell, Package, CheckCircle, 
-  X, History, User, CreditCard, Plus, Clock, Minus, ChevronDown, ChevronUp, Tag, Boxes, Download, FileText, Ban, AlertOctagon
+  X, History, User, CreditCard, Plus, Clock, Minus, ChevronDown, ChevronUp, Tag, Boxes, Download, FileText, Ban, AlertOctagon,
+  Edit3 // NUEVO ICONO IMPORTADO
 } from 'lucide-react'
 
 export default function VerPedidos() {
@@ -29,6 +30,15 @@ export default function VerPedidos() {
     metodo: 'Transferencia',
     esCorreccion: false,
     deudaMaxima: 0 as number 
+  })
+
+  // NUEVO ESTADO: Controla el modal de edición de cliente
+  const [modalEditarCliente, setModalEditarCliente] = useState({
+    open: false,
+    clienteId: null as number | null,
+    nombre: '',
+    telefono: '',
+    rut: ''
   })
 
   const cargar = useCallback(async () => {
@@ -83,7 +93,11 @@ export default function VerPedidos() {
       }
 
       return { 
-        ...p, c_nombre: cliente?.nombre || 'S/N', c_telefono: cliente?.telefono || '', 
+        ...p, 
+        c_nombre: cliente?.nombre || 'S/N', 
+        c_telefono: cliente?.telefono || '', 
+        c_rut: cliente?.rut || '', // Guardamos el RUT para poder editarlo
+        cliente_ref_id: cliente?.id, // ID real del cliente en la DB
         detalles, pagos, total_pagado: totalPagado, estado_macro: estadoMacro, color_bg: colorBg, color_text: colorText,
         pagoCompleto, todoEntregado
       }
@@ -93,6 +107,30 @@ export default function VerPedidos() {
   }, [router])
 
   useEffect(() => { cargar() }, [cargar])
+
+  // NUEVA FUNCIÓN: Guarda los cambios editados del cliente
+  const guardarEdicionCliente = async () => {
+    const { clienteId, nombre, telefono, rut } = modalEditarCliente
+    
+    if (!nombre.trim()) return alert("El nombre no puede estar vacío.")
+    
+    try {
+      const { error } = await supabase
+        .from('clientes')
+        .update({ nombre: nombre.trim(), telefono: telefono.trim(), rut: rut.trim() })
+        .eq('id', clienteId)
+
+      if (error) throw error
+
+      await registrarLog(`Editó datos del cliente: ${nombre}`, `ID Cliente: ${clienteId}`)
+      
+      setModalEditarCliente({ open: false, clienteId: null, nombre: '', telefono: '', rut: '' })
+      await cargar() 
+      alert("✅ Datos del cliente actualizados.")
+    } catch (err: any) { 
+      alert("Error al actualizar cliente: " + err.message) 
+    }
+  }
 
   const exportarExcel = () => {
     const dataFilas: any[] = []
@@ -319,7 +357,25 @@ export default function VerPedidos() {
                 </div>
 
                 <div style={{ marginBottom: '16px' }}>
-                  <h2 style={{ fontWeight: '950', fontSize: '26px', color: '#000', margin: '0 0 4px 0', letterSpacing: '-0.5px', textDecoration: p.estado === 'Anulado' ? 'line-through' : 'none' }}>{p.c_nombre}</h2>
+                  {/* MODIFICACIÓN: Contenedor con botón de edición */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '4px' }}>
+                    <h2 style={{ fontWeight: '950', fontSize: '26px', color: '#000', margin: 0, letterSpacing: '-0.5px', textDecoration: p.estado === 'Anulado' ? 'line-through' : 'none' }}>{p.c_nombre}</h2>
+                    <button 
+                      disabled={p.estado === 'Anulado'}
+                      onClick={() => setModalEditarCliente({
+                        open: true,
+                        clienteId: p.cliente_ref_id,
+                        nombre: p.c_nombre,
+                        telefono: p.c_telefono.replace('+569', ''), // Mostramos solo el número
+                        rut: p.c_rut
+                      })}
+                      style={{ background: 'none', border: 'none', cursor: p.estado === 'Anulado' ? 'not-allowed' : 'pointer', padding: '4px', display: 'flex', alignItems: 'center', color: '#3b82f6', opacity: p.estado === 'Anulado' ? 0.3 : 1 }}
+                      title="Editar datos del cliente"
+                    >
+                      <Edit3 size={20} />
+                    </button>
+                  </div>
+                  
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <span style={{ fontSize: '14px', fontWeight: '800', color: '#000', display: 'flex', alignItems: 'center', gap: '6px' }}><Phone size={14} /> {p.c_telefono}</span>
                     <span style={{ fontSize: '14px', fontWeight: '800', color: '#3b82f6', display: 'flex', alignItems: 'center', gap: '6px' }}><School size={14} /> {p.colegio || 'Particular'}</span>
@@ -475,6 +531,60 @@ export default function VerPedidos() {
                   </div>
                   <button onClick={guardarPago} style={{ width: '100%', backgroundColor: modalPago.esCorreccion ? '#ef4444' : '#4ade80', color: modalPago.esCorreccion ? '#fff' : '#000', padding: '20px', borderRadius: '20px', border: '4px solid #000', fontWeight: '950', fontSize: '18px', cursor: 'pointer' }}>
                     {modalPago.esCorreccion ? 'CONFIRMAR CORRECCIÓN' : 'CONFIRMAR PAGO'}
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* NUEVO MODAL: EDICIÓN DE CLIENTE */}
+        <AnimatePresence>
+          {modalEditarCliente.open && (
+            <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+              <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} style={{ backgroundColor: '#fff', border: '5px solid #000', borderRadius: '32px', padding: '35px', width: '100%', maxWidth: '420px', boxShadow: '15px 15px 0px #3b82f6' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '25px' }}>
+                  <h3 style={{ fontWeight: '950', fontSize: '24px', color: '#000' }}>EDITAR CLIENTE</h3>
+                  <button onClick={() => setModalEditarCliente({...modalEditarCliente, open: false})} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={28} /></button>
+                </div>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  <div>
+                    <label style={labelStyle}>Nombre Completo</label>
+                    <input 
+                      type="text" 
+                      style={inputStyle} 
+                      value={modalEditarCliente.nombre} 
+                      onChange={e => setModalEditarCliente({...modalEditarCliente, nombre: e.target.value})} 
+                    />
+                  </div>
+                  
+                  <div>
+                    <label style={labelStyle}>R.U.T</label>
+                    <input 
+                      type="text" 
+                      style={inputStyle} 
+                      value={modalEditarCliente.rut} 
+                      onChange={e => setModalEditarCliente({...modalEditarCliente, rut: e.target.value})} 
+                    />
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>Teléfono Móvil</label>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <div style={{ padding: '16px 10px', border: '3px solid #000', borderRadius: '16px', fontSize: '14px', fontWeight: '950', backgroundColor: '#e2e8f0', color: '#000', display: 'flex', alignItems: 'center' }}>+569</div>
+                      <input 
+                        type="tel" 
+                        maxLength={8} 
+                        style={inputStyle} 
+                        value={modalEditarCliente.telefono} 
+                        onChange={e => setModalEditarCliente({...modalEditarCliente, telefono: e.target.value.replace(/\D/g, '').slice(0, 8)})} 
+                      />
+                    </div>
+                  </div>
+
+                  <button onClick={guardarEdicionCliente} style={{ width: '100%', backgroundColor: '#000', color: '#fff', padding: '20px', borderRadius: '20px', border: 'none', fontWeight: '950', fontSize: '18px', cursor: 'pointer', marginTop: '10px' }}>
+                    GUARDAR CAMBIOS
                   </button>
                 </div>
               </motion.div>

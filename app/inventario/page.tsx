@@ -28,6 +28,17 @@ export default function Inventario() {
   const [abiertos, setAbiertos] = useState<string[]>([])
   const [colegiosAbiertos, setColegiosAbiertos] = useState<string[]>([])
 
+  // NUEVO ESTADO: Controla el modal de edición de artículos
+  const [modalEditarArticulo, setModalEditarArticulo] = useState({
+    open: false,
+    id: null as string | null,
+    nombre: '',
+    colegio: '',
+    talla: '',
+    stockFisico: 0,
+    stockReserva: 0
+  })
+
   const ordenTallas: { [key: string]: number } = {
     "4": 1, "5":2, "6": 3, "8": 4, "10": 5, 
     "12": 6, "14": 7, "16": 8, "S": 9, "M": 10, "L": 11, "XL": 12, "Estd": 13, "ESPECIAL": 14
@@ -84,6 +95,54 @@ export default function Inventario() {
       setNombre(''); setPrecio(''); setStock('')
       cargar()
     } catch (err: any) { alert("Error al crear artículo: " + err.message) }
+  }
+
+  // NUEVA FUNCIÓN: Guarda los cambios editados del artículo
+  const guardarEdicionArticulo = async () => {
+    const { id, nombre: nNombre, colegio: nColegio, talla: nTalla } = modalEditarArticulo
+    if (!nNombre || !nColegio || !nTalla) return alert("Completa los campos.")
+    
+    const nombreFormateado = nNombre.toUpperCase().trim()
+    const tallaFormateada = nTalla.toUpperCase().trim()
+
+    try {
+      const { error } = await supabase
+        .from('inventario')
+        .update({ nombre: nombreFormateado, colegio: nColegio, talla: tallaFormateada })
+        .eq('id', id)
+
+      if (error) throw error
+
+      await registrarLog(`Editó artículo ID ${id}: ${nombreFormateado} T${tallaFormateada}`, 'Inventario')
+      setModalEditarArticulo({ ...modalEditarArticulo, open: false })
+      cargar()
+      alert("✅ Artículo actualizado.")
+    } catch (err: any) {
+      alert("Error al actualizar: " + err.message)
+    }
+  }
+
+  // NUEVA FUNCIÓN: Elimina artículo si no hay stock ni reservas
+  const eliminarArticulo = async () => {
+    const { id, stockFisico, stockReserva, nombre: nNombre } = modalEditarArticulo
+    
+    if (stockFisico > 0 || stockReserva > 0) {
+      return alert(`❌ No puedes eliminar un artículo que tiene Stock Físico (${stockFisico}) o Reservas (${stockReserva}). Ajusta el stock a 0 primero.`)
+    }
+
+    if (!confirm(`⚠️ ¿Estás completamente seguro de eliminar "${nNombre}"? Esta acción no se puede deshacer.`)) return
+
+    try {
+      const { error } = await supabase.from('inventario').delete().eq('id', id)
+      if (error) throw error
+      
+      await registrarLog(`Eliminó artículo del sistema: ${nNombre} (ID ${id})`, 'Inventario')
+      setModalEditarArticulo({ ...modalEditarArticulo, open: false })
+      cargar()
+      alert("🗑️ Artículo eliminado con éxito.")
+    } catch (err: any) {
+      alert("Error al eliminar: " + err.message)
+    }
   }
 
   const itemsFiltrados = useMemo(() => {
@@ -259,6 +318,47 @@ export default function Inventario() {
           )}
         </AnimatePresence>
 
+        {/* MODAL EDICIÓN ARTÍCULO */}
+        <AnimatePresence>
+          {modalEditarArticulo.open && (
+            <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+              <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} style={{ backgroundColor: '#fff', border: '4px solid #000', borderRadius: '24px', padding: '30px', width: '100%', maxWidth: '400px', boxShadow: '10px 10px 0px #000', maxHeight: '90vh', overflowY: 'auto' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
+                  <h3 style={{ margin: 0, fontWeight: '950', fontSize: '20px', display: 'flex', alignItems: 'center', gap: '8px', color: '#000' }}><Settings2 size={20} color="#000"/> EDITAR ARTÍCULO</h3>
+                  <button onClick={() => setModalEditarArticulo({...modalEditarArticulo, open: false})} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={24} color="#000" /></button>
+                </div>
+                
+                <div style={{ display: 'grid', gap: '15px' }}>
+                  <div>
+                    <label style={labelStyle}>Colegio</label>
+                    <select style={inputStyle} value={modalEditarArticulo.colegio} onChange={e => setModalEditarArticulo({...modalEditarArticulo, colegio: e.target.value})}>
+                      {listaColegios.map(c => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Nombre de la Prenda</label>
+                    <input style={inputStyle} value={modalEditarArticulo.nombre} onChange={e => setModalEditarArticulo({...modalEditarArticulo, nombre: e.target.value})} placeholder="Ej: POLERON DE POLAR" />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Talla</label>
+                    <input style={inputStyle} value={modalEditarArticulo.talla} onChange={e => setModalEditarArticulo({...modalEditarArticulo, talla: e.target.value})} placeholder="Ej: 14 o M" />
+                  </div>
+                  
+                  <button onClick={guardarEdicionArticulo} style={{ width: '100%', padding: '16px', background: '#000', color: '#fff', border: 'none', borderRadius: '16px', fontWeight: '950', fontSize: '16px', marginTop: '10px', cursor: 'pointer' }}>
+                    GUARDAR CAMBIOS
+                  </button>
+
+                  <div style={{ marginTop: '10px', paddingTop: '15px', borderTop: '2px dashed #e2e8f0', textAlign: 'center' }}>
+                     <button onClick={eliminarArticulo} style={{ width: '100%', padding: '14px', background: '#fef2f2', color: '#ef4444', border: '2px solid #ef4444', borderRadius: '14px', fontWeight: '900', fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                       <Trash2 size={16} /> ELIMINAR ARTÍCULO
+                     </button>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
         {/* BUSCADOR */}
         <div style={{ position: 'relative', marginBottom: '30px' }}>
           <Search style={{ position: 'absolute', left: '16px', top: '16px' }} size={20} color="#000" />
@@ -306,7 +406,19 @@ export default function Inventario() {
                                   return (
                                     <div key={i.id} style={{ border: '3px solid #000', padding: '15px', borderRadius: '20px', backgroundColor: '#fff' }}>
                                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', alignItems: 'center' }}>
-                                        <span style={{ fontWeight: '1000', fontSize: '18px', color: '#000' }}>TALLA {i.talla}</span>
+                                        {/* MODIFICACIÓN: Añadido botón de configuración para editar el artículo completo */}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                          <span style={{ fontWeight: '1000', fontSize: '18px', color: '#000' }}>TALLA {i.talla}</span>
+                                          <button 
+                                            onClick={() => setModalEditarArticulo({
+                                              open: true, id: i.id, nombre: i.nombre, colegio: i.colegio, talla: i.talla, stockFisico: i.stock, stockReserva: i.stock_reservado || 0
+                                            })}
+                                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px' }}
+                                            title="Editar detalles del artículo"
+                                          >
+                                            <Settings2 size={16} color="#64748b" />
+                                          </button>
+                                        </div>
                                         
                                         <button 
                                           onClick={() => editarPrecioBase(i.id, i.precio_base, `${nombrePrenda} T${i.talla}`)}
