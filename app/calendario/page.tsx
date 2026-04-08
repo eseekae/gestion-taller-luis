@@ -19,6 +19,12 @@ export default function CalendarioLiteral() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // 🛡️ BLOQUEO DE SEGURIDAD
+    if (!localStorage.getItem('user_role')) {
+      router.push('/login')
+      return
+    }
+
     const cargar = async () => {
       setLoading(true)
       const { data } = await supabase
@@ -30,7 +36,7 @@ export default function CalendarioLiteral() {
       setLoading(false)
     }
     cargar()
-  }, [])
+  }, [router])
 
   const diasMes = useMemo(() => {
     const año = fechaActual.getFullYear()
@@ -194,7 +200,7 @@ export default function CalendarioLiteral() {
                   
                   {!colegioSeleccionado ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                      <p style={{ margin: 0, fontSize: '11px', fontWeight: '950', color: '#64748b', letterSpacing: '1px' }}>SELECCIONA UN COLEGIO</p>
+                      <p style={{ margin: '0 0 5px 0', fontSize: '11px', fontWeight: '950', color: '#64748b', letterSpacing: '1px' }}>SELECCIONA UN COLEGIO</p>
                       {Object.keys(pedidosAgrupados[diaSeleccionado] || {}).map(col => (
                         <motion.button 
                           key={col} whileHover={{ x: 5 }} onClick={() => setColegioSeleccionado(col)}

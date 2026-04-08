@@ -71,17 +71,15 @@ export default function PaginaProduccion() {
   }
 
   const enviarAStockCliente = async (detalleId: number, clienteNombre: string, producto: string) => {
-    // FIX: Confirmación alineada al nuevo flujo logístico de Don Luis
     if (!confirm(`¿Confirmar que la prenda de ${clienteNombre} está terminada y lista para retiro?`)) return
     try {
       const { error } = await supabase
         .from('detalles_pedido')
-        .update({ estado: 'Listo para retiro' }) // Este estado activa el color azul en Pedidos
+        .update({ estado: 'Listo para retiro' }) 
         .eq('id', detalleId)
       
       if (error) throw error
       
-      // Registro de auditoría detallado
       await registrarLog(
         `${localStorage.getItem('user_name') || 'Don Luis'} pasó a LISTO PARA RETIRO: ${producto}`,
         `Pedido #${detalleId} - Cliente: ${clienteNombre}`
@@ -93,7 +91,14 @@ export default function PaginaProduccion() {
     }
   }
 
-  useEffect(() => { cargarPendientes() }, [])
+  useEffect(() => { 
+    // 🛡️ BLOQUEO DE SEGURIDAD
+    if (!localStorage.getItem('user_role')) {
+      router.push('/login')
+      return
+    }
+    cargarPendientes() 
+  }, [router])
 
   const colegiosDisponibles = ['Todos', ...Array.from(new Set(pendientes.map(p => p.nombre)))]
 

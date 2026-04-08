@@ -17,7 +17,12 @@ export default function TicketPedido() {
 
   useEffect(() => {
     const cargarDatos = async () => {
-      if (!localStorage.getItem('user_role')) return router.push('/login')
+      // 🛡️ BLOQUEO DE SEGURIDAD ESTANDARIZADO
+      if (!localStorage.getItem('user_role')) {
+        router.push('/login')
+        return
+      }
+
       if (!id) return
 
       try {

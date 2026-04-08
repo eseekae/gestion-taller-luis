@@ -17,7 +17,6 @@ export default function RegistroPedido() {
   const [listaColegios, setListaColegios] = useState<any[]>([])
   const [carrito, setCarrito] = useState<any[]>([])
   
-  // MODIFICACIÓN: Agregado el estado 'antiguo' y fechaIngreso
   const [tipoEntrega, setTipoEntrega] = useState<'agendada' | 'inmediata' | 'antiguo'>('agendada')
   const [fechaIngreso, setFechaIngreso] = useState(new Date().toISOString().split('T')[0])
 
@@ -46,6 +45,12 @@ export default function RegistroPedido() {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
+    // 🛡️ BLOQUEO DE SEGURIDAD
+    if (!localStorage.getItem('user_role')) {
+      router.push('/login')
+      return
+    }
+
     setUsuarioActivo(localStorage.getItem('user_name') || 'Don Luis')
     const fetch = async () => {
       const { data: inv } = await supabase.from('inventario').select('*').order('nombre')
@@ -59,7 +64,7 @@ export default function RegistroPedido() {
       }
     }
     fetch()
-  }, [])
+  }, [router])
 
   const formatMontoInput = (val: string | number) => {
     const raw = val.toString().replace(/\D/g, '')
@@ -73,6 +78,7 @@ export default function RegistroPedido() {
   }, [inventario, colegio])
 
   const tallasDeInventario = useMemo(() => {
+    // MODIFICACIÓN: Se agregan posibles variables con espacio por si acaso y se fuerza trim() abajo
     const ordenPrioridad: { [key: string]: number } = {
       '4': 1, '5': 2, '6': 3, '8': 4, '10': 5, '12': 6, '14': 7, '16': 8,
       'S': 9, 'M': 10, 'L': 11, 'XL': 12, '2XL': 13, '3XL': 14
@@ -80,7 +86,8 @@ export default function RegistroPedido() {
 
     return inventario
       .filter(i => i.colegio === colegio && i.nombre === nombreSeleccionado)
-      .sort((a, b) => (ordenPrioridad[a.talla] || 99) - (ordenPrioridad[b.talla] || 99))
+      // MODIFICACIÓN: Se agrega .trim() para limpiar espacios invisibles de la base de datos
+      .sort((a, b) => (ordenPrioridad[a.talla?.trim()] || 99) - (ordenPrioridad[b.talla?.trim()] || 99))
   }, [colegio, nombreSeleccionado, inventario])
 
   useEffect(() => {
@@ -130,10 +137,9 @@ export default function RegistroPedido() {
 
   const quitarDelCarrito = (id: number) => setCarrito(carrito.filter(c => c.tempId !== id))
   
-  // MODIFICACIÓN: Función para editar precio histórico directamente en el carrito
   const editarPrecioCarrito = (id: number, precioActual: number) => {
     const nuevo = prompt('Ingresa el precio unitario histórico para este artículo:', precioActual.toString())
-    if (nuevo === null) return // Si el usuario cancela
+    if (nuevo === null) return 
     const precioLimpio = Number(nuevo.replace(/\D/g, ''))
     if (precioLimpio >= 0) {
       setCarrito(carrito.map(c => c.tempId === id ? { ...c, precio: precioLimpio } : c))
@@ -153,7 +159,6 @@ export default function RegistroPedido() {
     if (carrito.length === 0) return alert("Añade productos al pedido")
     if (telefono.length !== 8) return alert("El teléfono debe tener exactamente 8 números.")
     
-    // MODIFICACIÓN: Validar fecha de entrega también para pedidos antiguos
     if ((tipoEntrega === 'agendada' || tipoEntrega === 'antiguo') && !fechaEntrega) return alert("Selecciona una fecha de entrega")
     
     const pagoFinal = Number(montoPagado.toString().replace(/\D/g, ''))
@@ -168,7 +173,6 @@ export default function RegistroPedido() {
       const { data: cli, error: cliError } = await supabase.from('clientes').insert([{ nombre: nombreCliente, telefono: telefonoCompleto, rut }]).select().single()
       if (cliError || !cli) throw new Error(`Error cliente: ${cliError?.message}`)
       
-      // MODIFICACIÓN: Lógica de estados y notas para pedidos antiguos
       const estadoPedido = (tipoEntrega === 'inmediata' || tipoEntrega === 'antiguo') ? 'Completado' : 'Pendiente'
       const fechaFinalEntrega = tipoEntrega === 'inmediata' ? new Date().toISOString().split('T')[0] : (fechaEntrega || null)
       
@@ -208,7 +212,6 @@ export default function RegistroPedido() {
       }
       
       for (const item of carrito) {
-        // MODIFICACIÓN: Ignorar inventario si es pedido antiguo
         if (item.id_inv && tipoEntrega !== 'antiguo') {
           const rpcFunc = tipoEntrega === 'inmediata' ? 'entregar_stock' : 'reservar_stock'
           await supabase.rpc(rpcFunc, { prod_id: item.id_inv, cant: item.cantidad })
@@ -248,7 +251,6 @@ export default function RegistroPedido() {
           
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} style={cardStyle}>
             <label style={labelStyle}><Rocket size={16} /> Prioridad de Pedido</label>
-            {/* MODIFICACIÓN: Actualizado el grid a 3 columnas */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginTop: '10px', marginBottom: (tipoEntrega === 'agendada' || tipoEntrega === 'antiguo') ? '15px' : '0' }}>
               <motion.button type="button" onClick={() => setTipoEntrega('agendada')} style={{ padding: '12px', borderRadius: '16px', border: '4px solid #000', fontWeight: '900', color: '#000', fontSize: '11px', backgroundColor: tipoEntrega === 'agendada' ? '#fbbf24' : '#fff', boxShadow: tipoEntrega === 'agendada' ? 'inset 3px 3px 0px rgba(0,0,0,0.1)' : '3px 3px 0px #000', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: 'pointer' }}>
                 <Clock size={16} /> AGENDAR
@@ -267,7 +269,6 @@ export default function RegistroPedido() {
                   <input type="date" style={inputStyle} value={fechaEntrega} onChange={e => setFechaEntrega(e.target.value)} required={tipoEntrega === 'agendada'} />
                 </motion.div>
               )}
-              {/* MODIFICACIÓN: Formulario para pedido antiguo */}
               {tipoEntrega === 'antiguo' && (
                 <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>

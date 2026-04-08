@@ -32,7 +32,12 @@ export default function VerPedidos() {
   })
 
   const cargar = useCallback(async () => {
-    if (!localStorage.getItem('user_role')) return router.push('/login')
+    // 🛡️ BLOQUEO DE SEGURIDAD ESTANDARIZADO
+    if (!localStorage.getItem('user_role')) {
+      router.push('/login')
+      return
+    }
+
     setLoading(true)
 
     const [pRes, cRes, iRes, dRes, pagosRes, aRes] = await Promise.all([
@@ -317,7 +322,6 @@ export default function VerPedidos() {
                   <h2 style={{ fontWeight: '950', fontSize: '26px', color: '#000', margin: '0 0 4px 0', letterSpacing: '-0.5px', textDecoration: p.estado === 'Anulado' ? 'line-through' : 'none' }}>{p.c_nombre}</h2>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <span style={{ fontSize: '14px', fontWeight: '800', color: '#000', display: 'flex', alignItems: 'center', gap: '6px' }}><Phone size={14} /> {p.c_telefono}</span>
-                    {/* MODIFICACIÓN: Inyectado el nombre del colegio */}
                     <span style={{ fontSize: '14px', fontWeight: '800', color: '#3b82f6', display: 'flex', alignItems: 'center', gap: '6px' }}><School size={14} /> {p.colegio || 'Particular'}</span>
                   </div>
                 </div>
