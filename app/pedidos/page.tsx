@@ -54,7 +54,6 @@ export default function VerPedidos() {
         return { ...d, p_nombre: prod?.nombre || 'Producto' }
       })
 
-      // NUEVA LÓGICA DE ESTADOS (Pilar 4 de la propuesta)
       const todoEntregado = detalles?.length > 0 && detalles.every(d => (d.cantidad_entregada || 0) >= d.cantidad)
       const algoEntregado = detalles?.some(d => (d.cantidad_entregada || 0) > 0)
       const todoListo = detalles?.length > 0 && detalles.every(d => d.estado === 'Listo para retiro' || d.estado === 'Notificado' || d.estado === 'Entregado')
@@ -92,7 +91,6 @@ export default function VerPedidos() {
 
   const exportarExcel = () => {
     const dataFilas: any[] = []
-    // MODIFICACIÓN: Agregada columna MOTIVO ANULACIÓN
     const headers = [
       'ID PEDIDO', 'FECHA REG.', 'HORA REG.', 'CLIENTE', 'TELEFONO', 'COLEGIO',
       'PRODUCTO', 'TALLA', 'CANT.', 'ENTREGADO', 'VALOR UNIT.', 'SUBTOTAL',
@@ -110,7 +108,6 @@ export default function VerPedidos() {
       ).join(' | ')
 
       p.detalles?.forEach((d: any, index: number) => {
-        // MODIFICACIÓN: Incluido p.motivo_anulacion
         dataFilas.push({
           'ID PEDIDO': p.id,
           'FECHA REG.': fecha,
@@ -235,10 +232,8 @@ export default function VerPedidos() {
     if(!confirm('⚠️ ¿Estás seguro? El stock se devolverá automáticamente y el pedido quedará NULO.')) return
     
     try {
-      // 1. Marcar como anulado y guardar el motivo
       await supabase.from('pedidos').update({ estado: 'Anulado', motivo_anulacion: motivo }).eq('id', p.id)
       
-      // 2. Devolver stock (Solo si tu base de datos tiene la función RPC creada)
       if (p.detalles) {
         for (const det of p.detalles) {
            await supabase.rpc('devolver_stock_anulacion', { 
@@ -298,7 +293,6 @@ export default function VerPedidos() {
             const expandido = !!expandidos[p.id]
             const idFormateado = p.id.toString().padStart(4, '0')
             
-            // FIX: Candado inteligente para bloquear modificaciones
             const esFinalizado = p.estado_macro === 'FINALIZADO' || p.estado_macro === 'ANULADO'
 
             return (
@@ -321,7 +315,11 @@ export default function VerPedidos() {
 
                 <div style={{ marginBottom: '16px' }}>
                   <h2 style={{ fontWeight: '950', fontSize: '26px', color: '#000', margin: '0 0 4px 0', letterSpacing: '-0.5px', textDecoration: p.estado === 'Anulado' ? 'line-through' : 'none' }}>{p.c_nombre}</h2>
-                  <span style={{ fontSize: '14px', fontWeight: '800', color: '#000', display: 'flex', alignItems: 'center', gap: '6px' }}><Phone size={14} /> {p.c_telefono}</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <span style={{ fontSize: '14px', fontWeight: '800', color: '#000', display: 'flex', alignItems: 'center', gap: '6px' }}><Phone size={14} /> {p.c_telefono}</span>
+                    {/* MODIFICACIÓN: Inyectado el nombre del colegio */}
+                    <span style={{ fontSize: '14px', fontWeight: '800', color: '#3b82f6', display: 'flex', alignItems: 'center', gap: '6px' }}><School size={14} /> {p.colegio || 'Particular'}</span>
+                  </div>
                 </div>
 
                 {p.estado === 'Anulado' && p.motivo_anulacion && (
