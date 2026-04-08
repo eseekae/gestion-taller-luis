@@ -92,10 +92,11 @@ export default function VerPedidos() {
 
   const exportarExcel = () => {
     const dataFilas: any[] = []
+    // MODIFICACIÓN: Agregada columna MOTIVO ANULACIÓN
     const headers = [
       'ID PEDIDO', 'FECHA REG.', 'HORA REG.', 'CLIENTE', 'TELEFONO', 'COLEGIO',
       'PRODUCTO', 'TALLA', 'CANT.', 'ENTREGADO', 'VALOR UNIT.', 'SUBTOTAL',
-      'TOTAL ORDEN', 'TOTAL ABONADO', 'SALDO PENDIENTE', 'ESTADO', 'DETALLE PAGOS', 'OBSERVACIONES'
+      'TOTAL ORDEN', 'TOTAL ABONADO', 'SALDO PENDIENTE', 'ESTADO', 'DETALLE PAGOS', 'OBSERVACIONES', 'MOTIVO ANULACIÓN'
     ]
 
     datos.forEach(p => {
@@ -109,6 +110,7 @@ export default function VerPedidos() {
       ).join(' | ')
 
       p.detalles?.forEach((d: any, index: number) => {
+        // MODIFICACIÓN: Incluido p.motivo_anulacion
         dataFilas.push({
           'ID PEDIDO': p.id,
           'FECHA REG.': fecha,
@@ -127,7 +129,8 @@ export default function VerPedidos() {
           'SALDO PENDIENTE': index === 0 ? deuda : '',
           'ESTADO': p.estado_macro,
           'DETALLE PAGOS': index === 0 ? historialPagos : '',
-          'OBSERVACIONES': index === 0 ? p.observaciones || '' : ''
+          'OBSERVACIONES': index === 0 ? p.observaciones || '' : '',
+          'MOTIVO ANULACIÓN': index === 0 ? (p.motivo_anulacion || '') : ''
         })
       })
       dataFilas.push(Object.fromEntries(headers.map(h => [h, '---'])))
@@ -224,7 +227,6 @@ export default function VerPedidos() {
     return `$${Number(raw).toLocaleString('es-CL')}`
   }
 
-  // MODIFICACIÓN: Se reemplazó borrarPedido por anularPedido (Pilar 1: Modificar lo estrictamente necesario)
   const anularPedido = async (p: any) => {
     if (p.estado === 'Anulado') return alert('Este pedido ya se encuentra anulado.')
     const motivo = prompt(`¿Por qué deseas ANULAR el pedido #${p.id} de ${p.c_nombre}?`)
@@ -322,7 +324,6 @@ export default function VerPedidos() {
                   <span style={{ fontSize: '14px', fontWeight: '800', color: '#000', display: 'flex', alignItems: 'center', gap: '6px' }}><Phone size={14} /> {p.c_telefono}</span>
                 </div>
 
-                {/* MODIFICACIÓN: Alerta visual del motivo si está anulado */}
                 {p.estado === 'Anulado' && p.motivo_anulacion && (
                   <div style={{ backgroundColor: '#fee2e2', border: '2px solid #ef4444', padding: '12px', borderRadius: '12px', marginBottom: '16px' }}>
                     <p style={{ margin: 0, fontSize: '11px', fontWeight: '950', color: '#b91c1c', display: 'flex', alignItems: 'center', gap: '5px' }}>
@@ -354,7 +355,6 @@ export default function VerPedidos() {
                               </div>
                             </div>
                             <div style={{ display: 'flex', gap: '6px' }}>
-                              {/* FIX: Deshabilitar botones de entrega si está FINALIZADO */}
                               <button disabled={esFinalizado} onClick={() => actualizarEntregaItem(det, -1)} style={{ background: '#ef4444', color: '#fff', border: '2px solid #000', borderRadius: '8px', width: '30px', height: '30px', fontWeight: '950', cursor: esFinalizado ? 'not-allowed' : 'pointer', opacity: esFinalizado ? 0.4 : 1 }}>-</button>
                               <button disabled={esFinalizado} onClick={() => actualizarEntregaItem(det, 1)} style={{ background: '#4ade80', color: '#000', border: '2px solid #000', borderRadius: '8px', width: '30px', height: '30px', fontWeight: '950', cursor: esFinalizado ? 'not-allowed' : 'pointer', opacity: esFinalizado ? 0.4 : 1 }}>+</button>
                             </div>
@@ -372,7 +372,6 @@ export default function VerPedidos() {
                 </AnimatePresence>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '24px' }}>
-                  {/* FIX: Deshabilitar botones de acción si está FINALIZADO */}
                   <motion.button 
                     disabled={esFinalizado}
                     onClick={() => notificarCliente(p)} 
@@ -399,7 +398,6 @@ export default function VerPedidos() {
                     <p style={labelStyle}>PAGADO</p>
                     <p style={{ fontSize: '16px', fontWeight: '950', color: '#166534', margin: 0 }}>${Number(p.total_pagado || 0).toLocaleString('es-CL')}</p>
                     <div style={{ position: 'absolute', right: '5px', top: '15px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                       {/* FIX: Deshabilitar botones de pago si está FINALIZADO */}
                        <button disabled={esFinalizado} onClick={() => setModalPago({ ...modalPago, open: true, pedidoId: p.id, nombreCliente: p.c_nombre, esCorreccion: false, deudaMaxima: deuda })} style={{ background: '#000', color: '#fff', border: 'none', borderRadius: '4px', cursor: esFinalizado ? 'not-allowed' : 'pointer', opacity: esFinalizado ? 0.3 : 1 }}><Plus size={12} /></button>
                        <button disabled={esFinalizado} onClick={() => setModalPago({ ...modalPago, open: true, pedidoId: p.id, nombreCliente: p.c_nombre, esCorreccion: true, deudaMaxima: p.total_pagado })} style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: esFinalizado ? 'not-allowed' : 'pointer', opacity: esFinalizado ? 0.3 : 1 }}><Minus size={12} /></button>
                     </div>
@@ -411,9 +409,8 @@ export default function VerPedidos() {
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid #f1f5f9', paddingTop: '16px' }}>
-                  {/* MODIFICACIÓN: Botón ahora llama a anularPedido y tiene ícono de Ban (Pilar 1: Modificar solo lo necesario) */}
                   <button disabled={p.estado === 'Anulado'} onClick={() => anularPedido(p)} style={{ color: p.estado === 'Anulado' ? '#94a3b8' : '#ef4444', fontWeight: '900', border: 'none', background: 'none', display: 'flex', alignItems: 'center', gap: '6px', cursor: p.estado === 'Anulado' ? 'not-allowed' : 'pointer', fontSize: '12px' }}>
-                    {p.estado === 'Anulado' ? <Ban size={16} /> : <Ban size={16} />} 
+                    <Ban size={16} /> 
                     {p.estado === 'Anulado' ? 'PEDIDO ANULADO' : 'ANULAR PEDIDO'}
                   </button>
                   <div style={{ display: 'flex', gap: '12px' }}>
