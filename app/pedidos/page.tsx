@@ -138,7 +138,7 @@ export default function VerPedidos() {
       alert("Error al actualizar cliente: " + err.message) 
     }
   }
-
+//cambios 09/04/2026
   const exportarExcel = () => {
     const dataFilas: any[] = []
     const headers = [
