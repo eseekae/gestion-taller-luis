@@ -21,6 +21,7 @@ export default function VerPedidos() {
   const [expandidos, setExpandidos] = useState<Record<string, boolean>>({})
   const [logs, setLogs] = useState<any[]>([])
 
+  // MODIFICACIÓN: Expandimos el estado para tener toda la info financiera disponible
   const [modalPago, setModalPago] = useState({
     open: false,
     pedidoId: null as number | null, 
@@ -29,7 +30,12 @@ export default function VerPedidos() {
     fecha: new Date().toISOString().split('T')[0],
     metodo: 'Transferencia',
     esCorreccion: false,
-    deudaMaxima: 0 as number 
+    deudaMaxima: 0 as number,
+    totalOriginal: 0 as number,
+    pagadoHistorial: 0 as number,
+    ultimoPagoMonto: 0 as number | null,
+    ultimoPagoMetodo: '' as string,
+    ultimoPagoFecha: '' as string
   })
 
   const [modalEditarCliente, setModalEditarCliente] = useState({
@@ -111,11 +117,9 @@ export default function VerPedidos() {
     
     if (!nombre.trim()) return alert("El nombre no puede estar vacío.")
     
-    // MODIFICACIÓN: Validación estricta de 8 dígitos
     if (telefono.length !== 8) return alert("El teléfono debe tener exactamente 8 números.")
     
     try {
-      // MODIFICACIÓN: Inyección de +569 automático al guardar
       const telefonoCompleto = `+569${telefono}`
 
       const { error } = await supabase
@@ -134,7 +138,7 @@ export default function VerPedidos() {
       alert("Error al actualizar cliente: " + err.message) 
     }
   }
-
+//cambios 09/04/2026
   const exportarExcel = () => {
     const dataFilas: any[] = []
     const headers = [
@@ -458,8 +462,25 @@ export default function VerPedidos() {
                     <p style={labelStyle}>PAGADO</p>
                     <p style={{ fontSize: '16px', fontWeight: '950', color: '#166534', margin: 0 }}>${Number(p.total_pagado || 0).toLocaleString('es-CL')}</p>
                     <div style={{ position: 'absolute', right: '5px', top: '15px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                       <button disabled={esFinalizado} onClick={() => setModalPago({ ...modalPago, open: true, pedidoId: p.id, nombreCliente: p.c_nombre, esCorreccion: false, deudaMaxima: deuda })} style={{ background: '#000', color: '#fff', border: 'none', borderRadius: '4px', cursor: esFinalizado ? 'not-allowed' : 'pointer', opacity: esFinalizado ? 0.3 : 1 }}><Plus size={12} /></button>
-                       <button disabled={esFinalizado} onClick={() => setModalPago({ ...modalPago, open: true, pedidoId: p.id, nombreCliente: p.c_nombre, esCorreccion: true, deudaMaxima: p.total_pagado })} style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: esFinalizado ? 'not-allowed' : 'pointer', opacity: esFinalizado ? 0.3 : 1 }}><Minus size={12} /></button>
+                       {/* MODIFICACIÓN: Al hacer click en +, pasamos todos los datos extra */}
+                       <button 
+                         disabled={esFinalizado} 
+                         onClick={() => setModalPago({ 
+                           ...modalPago, 
+                           open: true, 
+                           pedidoId: p.id, 
+                           nombreCliente: p.c_nombre, 
+                           esCorreccion: false, 
+                           deudaMaxima: deuda,
+                           totalOriginal: p.total_final,
+                           pagadoHistorial: p.total_pagado,
+                           ultimoPagoMonto: p.pagos?.[p.pagos.length - 1]?.monto || null,
+                           ultimoPagoMetodo: p.pagos?.[p.pagos.length - 1]?.metodo_pago || '',
+                           ultimoPagoFecha: p.pagos?.[p.pagos.length - 1]?.fecha_pago || ''
+                         })} 
+                         style={{ background: '#000', color: '#fff', border: 'none', borderRadius: '4px', cursor: esFinalizado ? 'not-allowed' : 'pointer', opacity: esFinalizado ? 0.3 : 1 }}
+                       ><Plus size={12} /></button>
+                       <button disabled={esFinalizado} onClick={() => setModalPago({ ...modalPago, open: true, pedidoId: p.id, nombreCliente: p.c_nombre, esCorreccion: true, deudaMaxima: p.total_pagado, totalOriginal: p.total_final, pagadoHistorial: p.total_pagado, ultimoPagoMonto: p.pagos?.[p.pagos.length - 1]?.monto || null, ultimoPagoMetodo: p.pagos?.[p.pagos.length - 1]?.metodo_pago || '', ultimoPagoFecha: p.pagos?.[p.pagos.length - 1]?.fecha_pago || '' })} style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: esFinalizado ? 'not-allowed' : 'pointer', opacity: esFinalizado ? 0.3 : 1 }}><Minus size={12} /></button>
                     </div>
                   </div>
                   <div style={{ background: deuda > 0 ? '#fef2f2' : '#f0fdf4', padding: '12px', borderRadius: '16px', border: '3px solid #000' }}>
@@ -501,14 +522,43 @@ export default function VerPedidos() {
           </div>
         </div>
 
+        {/* MODIFICACIÓN: Modal de pagos con la info gigante del saldo y cuadro de resumen */}
         <AnimatePresence>
           {modalPago.open && (
             <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-              <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} style={{ backgroundColor: '#fff', border: '5px solid #000', borderRadius: '32px', padding: '35px', width: '100%', maxWidth: '420px', boxShadow: '15px 15px 0px #3b82f6' }}>
+              <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} style={{ backgroundColor: '#fff', border: '5px solid #000', borderRadius: '32px', padding: '35px', width: '100%', maxWidth: '420px', boxShadow: '15px 15px 0px #3b82f6', maxHeight: '90vh', overflowY: 'auto' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '25px' }}>
-                  <h3 style={{ fontWeight: '950', fontSize: '24px', color: '#000' }}>{modalPago.esCorreccion ? 'CORREGIR PAGO' : 'NUEVO PAGO'}</h3>
+                  <h3 style={{ fontWeight: '950', fontSize: '24px', color: '#000', margin: 0 }}>{modalPago.esCorreccion ? 'CORREGIR PAGO' : 'NUEVO PAGO'}</h3>
                   <button onClick={() => setModalPago({...modalPago, open: false})} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={28} /></button>
                 </div>
+
+                <div style={{ textAlign: 'center', marginBottom: '25px' }}>
+                  <p style={{ margin: 0, fontSize: '14px', fontWeight: '950', color: '#64748b' }}>SALDO PENDIENTE</p>
+                  <p style={{ margin: 0, fontSize: '48px', fontWeight: '1000', color: '#b91c1c', lineHeight: 1 }}>${modalPago.deudaMaxima.toLocaleString('es-CL')}</p>
+                </div>
+
+                <div style={{ backgroundColor: '#f1f5f9', padding: '15px', borderRadius: '16px', border: '2px solid #000', marginBottom: '25px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                    <span style={{ fontSize: '12px', fontWeight: '900', color: '#64748b' }}>TOTAL VENTA:</span>
+                    <span style={{ fontSize: '14px', fontWeight: '950', color: '#000' }}>${modalPago.totalOriginal.toLocaleString('es-CL')}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', paddingBottom: '10px', borderBottom: '1px solid #cbd5e1' }}>
+                    <span style={{ fontSize: '12px', fontWeight: '900', color: '#64748b' }}>YA PAGADO:</span>
+                    <span style={{ fontSize: '14px', fontWeight: '950', color: '#166534' }}>${modalPago.pagadoHistorial.toLocaleString('es-CL')}</span>
+                  </div>
+                  
+                  {modalPago.ultimoPagoMonto ? (
+                    <div>
+                      <p style={{ margin: '0 0 5px 0', fontSize: '10px', fontWeight: '950', color: '#000' }}>ÚLTIMO REGISTRO:</p>
+                      <p style={{ margin: 0, fontSize: '12px', fontWeight: '800', color: '#475569' }}>
+                        ${modalPago.ultimoPagoMonto.toLocaleString('es-CL')} el {new Date(modalPago.ultimoPagoFecha).toLocaleDateString('es-CL')} ({modalPago.ultimoPagoMetodo})
+                      </p>
+                    </div>
+                  ) : (
+                    <p style={{ margin: 0, fontSize: '11px', fontWeight: '900', color: '#64748b', fontStyle: 'italic' }}>No hay abonos previos</p>
+                  )}
+                </div>
+
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                   <div>
                     <label style={labelStyle}>Monto a {modalPago.esCorreccion ? 'Descontar' : 'Abonar'}</label>
@@ -539,7 +589,6 @@ export default function VerPedidos() {
           )}
         </AnimatePresence>
 
-        {/* NUEVO MODAL: EDICIÓN DE CLIENTE */}
         <AnimatePresence>
           {modalEditarCliente.open && (
             <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
@@ -582,7 +631,6 @@ export default function VerPedidos() {
                         onChange={e => setModalEditarCliente({...modalEditarCliente, telefono: e.target.value.replace(/\D/g, '').slice(0, 8)})} 
                       />
                     </div>
-                    {/* MODIFICACIÓN: Alerta de faltan números */}
                     {modalEditarCliente.telefono.length > 0 && modalEditarCliente.telefono.length < 8 && (
                       <p style={{ color: '#ef4444', fontSize: '11px', fontWeight: '900', marginTop: '5px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <AlertCircle size={12} /> FALTAN {8 - modalEditarCliente.telefono.length} NÚMEROS
