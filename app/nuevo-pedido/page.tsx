@@ -7,7 +7,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { 
   ArrowLeft, User, Phone, IdCard, School, Calendar, 
   ShoppingBag, Plus, X, CheckCircle, MessageSquare, 
-  Rocket, Clock, AlertCircle, Tag, Percent, Minus, Banknote, Edit3, History
+  Rocket, Clock, AlertCircle, Tag, Percent, Minus, Banknote, Edit3, History,
+  PackageOpen // AÑADIDO PARA EL BOTÓN PARCIAL
 } from 'lucide-react'
 
 export default function RegistroPedido() {
@@ -17,10 +18,10 @@ export default function RegistroPedido() {
   const [listaColegios, setListaColegios] = useState<any[]>([])
   const [carrito, setCarrito] = useState<any[]>([])
   
-  const [tipoEntrega, setTipoEntrega] = useState<'agendada' | 'inmediata' | 'antiguo'>('agendada')
+  // MODIFICACIÓN: Agregado el estado 'parcial' a los tipos de entrega
+  const [tipoEntrega, setTipoEntrega] = useState<'agendada' | 'inmediata' | 'antiguo' | 'parcial'>('agendada')
   const [fechaIngreso, setFechaIngreso] = useState(new Date().toISOString().split('T')[0])
 
-  // MODIFICACIÓN: Nuevos estados para controlar el texto crudo de las fechas antiguas
   const [fechaIngresoAntiguo, setFechaIngresoAntiguo] = useState('')
   const [fechaEntregaAntiguo, setFechaEntregaAntiguo] = useState('')
 
@@ -76,7 +77,6 @@ export default function RegistroPedido() {
     return `$${Number(raw).toLocaleString('es-CL')}`
   }
 
-  // MODIFICACIÓN: Función que formatea los números en DD/MM/AAAA mientras se escribe
   const formatFechaTexto = (val: string) => {
     const raw = val.replace(/\D/g, '').slice(0, 8); 
     if (raw.length >= 5) return `${raw.slice(0,2)}/${raw.slice(2,4)}/${raw.slice(4)}`;
@@ -140,7 +140,8 @@ export default function RegistroPedido() {
     
     if (!item.id_inv && tallaSeleccionada !== 'ESPECIAL') return alert("Error al identificar el producto.")
     
-    setCarrito([...carrito, { ...item, tempId: Date.now() }])
+    // MODIFICACIÓN: Se inyecta 'entregados: 0' por defecto para controlar la entrega parcial
+    setCarrito([...carrito, { ...item, entregados: 0, tempId: Date.now() }])
     setPrecioManualEspecial('')
     setCantidad('')
   }
@@ -154,6 +155,19 @@ export default function RegistroPedido() {
     if (precioLimpio >= 0) {
       setCarrito(carrito.map(c => c.tempId === id ? { ...c, precio: precioLimpio } : c))
     }
+  }
+
+  // NUEVA FUNCIÓN: Actualiza el mini contador de "Entregados Hoy" en el carrito
+  const actualizarEntregados = (id: number, delta: number) => {
+    setCarrito(carrito.map(c => {
+      if (c.tempId === id) {
+        const nuevoVal = (c.entregados || 0) + delta;
+        if (nuevoVal >= 0 && nuevoVal <= c.cantidad) {
+          return { ...c, entregados: nuevoVal };
+        }
+      }
+      return c;
+    }))
   }
   
   const totalOriginal = useMemo(() => carrito.reduce((acc, curr) => acc + (curr.precio * curr.cantidad), 0), [carrito])
@@ -169,7 +183,6 @@ export default function RegistroPedido() {
     if (carrito.length === 0) return alert("Añade productos al pedido")
     if (telefono.length !== 8) return alert("El teléfono debe tener exactamente 8 números.")
     
-    // MODIFICACIÓN: Interceptamos las fechas para transformarlas antes de guardar
     let finalFechaIngreso = fechaIngreso;
     let finalFechaEntrega = fechaEntrega;
 
@@ -180,10 +193,9 @@ export default function RegistroPedido() {
       const [dI, mI, yI] = fechaIngresoAntiguo.split('/');
       const [dE, mE, yE] = fechaEntregaAntiguo.split('/');
       
-      // Armado de fecha al revés (AAAA-MM-DD) para Supabase
       finalFechaIngreso = `${yI}-${mI}-${dI}`;
       finalFechaEntrega = `${yE}-${mE}-${dE}`;
-    } else if (tipoEntrega === 'agendada' && !fechaEntrega) {
+    } else if ((tipoEntrega === 'agendada' || tipoEntrega === 'parcial') && !fechaEntrega) {
       return alert("Selecciona una fecha de entrega")
     }
     
@@ -199,12 +211,15 @@ export default function RegistroPedido() {
       const { data: cli, error: cliError } = await supabase.from('clientes').insert([{ nombre: nombreCliente, telefono: telefonoCompleto, rut }]).select().single()
       if (cliError || !cli) throw new Error(`Error cliente: ${cliError?.message}`)
       
+      // MODIFICACIÓN: Lógica de estados para el pedido principal
       const estadoPedido = (tipoEntrega === 'inmediata' || tipoEntrega === 'antiguo') ? 'Completado' : 'Pendiente'
       const fechaFinalEntregaDB = tipoEntrega === 'inmediata' ? new Date().toISOString().split('T')[0] : finalFechaEntrega
       
       let obsFinal = observaciones + (descuentoFinal > 0 ? ` [Dscto: $${descuentoFinal.toLocaleString()}]` : '') + (valorAjuste !== 0 ? ` [Ajuste: $${valorAjuste.toLocaleString()}]` : '')
       if (tipoEntrega === 'antiguo') {
         obsFinal = `[PEDIDO ANTIGUO] ` + obsFinal
+      } else if (tipoEntrega === 'parcial') {
+        obsFinal = `[ENTREGA PARCIAL] ` + obsFinal
       }
 
       const payloadPedido: any = {
@@ -214,7 +229,6 @@ export default function RegistroPedido() {
         creado_por: usuarioActivo
       }
       
-      // Inyección silenciosa de la fecha formateada
       if (tipoEntrega === 'antiguo' && finalFechaIngreso) {
         payloadPedido.created_at = `${finalFechaIngreso}T12:00:00Z`
       }
@@ -223,11 +237,19 @@ export default function RegistroPedido() {
       
       if (pedError || !ped) throw new Error(`Error pedido: ${pedError?.message}`)
       
-      const detalles = carrito.map(item => ({
-        pedido_id: ped.id, producto_id: item.id_inv, cantidad: item.cantidad, 
-        cantidad_entregada: (tipoEntrega === 'inmediata' || tipoEntrega === 'antiguo') ? item.cantidad : 0, 
-        talla: item.talla, precio_unitario: item.precio, estado: (tipoEntrega === 'inmediata' || tipoEntrega === 'antiguo') ? 'Entregado' : 'Pendiente'
-      }))
+      // MODIFICACIÓN: Cálculo dinámico de lo entregado vs pendiente según el nuevo tipo
+      const detalles = carrito.map(item => {
+        const cantEntregada = (tipoEntrega === 'inmediata' || tipoEntrega === 'antiguo') 
+          ? item.cantidad 
+          : (tipoEntrega === 'parcial' ? (item.entregados || 0) : 0);
+
+        return {
+          pedido_id: ped.id, producto_id: item.id_inv, cantidad: item.cantidad, 
+          cantidad_entregada: cantEntregada, 
+          talla: item.talla, precio_unitario: item.precio, 
+          estado: cantEntregada === item.cantidad ? 'Entregado' : 'Pendiente'
+        }
+      })
       await supabase.from('detalles_pedido').insert(detalles)
       
       if (pagoFinal > 0) {
@@ -238,10 +260,26 @@ export default function RegistroPedido() {
         }])
       }
       
+      // MODIFICACIÓN: Lógica mixta de RPCs para descontar stock físico vs reservar stock
       for (const item of carrito) {
         if (item.id_inv && tipoEntrega !== 'antiguo') {
-          const rpcFunc = tipoEntrega === 'inmediata' ? 'entregar_stock' : 'reservar_stock'
-          await supabase.rpc(rpcFunc, { prod_id: item.id_inv, cant: item.cantidad })
+          if (tipoEntrega === 'inmediata') {
+            await supabase.rpc('entregar_stock', { prod_id: item.id_inv, cant: item.cantidad })
+          } else if (tipoEntrega === 'agendada') {
+            await supabase.rpc('reservar_stock', { prod_id: item.id_inv, cant: item.cantidad })
+          } else if (tipoEntrega === 'parcial') {
+            const cantEntregada = item.entregados || 0;
+            const cantPendiente = item.cantidad - cantEntregada;
+            
+            // Lo que se lleva hoy, se descuenta de inmediato
+            if (cantEntregada > 0) {
+              await supabase.rpc('entregar_stock', { prod_id: item.id_inv, cant: cantEntregada })
+            }
+            // Lo que falta, se manda a reserva (taller)
+            if (cantPendiente > 0) {
+              await supabase.rpc('reservar_stock', { prod_id: item.id_inv, cant: cantPendiente })
+            }
+          }
         }
       }
       
@@ -278,25 +316,28 @@ export default function RegistroPedido() {
           
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} style={cardStyle}>
             <label style={labelStyle}><Rocket size={16} /> Prioridad de Pedido</label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginTop: '10px', marginBottom: (tipoEntrega === 'agendada' || tipoEntrega === 'antiguo') ? '15px' : '0' }}>
+            {/* MODIFICACIÓN: Grilla 2x2 para acomodar el 4to botón de Parcial */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '10px', marginBottom: (tipoEntrega !== 'inmediata') ? '15px' : '0' }}>
               <motion.button type="button" onClick={() => setTipoEntrega('agendada')} style={{ padding: '12px', borderRadius: '16px', border: '4px solid #000', fontWeight: '900', color: '#000', fontSize: '11px', backgroundColor: tipoEntrega === 'agendada' ? '#fbbf24' : '#fff', boxShadow: tipoEntrega === 'agendada' ? 'inset 3px 3px 0px rgba(0,0,0,0.1)' : '3px 3px 0px #000', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: 'pointer' }}>
                 <Clock size={16} /> AGENDAR
               </motion.button>
               <motion.button type="button" onClick={() => setTipoEntrega('inmediata')} style={{ padding: '12px', borderRadius: '16px', border: '4px solid #000', fontWeight: '900', color: '#000', fontSize: '11px', backgroundColor: tipoEntrega === 'inmediata' ? '#4ade80' : '#fff', boxShadow: tipoEntrega === 'inmediata' ? 'inset 3px 3px 0px rgba(0,0,0,0.1)' : '3px 3px 0px #000', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: 'pointer' }}>
                 <CheckCircle size={16} /> INMEDIATA
               </motion.button>
+              <motion.button type="button" onClick={() => setTipoEntrega('parcial')} style={{ padding: '12px', borderRadius: '16px', border: '4px solid #000', fontWeight: '900', color: '#000', fontSize: '11px', backgroundColor: tipoEntrega === 'parcial' ? '#a78bfa' : '#fff', boxShadow: tipoEntrega === 'parcial' ? 'inset 3px 3px 0px rgba(0,0,0,0.1)' : '3px 3px 0px #000', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: 'pointer' }}>
+                <PackageOpen size={16} /> PARCIAL
+              </motion.button>
               <motion.button type="button" onClick={() => setTipoEntrega('antiguo')} style={{ padding: '12px', borderRadius: '16px', border: '4px solid #000', fontWeight: '900', color: '#000', fontSize: '11px', backgroundColor: tipoEntrega === 'antiguo' ? '#cbd5e1' : '#fff', boxShadow: tipoEntrega === 'antiguo' ? 'inset 3px 3px 0px rgba(0,0,0,0.1)' : '3px 3px 0px #000', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: 'pointer' }}>
                 <History size={16} /> ANTIGUO
               </motion.button>
             </div>
             <AnimatePresence>
-              {tipoEntrega === 'agendada' && (
+              {(tipoEntrega === 'agendada' || tipoEntrega === 'parcial') && (
                 <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}>
                   <label style={labelStyle}><Calendar size={16} /> Fecha de Entrega Prometida</label>
-                  <input type="date" style={inputStyle} value={fechaEntrega} onChange={e => setFechaEntrega(e.target.value)} required={tipoEntrega === 'agendada'} />
+                  <input type="date" style={inputStyle} value={fechaEntrega} onChange={e => setFechaEntrega(e.target.value)} required={tipoEntrega === 'agendada' || tipoEntrega === 'parcial'} />
                 </motion.div>
               )}
-              {/* MODIFICACIÓN: En la pestaña "Antiguo" se usan text inputs que auto-formatean */}
               {tipoEntrega === 'antiguo' && (
                 <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
@@ -422,7 +463,20 @@ export default function RegistroPedido() {
                 <p style={labelStyle}>Artículos en Carrito</p>
                 {carrito.map((item) => (
                   <div key={item.tempId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
-                    <div style={{ flex: 1 }}><p style={{ margin: 0, fontWeight: '900', color: '#000', fontSize: '15px' }}>{item.nombre}</p><p style={{ margin: 0, fontSize: '12px', fontWeight: '800', color: '#64748b' }}>{item.cantidad}x Talla {item.talla}</p></div>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ margin: 0, fontWeight: '900', color: '#000', fontSize: '15px' }}>{item.nombre}</p>
+                      <p style={{ margin: 0, fontSize: '12px', fontWeight: '800', color: '#64748b' }}>{item.cantidad}x Talla {item.talla}</p>
+                      
+                      {/* MODIFICACIÓN: Pequeño panel de control si es entrega PARCIAL */}
+                      {tipoEntrega === 'parcial' && (
+                        <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#f1f5f9', padding: '4px 8px', borderRadius: '8px', width: 'fit-content', border: '1px solid #e2e8f0' }}>
+                          <span style={{ fontSize: '11px', fontWeight: '950', color: '#000' }}>ENTREGAR HOY:</span>
+                          <button type="button" onClick={() => actualizarEntregados(item.tempId, -1)} style={{ background: '#fff', border: '2px solid #000', borderRadius: '6px', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', cursor: 'pointer' }}>-</button>
+                          <span style={{ fontSize: '13px', fontWeight: '950', color: '#a78bfa' }}>{item.entregados || 0}</span>
+                          <button type="button" onClick={() => actualizarEntregados(item.tempId, 1)} style={{ background: '#fff', border: '2px solid #000', borderRadius: '6px', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', cursor: 'pointer' }}>+</button>
+                        </div>
+                      )}
+                    </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                       <div style={{ textAlign: 'right' }}>
                         <span style={{ fontWeight: '950', color: '#000', fontSize: '16px', display: 'block' }}>${(item.precio * item.cantidad).toLocaleString()}</span>
