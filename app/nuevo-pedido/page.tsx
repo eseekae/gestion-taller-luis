@@ -20,6 +20,10 @@ export default function RegistroPedido() {
   const [tipoEntrega, setTipoEntrega] = useState<'agendada' | 'inmediata' | 'antiguo'>('agendada')
   const [fechaIngreso, setFechaIngreso] = useState(new Date().toISOString().split('T')[0])
 
+  // MODIFICACIÓN: Nuevos estados para controlar el texto crudo de las fechas antiguas
+  const [fechaIngresoAntiguo, setFechaIngresoAntiguo] = useState('')
+  const [fechaEntregaAntiguo, setFechaEntregaAntiguo] = useState('')
+
   const [nombreSeleccionado, setNombreSeleccionado] = useState('')
   const [tallaSeleccionada, setTallaSeleccionada] = useState('')
   const [precioManualEspecial, setPrecioManualEspecial] = useState('')
@@ -72,13 +76,20 @@ export default function RegistroPedido() {
     return `$${Number(raw).toLocaleString('es-CL')}`
   }
 
+  // MODIFICACIÓN: Función que formatea los números en DD/MM/AAAA mientras se escribe
+  const formatFechaTexto = (val: string) => {
+    const raw = val.replace(/\D/g, '').slice(0, 8); 
+    if (raw.length >= 5) return `${raw.slice(0,2)}/${raw.slice(2,4)}/${raw.slice(4)}`;
+    if (raw.length >= 3) return `${raw.slice(0,2)}/${raw.slice(2)}`;
+    return raw;
+  }
+
   const productosUnicos = useMemo(() => {
     const filtrados = inventario.filter(i => i.colegio === colegio)
     return Array.from(new Set(filtrados.map(i => i.nombre)))
   }, [inventario, colegio])
 
   const tallasDeInventario = useMemo(() => {
-    // MODIFICACIÓN: Se agregan posibles variables con espacio por si acaso y se fuerza trim() abajo
     const ordenPrioridad: { [key: string]: number } = {
       '4': 1, '5': 2, '6': 3, '8': 4, '10': 5, '12': 6, '14': 7, '16': 8,
       'S': 9, 'M': 10, 'L': 11, 'XL': 12, '2XL': 13, '3XL': 14
@@ -86,7 +97,6 @@ export default function RegistroPedido() {
 
     return inventario
       .filter(i => i.colegio === colegio && i.nombre === nombreSeleccionado)
-      // MODIFICACIÓN: Se agrega .trim() para limpiar espacios invisibles de la base de datos
       .sort((a, b) => (ordenPrioridad[a.talla?.trim()] || 99) - (ordenPrioridad[b.talla?.trim()] || 99))
   }, [colegio, nombreSeleccionado, inventario])
 
@@ -159,7 +169,23 @@ export default function RegistroPedido() {
     if (carrito.length === 0) return alert("Añade productos al pedido")
     if (telefono.length !== 8) return alert("El teléfono debe tener exactamente 8 números.")
     
-    if ((tipoEntrega === 'agendada' || tipoEntrega === 'antiguo') && !fechaEntrega) return alert("Selecciona una fecha de entrega")
+    // MODIFICACIÓN: Interceptamos las fechas para transformarlas antes de guardar
+    let finalFechaIngreso = fechaIngreso;
+    let finalFechaEntrega = fechaEntrega;
+
+    if (tipoEntrega === 'antiguo') {
+      if (fechaIngresoAntiguo.length !== 10) return alert("La fecha de ingreso debe tener el formato completo DD/MM/AAAA.");
+      if (fechaEntregaAntiguo.length !== 10) return alert("La fecha de entrega debe tener el formato completo DD/MM/AAAA.");
+      
+      const [dI, mI, yI] = fechaIngresoAntiguo.split('/');
+      const [dE, mE, yE] = fechaEntregaAntiguo.split('/');
+      
+      // Armado de fecha al revés (AAAA-MM-DD) para Supabase
+      finalFechaIngreso = `${yI}-${mI}-${dI}`;
+      finalFechaEntrega = `${yE}-${mE}-${dE}`;
+    } else if (tipoEntrega === 'agendada' && !fechaEntrega) {
+      return alert("Selecciona una fecha de entrega")
+    }
     
     const pagoFinal = Number(montoPagado.toString().replace(/\D/g, ''))
     
@@ -174,7 +200,7 @@ export default function RegistroPedido() {
       if (cliError || !cli) throw new Error(`Error cliente: ${cliError?.message}`)
       
       const estadoPedido = (tipoEntrega === 'inmediata' || tipoEntrega === 'antiguo') ? 'Completado' : 'Pendiente'
-      const fechaFinalEntrega = tipoEntrega === 'inmediata' ? new Date().toISOString().split('T')[0] : (fechaEntrega || null)
+      const fechaFinalEntregaDB = tipoEntrega === 'inmediata' ? new Date().toISOString().split('T')[0] : finalFechaEntrega
       
       let obsFinal = observaciones + (descuentoFinal > 0 ? ` [Dscto: $${descuentoFinal.toLocaleString()}]` : '') + (valorAjuste !== 0 ? ` [Ajuste: $${valorAjuste.toLocaleString()}]` : '')
       if (tipoEntrega === 'antiguo') {
@@ -183,13 +209,14 @@ export default function RegistroPedido() {
 
       const payloadPedido: any = {
         cliente_id: cli.id, total_final: totalConDescuento, estado: estadoPedido,
-        colegio: colegio || 'Particular', fecha_entrega: fechaFinalEntrega,
+        colegio: colegio || 'Particular', fecha_entrega: fechaFinalEntregaDB,
         observaciones: obsFinal,
         creado_por: usuarioActivo
       }
       
-      if (tipoEntrega === 'antiguo' && fechaIngreso) {
-        payloadPedido.created_at = `${fechaIngreso}T12:00:00Z`
+      // Inyección silenciosa de la fecha formateada
+      if (tipoEntrega === 'antiguo' && finalFechaIngreso) {
+        payloadPedido.created_at = `${finalFechaIngreso}T12:00:00Z`
       }
 
       const { data: ped, error: pedError } = await supabase.from('pedidos').insert([payloadPedido]).select().single()
@@ -206,7 +233,7 @@ export default function RegistroPedido() {
       if (pagoFinal > 0) {
         await supabase.from('pagos').insert([{
           pedido_id: ped.id, monto: pagoFinal, 
-          fecha_pago: tipoEntrega === 'antiguo' ? fechaIngreso : new Date().toISOString().split('T')[0], 
+          fecha_pago: tipoEntrega === 'antiguo' ? finalFechaIngreso : new Date().toISOString().split('T')[0], 
           metodo_pago: metodoPago, creado_por: usuarioActivo
         }])
       }
@@ -269,16 +296,33 @@ export default function RegistroPedido() {
                   <input type="date" style={inputStyle} value={fechaEntrega} onChange={e => setFechaEntrega(e.target.value)} required={tipoEntrega === 'agendada'} />
                 </motion.div>
               )}
+              {/* MODIFICACIÓN: En la pestaña "Antiguo" se usan text inputs que auto-formatean */}
               {tipoEntrega === 'antiguo' && (
                 <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                     <div>
                       <label style={labelStyle}><Calendar size={16} /> F. Ingreso</label>
-                      <input type="date" style={inputStyle} value={fechaIngreso} onChange={e => setFechaIngreso(e.target.value)} required={tipoEntrega === 'antiguo'} />
+                      <input 
+                        type="text" 
+                        style={inputStyle} 
+                        value={fechaIngresoAntiguo} 
+                        onChange={e => setFechaIngresoAntiguo(formatFechaTexto(e.target.value))} 
+                        placeholder="DD/MM/AAAA"
+                        maxLength={10}
+                        required={tipoEntrega === 'antiguo'} 
+                      />
                     </div>
                     <div>
                       <label style={labelStyle}><CheckCircle size={16} /> F. Entregado</label>
-                      <input type="date" style={inputStyle} value={fechaEntrega} onChange={e => setFechaEntrega(e.target.value)} required={tipoEntrega === 'antiguo'} />
+                      <input 
+                        type="text" 
+                        style={inputStyle} 
+                        value={fechaEntregaAntiguo} 
+                        onChange={e => setFechaEntregaAntiguo(formatFechaTexto(e.target.value))} 
+                        placeholder="DD/MM/AAAA"
+                        maxLength={10}
+                        required={tipoEntrega === 'antiguo'} 
+                      />
                     </div>
                   </div>
                   <p style={{ fontSize: '11px', color: '#64748b', fontWeight: '900', marginTop: '10px', display: 'flex', alignItems: 'center', gap: '4px' }}><AlertCircle size={12} /> ESTE PEDIDO NO AFECTARÁ EL INVENTARIO</p>
